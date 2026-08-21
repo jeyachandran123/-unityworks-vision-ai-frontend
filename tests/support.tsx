@@ -102,7 +102,89 @@ export function fixtureState() {
   };
 }
 
+export function emptyLiveRuntime() {
+  return {
+    runtime: {
+      enabled: false,
+      reason: 'FEATURE_LIVE_CCTV is off; no camera session will start',
+      active_sessions: 0,
+      streaming_sessions: 0,
+      streaming: false,
+    },
+    sessions: [],
+    cameras_configured: [],
+    backpressure: { policy: 'drop-oldest', rationale: 'newest frame is the valuable one' },
+  };
+}
+
+/** A running REPLAY source. Never labelled live. */
+export function replayLiveRuntime() {
+  return {
+    runtime: {
+      enabled: true,
+      reason: '',
+      active_sessions: 1,
+      streaming_sessions: 1,
+      streaming: true,
+    },
+    sessions: [
+      {
+        session_id: 'sess-replay-1',
+        kind: 'replay',
+        camera_id: 'cam-01',
+        tenant_id: 'org-test',
+        state: 'running',
+        streaming: true,
+        seekable: false,
+        bounded: true,
+        analysis_fps: 4,
+        error: '',
+        source: {
+          camera_id: 'cam-01',
+          kind: 'replay',
+          state: 'running',
+          health: 'online',
+          uri: 'file://kitchen.mp4',
+          epoch: 0,
+          frames_produced: 120,
+          reconnects: 0,
+          errors: 0,
+          last_error: '',
+          producing: true,
+          stale: false,
+          transitions: [],
+        },
+        queue: {
+          capacity: 8,
+          depth: 2,
+          high_water: 8,
+          accepted: 120,
+          dropped_total: 37,
+          dropped_queue_full: 5,
+          dropped_sampled: 32,
+          dropped_shutdown: 0,
+        },
+        stats: {
+          frames_received: 157,
+          frames_processed: 118,
+          frames_dropped: 37,
+          processing_errors: 0,
+          mean_processing_ms: 4.2,
+        },
+      },
+    ],
+    cameras_configured: [],
+    backpressure: { policy: 'drop-oldest', rationale: 'newest frame is the valuable one' },
+  };
+}
+
 export interface StubOptions {
+  /** Overrides the camera block on /status. */
+  cameras?: unknown;
+  /** Overrides the live_runtime block on /status. */
+  runtime?: unknown;
+  /** Overrides /devtools/live. */
+  live?: unknown;
   /** `null` makes /auth/refresh 401 — i.e. no existing session. */
   session?: Identity | null;
   /** Envelope code returned by /auth/login. */
@@ -175,8 +257,26 @@ export function stubFetch(options: StubOptions = {}) {
         service: { ok: true },
         vision_os: { assembled: false, reason: 'VISION_AUTOSTART is false', attributes: [], policies: [] },
         tenant_id: 'org-test',
-        not_yet_reported: ['cameras', 'coverage', 'incidents'],
+        cameras: options.cameras ?? {
+          configured: 0,
+          sessions: 0,
+          streaming: 0,
+          health: [],
+        },
+        live_runtime: options.runtime ?? {
+          enabled: false,
+          reason: 'FEATURE_LIVE_CCTV is off; no camera session will start',
+          active_sessions: 0,
+          streaming_sessions: 0,
+          streaming: false,
+        },
+        // 'cameras' left this list in Phase 3 — real camera health is reported.
+        not_yet_reported: ['coverage', 'incidents'],
       });
+    }
+
+    if (url.includes('/devtools/live')) {
+      return jsonResponse(options.live ?? emptyLiveRuntime());
     }
 
     if (url.includes('/devtools/vision')) {

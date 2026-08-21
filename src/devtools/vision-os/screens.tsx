@@ -632,22 +632,145 @@ function PendingCapability({
 }
 
 export function SourcesScreen() {
+  const live = useQuery({ queryKey: ['devtools', 'live'], queryFn: devtoolsApi.live });
+
   return (
-    <PendingCapability
-      title="Sources"
-      what="Acquisition state per camera: connection, frames received, reconnects."
-      why="A camera that has produced no frames for an hour is the single most important fact in this application, and the one most easily hidden by a frozen last frame."
-      route="GET /devtools/sources"
-      phase="Phase 3"
-      preserved={[
-        'Camera state: configured, connecting, connected, running, reconnecting, disconnected, error, disabled',
-        'Frames received and last-frame age',
-        'Reconnect count and current backoff',
-        'Stream type and analysis fps, independent of camera fps',
-        'Redacted RTSP URL — never the credential',
-      ]}
-    />
+    <>
+      <ToolHeader
+        title="Sources"
+        what="Acquisition state per camera: connection, frames, drops, reconnects."
+        why="A camera that has produced no frames for an hour is the most important fact in this application, and the one most easily hidden by a frozen last frame. Nothing here is ever shown as online while it is silent."
+        source="GET /devtools/live"
+      />
+
+      <QueryBoundary query={live} label="Loading sources">
+        {(view) => (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+              <StatCard
+                label="Runtime"
+                value={view.runtime.enabled ? 'Enabled' : 'Disabled'}
+                detail={view.runtime.reason || 'FEATURE_LIVE_CCTV is on'}
+              />
+              <StatCard label="Active sessions" value={view.runtime.active_sessions} detail="replay and live" />
+              <StatCard
+                label="Streaming"
+                value={view.runtime.streaming_sessions}
+                detail="received a genuine frame"
+                tone={view.runtime.streaming ? 'accent' : 'default'}
+              />
+              <StatCard label="Cameras configured" value={view.cameras_configured.length} detail="named in CCTV_CHANNELS" />
+            </div>
+
+            {view.sessions.length === 0 ? (
+              <UnavailableState
+                title="No source is running"
+                body={
+                  <>
+                    {view.runtime.reason || 'No camera session has been started.'} Nothing
+                    is being observed — which is different from observing nothing.
+                  </>
+                }
+              />
+            ) : (
+              <DataTable
+                caption="Live and replay sources with their acquisition state"
+                rows={view.sessions}
+                rowKey={(row) => row.session_id}
+                columns={[
+                  {
+                    key: 'camera',
+                    header: 'Camera',
+                    render: (row) => (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)' }}>{row.camera_id}</span>
+                        <Badge>{row.kind}</Badge>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'health',
+                    header: 'Health',
+                    render: (row) => (
+                      <StatusBadge tone={healthTone(row.source.health)}>{row.source.health}</StatusBadge>
+                    ),
+                  },
+                  {
+                    key: 'streaming',
+                    header: 'Streaming',
+                    render: (row) =>
+                      row.streaming ? (
+                        <Badge tone="accent">yes</Badge>
+                      ) : (
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>no</span>
+                      ),
+                  },
+                  { key: 'produced', header: 'Frames', numeric: true, render: (row) => row.source.frames_produced },
+                  { key: 'processed', header: 'Processed', numeric: true, render: (row) => row.stats.frames_processed },
+                  {
+                    key: 'dropped',
+                    header: 'Dropped',
+                    numeric: true,
+                    render: (row) => (
+                      <span
+                        title={
+                          // Two different facts, and the tooltip keeps them apart:
+                          // sampled-out is the system working as configured,
+                          // queue-full is the system falling behind.
+                          `${row.queue.dropped_sampled} sampled out · ` +
+                          `${row.queue.dropped_queue_full} queue full`
+                        }
+                      >
+                        {row.queue.dropped_total}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'queue',
+                    header: 'Queue',
+                    numeric: true,
+                    render: (row) => `${row.queue.depth}/${row.queue.capacity}`,
+                  },
+                  { key: 'reconnects', header: 'Reconnects', numeric: true, render: (row) => row.source.reconnects },
+                  {
+                    key: 'uri',
+                    header: 'Source',
+                    render: (row) => (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)' }}>{row.source.uri}</span>
+                    ),
+                  },
+                ]}
+              />
+            )}
+
+            <Card style={{ marginTop: 'var(--space-6)' }}>
+              <SectionHeader
+                title={`Backpressure: ${view.backpressure.policy}`}
+                description={view.backpressure.rationale}
+              />
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', maxWidth: '68ch' }}>
+                Frames are never reordered, never duplicated and never fabricated.
+                A dropped frame is gone and counted — <code style={{ fontFamily: 'var(--font-mono)' }}>sampled_out</code> is
+                the system working as configured;{' '}
+                <code style={{ fontFamily: 'var(--font-mono)' }}>queue_full</code> is the system falling behind.
+              </p>
+            </Card>
+
+            <div style={{ marginTop: 'var(--space-6)' }}>
+              <JsonViewer data={view} label="Raw live runtime" />
+            </div>
+          </>
+        )}
+      </QueryBoundary>
+    </>
   );
+}
+
+function healthTone(health: string): 'online' | 'degraded' | 'offline' | 'idle' {
+  if (health === 'online') return 'online';
+  if (health === 'degraded' || health === 'connecting') return 'degraded';
+  if (health === 'error') return 'offline';
+  return 'idle';
 }
 
 export function FramesScreen() {

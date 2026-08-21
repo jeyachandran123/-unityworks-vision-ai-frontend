@@ -20,7 +20,7 @@
 
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { healthApi } from '@shared/api/services';
+import { healthApi, type OperatorStatus } from '@shared/api/services';
 import {
   Badge,
   Card,
@@ -29,6 +29,7 @@ import {
   LoadingState,
   PageHeader,
   StatCard,
+  StatusBadge,
   UnavailableState,
 } from '@shared/ui/primitives';
 import { isApiError } from '@shared/api/errors';
@@ -103,7 +104,19 @@ export function DashboardPage() {
                 under `not_yet_reported`, and inventing a zero would be the exact
                 failure this product exists to avoid. */}
             <StatCard label="Open incidents" value={null} unavailableReason="Incidents arrive in Phase 4" />
-            <StatCard label="Cameras online" value={null} unavailableReason="Camera management arrives in Phase 3" />
+            {/* Real, from the live runtime. Still refuses to imply anything it
+                does not know: zero configured cameras reads as zero configured
+                cameras, never as zero problems. */}
+            <StatCard
+              label="Cameras online"
+              value={
+                status.data.cameras.configured === 0
+                  ? null
+                  : status.data.cameras.health.filter((c) => c.health === 'online').length
+              }
+              unavailableReason="No camera is configured yet"
+              detail={`${status.data.cameras.configured} configured · ${status.data.cameras.streaming} streaming`}
+            />
             <StatCard label="Subjects assessed" value={null} unavailableReason="Requires a live source" />
             <StatCard
               label="Service"
@@ -137,24 +150,92 @@ export function DashboardPage() {
 /* ── The remaining eight ──────────────────────────────────────────────────── */
 
 export function LiveMonitoringPage() {
+  const status = useQuery({
+    queryKey: ['status'],
+    queryFn: () => healthApi.status(),
+    // Camera health changes on the scale of seconds, so this refetches faster
+    // than the rest of the product. Still not a substitute for the WebSocket,
+    // which reports a stream starting or stopping between polls.
+    refetchInterval: 5_000,
+  });
+
   return (
-    <ProductPage
-      title="Live Monitoring"
-      description="The camera wall. A tile shows what a camera is seeing, or says plainly that it is not seeing anything."
-      capability="live camera sources"
-    >
+    <>
+      <PageHeader
+        title="Live Monitoring"
+        description="What each camera is seeing now — or a plain statement that it is not seeing anything."
+      />
+
+      {status.isPending ? <LoadingState label="Loading cameras" /> : null}
+
+      {status.isError ? (
+        <ErrorState
+          body={isApiError(status.error) ? status.error.friendlyMessage : 'Camera state could not be loaded.'}
+          requestId={isApiError(status.error) ? status.error.requestId : undefined}
+          onRetry={() => void status.refetch()}
+        />
+      ) : null}
+
+      {status.isSuccess ? <CameraWall status={status.data} /> : null}
+    </>
+  );
+}
+
+function CameraWall({ status }: { status: OperatorStatus }) {
+  const { cameras, live_runtime: runtime } = status;
+
+  if (cameras.health.length === 0) {
+    return (
       <UnavailableState
-        title="No camera sources configured"
+        title={runtime.enabled ? 'No camera session is running' : 'Live monitoring is not enabled'}
         body={
           <>
-            Live ingestion arrives in Phase 3. When a camera goes offline this
-            surface will show it as offline — never a frozen last frame, which is
-            the most dangerous default in CCTV software.
+            {runtime.reason ||
+              `${cameras.configured} camera(s) are configured and none has an active session.`}{' '}
+            Nothing is being observed — which is not the same as observing
+            nothing, and this page will never imply otherwise.
           </>
         }
       />
-    </ProductPage>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(16rem, 1fr))',
+        gap: 'var(--space-4)',
+      }}
+    >
+      {cameras.health.map((camera) => (
+        <Card key={camera.camera_id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <StatusBadge tone={cameraTone(camera.health)}>{camera.health}</StatusBadge>
+            <Badge>{camera.kind}</Badge>
+          </div>
+          <div style={{ marginTop: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+            {camera.camera_id}
+          </div>
+          {/* Deliberately no image. The backend serves no frame, and a black
+              rectangle — or worse, a stale one — would be a claim this page
+              cannot support. A camera that is not producing says so in words. */}
+          <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
+            {camera.health === 'online'
+              ? 'Producing frames. No image is shown until imagery egress is enabled.'
+              : 'Not producing frames.'}
+          </div>
+        </Card>
+      ))}
+    </div>
   );
+}
+
+function cameraTone(health: string): 'online' | 'degraded' | 'offline' | 'idle' {
+  if (health === 'online') return 'online';
+  if (health === 'degraded' || health === 'connecting') return 'degraded';
+  if (health === 'error') return 'offline';
+  return 'idle';
 }
 
 export function StaffHygienePage() {

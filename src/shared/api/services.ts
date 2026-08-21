@@ -52,10 +52,35 @@ export const authApi = {
 
 /* ── health & status ──────────────────────────────────────────────────────── */
 
+export type CameraHealth = 'connecting' | 'online' | 'degraded' | 'offline' | 'error';
+export type SourceKind = 'live' | 'replay';
+
+export interface CameraSignal {
+  camera_id: string;
+  health: CameraHealth;
+  kind: SourceKind;
+}
+
+export interface RuntimeSummary {
+  enabled: boolean;
+  reason: string;
+  active_sessions: number;
+  streaming_sessions: number;
+  /** Derived from sessions that received a genuine frame. Never asserted. */
+  streaming: boolean;
+}
+
 export interface OperatorStatus {
   service: { ok: boolean };
   vision_os: VisionStatus;
   tenant_id: string;
+  cameras: {
+    configured: number;
+    sessions: number;
+    streaming: number;
+    health: CameraSignal[];
+  };
+  live_runtime: RuntimeSummary;
   /** Signals the backend deliberately does not report yet. Rendered, not hidden. */
   not_yet_reported: string[];
 }
@@ -128,7 +153,72 @@ export interface EvidenceView {
   reason: string;
 }
 
+export interface QueueStats {
+  capacity: number;
+  depth: number;
+  high_water: number;
+  accepted: number;
+  dropped_total: number;
+  dropped_queue_full: number;
+  dropped_sampled: number;
+  dropped_shutdown: number;
+}
+
+export interface SourceStatusView {
+  camera_id: string;
+  kind: SourceKind;
+  state: string;
+  health: CameraHealth;
+  /** Redacted: rtsp://***:***@host:554/... A credential never reaches here. */
+  uri: string;
+  epoch: number;
+  frames_produced: number;
+  reconnects: number;
+  errors: number;
+  last_error: string;
+  producing: boolean;
+  stale: boolean;
+  transitions: Array<{ at_ns: number; from: string; to: string; reason: string }>;
+}
+
+export interface LiveSessionView {
+  session_id: string;
+  kind: SourceKind;
+  camera_id: string;
+  tenant_id: string;
+  state: string;
+  streaming: boolean;
+  seekable: boolean;
+  bounded: boolean;
+  analysis_fps: number;
+  error: string;
+  source: SourceStatusView;
+  queue: QueueStats;
+  stats: {
+    frames_received: number;
+    frames_processed: number;
+    frames_dropped: number;
+    processing_errors: number;
+    mean_processing_ms: number;
+  };
+}
+
+export interface LiveRuntimeView {
+  runtime: RuntimeSummary;
+  sessions: LiveSessionView[];
+  cameras_configured: Array<{
+    camera_id: string;
+    uri: string;
+    channel: number;
+    stream_type: string;
+    analysis_fps: number;
+    credential_configured: boolean;
+  }>;
+  backpressure: { policy: string; rationale: string };
+}
+
 export const devtoolsApi = {
+  live: () => api.get<LiveRuntimeView>('/devtools/live'),
   vision: () => api.get<VisionDiagnostics>('/devtools/vision'),
   sessions: () => api.get<{ sessions: FixtureSession[] }>('/devtools/sessions'),
   capabilities: () => api.get<Capabilities>('/devtools/capabilities'),

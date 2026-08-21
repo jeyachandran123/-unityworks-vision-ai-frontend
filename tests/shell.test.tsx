@@ -107,7 +107,8 @@ describe('product routes do not fabricate data', () => {
     renderApp(<AppRouter />, '/dashboard');
 
     await screen.findByText('Not yet reported');
-    expect(screen.getByText('cameras')).toBeInTheDocument();
+    // 'cameras' left this list in Phase 3: real camera health is reported now.
+    expect(screen.getByText('coverage')).toBeInTheDocument();
     expect(screen.getByText('incidents')).toBeInTheDocument();
   });
 

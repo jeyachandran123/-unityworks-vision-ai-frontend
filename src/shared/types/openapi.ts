@@ -15,6 +15,7 @@ export const API_PATHS = [
   "/api/v1/auth/refresh",
   "/api/v1/devtools/capabilities",
   "/api/v1/devtools/evidence/{blob_ref}",
+  "/api/v1/devtools/live",
   "/api/v1/devtools/sessions",
   "/api/v1/devtools/state",
   "/api/v1/devtools/vision",
@@ -56,6 +57,9 @@ export type CapabilitiesApiV1DevtoolsCapabilitiesGetResponse = Record<string, un
 
 /** `GET /api/v1/devtools/evidence/{blob_ref}` */
 export type EvidenceApiV1DevtoolsEvidenceBlobRefGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/devtools/live` */
+export type LiveRuntimeApiV1DevtoolsLiveGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/sessions` */
 export type SessionsApiV1DevtoolsSessionsGetResponse = Record<string, unknown>;
