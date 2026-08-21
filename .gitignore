@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Secrets. The frontend holds none, and this keeps it that way.
+.env
+.env.*
+!.env.example

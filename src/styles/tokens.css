@@ -1,0 +1,195 @@
+/**
+ * Design tokens.
+ *
+ * Two themes over one token contract. Components read tokens and never literals,
+ * so a colour cannot exist in one theme and not the other.
+ *
+ * ── The rule that outranks aesthetics ──────────────────────────────────────
+ *
+ * Vision OS reports four states, not two: PRESENT, ABSENT, NOT_VISIBLE,
+ * UNKNOWN. Each gets its own token, its own icon and its own word. "Not
+ * visible" must never look like "nothing was there", and neither may look like
+ * a violation — one of those accuses somebody nobody could see.
+ *
+ * The palette is deliberately restrained: one accent, five state colours, and
+ * greys with a slight cool bias so they read as chosen rather than defaulted.
+ * Colour is never the only signal; every state also carries a glyph and a label.
+ */
+
+:root {
+  /* ── Surfaces (dark is the default: an operations screen runs all day) ── */
+  --surface-base: #0c1013;
+  --surface-raised: #141a1f;
+  --surface-overlay: #1b232a;
+  --surface-sunken: #080b0d;
+  --surface-hover: #1f2830;
+  --surface-selected: #1b2f36;
+
+  /* ── Ink ── */
+  --ink-primary: #e8eef1;
+  --ink-secondary: #9fb0ba;
+  --ink-tertiary: #6d7f8a;
+  --ink-inverse: #0c1013;
+  --ink-on-accent: #04191d;
+
+  /* ── Lines ── */
+  --line-subtle: #1e262c;
+  --line-default: #2a343c;
+  --line-strong: #3b4750;
+
+  /* ── Accent: a deep instrument teal. Optical, not decorative. ── */
+  --accent: #4fb3c4;
+  --accent-hover: #6cc6d5;
+  --accent-active: #3d97a7;
+  --accent-wash: #12262c;
+  --accent-line: #2c5f6b;
+
+  /* ── The four observation states. Non-negotiable. ── */
+  --state-present: #46b877;
+  --state-present-wash: #11241a;
+  --state-absent: #e0655c;
+  --state-absent-wash: #2b1614;
+  --state-not-visible: #8b7fd4;
+  --state-not-visible-wash: #1d1a2e;
+  --state-unknown: #7d8f9a;
+  --state-unknown-wash: #191f24;
+
+  /* ── Connection / health ── */
+  --health-online: #46b877;
+  --health-degraded: #d9a441;
+  --health-degraded-wash: #2a2113;
+  --health-offline: #e0655c;
+  --health-idle: #7d8f9a;
+
+  /* ── Severity ── */
+  --severity-critical: #e0655c;
+  --severity-high: #e08a4a;
+  --severity-medium: #d9a441;
+  --severity-low: #6c9fd4;
+  --severity-info: #7d8f9a;
+
+  /* ── Type ── */
+  --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.14em;
+
+  /* ── Space (4px base) ── */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ── Radius ── */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* ── Elevation. Restrained: a border does most of the work on dark. ── */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+
+  /* ── Motion. Short and few. ── */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Layers ── */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+
+  /* ── Layout ── */
+  --sidebar-width: 15rem;
+  --sidebar-width-collapsed: 3.5rem;
+  --topbar-height: 3.25rem;
+  --content-max: 96rem;
+
+  /* ── Focus. One ring everywhere, always visible. ── */
+  --focus-ring: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--accent);
+}
+
+/* Light theme. Same tokens, re-pointed — never a separate set of components. */
+:root[data-theme="light"] {
+  --surface-base: #f5f7f8;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #e8edef;
+  --surface-hover: #eef2f4;
+  --surface-selected: #e0f0f3;
+
+  --ink-primary: #10171b;
+  --ink-secondary: #46565f;
+  --ink-tertiary: #6b7c86;
+  --ink-inverse: #ffffff;
+  --ink-on-accent: #ffffff;
+
+  --line-subtle: #e4eaec;
+  --line-default: #d2dbdf;
+  --line-strong: #b4c1c7;
+
+  --accent: #14707f;
+  --accent-hover: #0f5a66;
+  --accent-active: #0c4a54;
+  --accent-wash: #e0f0f3;
+  --accent-line: #8fc3cc;
+
+  /* Darkened for contrast on a light ground — not simply reused. */
+  --state-present: #1c7a45;
+  --state-present-wash: #dff2e6;
+  --state-absent: #b83a30;
+  --state-absent-wash: #fae3e1;
+  --state-not-visible: #5341a8;
+  --state-not-visible-wash: #e8e4f7;
+  --state-unknown: #566670;
+  --state-unknown-wash: #e7ebed;
+
+  --health-online: #1c7a45;
+  --health-degraded: #8a6100;
+  --health-degraded-wash: #f8eed2;
+  --health-offline: #b83a30;
+  --health-idle: #566670;
+
+  --severity-critical: #b83a30;
+  --severity-high: #a35418;
+  --severity-medium: #8a6100;
+  --severity-low: #2b5f9e;
+  --severity-info: #566670;
+
+  --shadow-sm: 0 1px 2px rgb(16 23 27 / 0.06);
+  --shadow-md: 0 4px 12px rgb(16 23 27 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(16 23 27 / 0.12);
+}
