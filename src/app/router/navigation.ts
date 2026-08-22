@@ -75,9 +75,9 @@ export const PRODUCT_NAV: NavSection[] = [
         id: 'incidents',
         label: 'Incidents',
         path: '/incidents',
-        permissions: [PERMISSIONS.viewObservations],
+        permissions: [PERMISSIONS.viewIncidents],
         glyph: '▤',
-        hint: 'The work queue — open, assigned, resolved',
+        hint: 'The work queue — open, acknowledged, resolved',
       },
       {
         id: 'evidence',
@@ -92,7 +92,7 @@ export const PRODUCT_NAV: NavSection[] = [
         id: 'cameras',
         label: 'Cameras',
         path: '/cameras',
-        permissions: [PERMISSIONS.viewCameraHealth],
+        permissions: [PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth],
         glyph: '◎',
         hint: 'Coverage, health and blind spots',
       },
@@ -110,6 +110,16 @@ export const PRODUCT_NAV: NavSection[] = [
     id: 'manage',
     label: 'Manage',
     items: [
+      {
+        id: 'audit',
+        label: 'Audit Trail',
+        path: '/audit',
+        // Its own permission. Knowing who looked at imagery of a named employee
+        // is its own kind of access, not a by-product of administering things.
+        permissions: [PERMISSIONS.viewAudit],
+        glyph: '❑',
+        hint: 'Who did what, and who looked at whom',
+      },
       {
         id: 'admin',
         label: 'Administration',

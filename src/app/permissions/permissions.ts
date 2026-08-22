@@ -21,6 +21,23 @@ export const PERMISSIONS = {
   /** Never implied by `viewObservations`. A separate act, deliberately. */
   viewEvidence: 'view_evidence',
   viewCameraHealth: 'view_camera_health',
+
+  /** Reading the camera list. Not the authority to change it. */
+  viewCameras: 'view_cameras',
+  /** Adding a camera, and — the consequential one — enabling it. */
+  manageCameras: 'manage_cameras',
+
+  viewIncidents: 'view_incidents',
+  /** "Somebody has seen this." Does not close it. */
+  acknowledgeIncidents: 'acknowledge_incidents',
+  /** Closes a violation. Separate from acknowledging, deliberately. */
+  resolveIncidents: 'resolve_incidents',
+
+  /** Destroys a record that may be needed to defend a finding. Never implied. */
+  deleteEvidence: 'delete_evidence',
+  /** Who looked at imagery of whom. Its own privilege, not an admin side effect. */
+  viewAudit: 'view_audit',
+
   accessDevtools: 'access_devtools',
   /** Spends money and causes computation. Not a read. */
   registerDemand: 'register_demand',

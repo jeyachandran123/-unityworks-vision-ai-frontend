@@ -26,13 +26,17 @@ export function identity(overrides: Partial<Identity> = {}): Identity {
     display_name: 'Dev User',
     tenant_id: 'org-test',
     roles: ['developer'],
+    // Exactly `permissions_for({developer})` on the backend. A fixture that
+    // grants more than the role does turns every guard test into a tautology.
     permissions: [
-      'view_live',
-      'view_observations',
-      'view_evidence',
-      'view_camera_health',
       'access_devtools',
       'register_demand',
+      'view_camera_health',
+      'view_cameras',
+      'view_evidence',
+      'view_incidents',
+      'view_live',
+      'view_observations',
     ],
     camera_scope: { breadth: 'listed', camera_ids: ['cam-fixture-01'] },
     site_ids: ['site-fixture'],
@@ -45,7 +49,19 @@ export const managerIdentity = (): Identity =>
     subject: 'manager@example.com',
     display_name: 'Manager',
     roles: ['restaurant_manager'],
-    permissions: ['view_live', 'view_observations', 'view_evidence', 'view_camera_health'],
+    // `permissions_for({restaurant_manager})`. May resolve an incident; may not
+    // configure a camera, delete evidence or read the audit trail.
+    permissions: [
+      'acknowledge_incidents',
+      'resolve_incidents',
+      'view_camera_health',
+      'view_cameras',
+      'view_evidence',
+      'view_incidents',
+      'view_live',
+      'view_observations',
+      'view_users',
+    ],
   });
 
 export const supervisorIdentity = (): Identity =>
@@ -53,8 +69,51 @@ export const supervisorIdentity = (): Identity =>
     subject: 'supervisor@example.com',
     display_name: 'Supervisor',
     roles: ['kitchen_supervisor'],
-    // No view_evidence. The role most likely to be a shared kitchen screen.
-    permissions: ['view_live', 'view_observations', 'view_camera_health'],
+    // No view_evidence: the role most likely to be a shared kitchen screen.
+    // May acknowledge an incident but not resolve one.
+    permissions: [
+      'acknowledge_incidents',
+      'view_camera_health',
+      'view_cameras',
+      'view_incidents',
+      'view_live',
+      'view_observations',
+    ],
+  });
+
+export const auditorIdentity = (): Identity =>
+  identity({
+    subject: 'auditor@example.com',
+    display_name: 'Auditor',
+    roles: ['auditor'],
+    // The narrowest interesting role: reads the trail, reads evidence, and can
+    // change nothing at all.
+    permissions: ['view_audit', 'view_evidence', 'view_incidents', 'view_observations'],
+  });
+
+export const adminIdentity = (): Identity =>
+  identity({
+    subject: 'admin@example.com',
+    display_name: 'Org Admin',
+    roles: ['org_admin'],
+    permissions: [
+      'acknowledge_incidents',
+      'delete_evidence',
+      'manage_cameras',
+      'manage_organization',
+      'manage_users',
+      'register_demand',
+      'resolve_incidents',
+      'view_audit',
+      'view_camera_health',
+      'view_cameras',
+      'view_evidence',
+      'view_incidents',
+      'view_live',
+      'view_observations',
+      'view_users',
+    ],
+    camera_scope: { breadth: 'all_in_tenant', camera_ids: [] },
   });
 
 function attribute(key: string, value: string) {
@@ -270,9 +329,27 @@ export function stubFetch(options: StubOptions = {}) {
           streaming_sessions: 0,
           streaming: false,
         },
-        // 'cameras' left this list in Phase 3 — real camera health is reported.
-        not_yet_reported: ['coverage', 'incidents'],
+        cameras_registered: 0,
+        cameras_enabled: 0,
+        // 'cameras' left this list in Phase 3 and 'incidents' in Phase 5, as
+        // each store arrived. 'coverage' remains because nothing computes it.
+        not_yet_reported: ['coverage'],
       });
+    }
+
+    // The durable product routes. Empty by default: a test that wants rows
+    // supplies them through `routes`, and a page that fabricates a count when
+    // given none should fail rather than look plausible.
+    if (url.includes('/incidents')) {
+      return jsonResponse({ incidents: [], count: 0 });
+    }
+
+    if (url.includes('/cameras')) {
+      return jsonResponse({ cameras: [], enabled: 0, total: 0 });
+    }
+
+    if (url.includes('/audit')) {
+      return jsonResponse({ events: [], count: 0 });
     }
 
     if (url.includes('/devtools/live')) {

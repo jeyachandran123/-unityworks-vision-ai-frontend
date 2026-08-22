@@ -12,7 +12,11 @@ import react from '@vitejs/plugin-react';
  * silently fail to restore. Production sits behind a single origin for the same
  * reason.
  */
-const api = process.env.UWV_API_URL ?? 'http://127.0.0.1:8000';
+// 8010, not 8000. Port 8000 on this machine is published by an unrelated
+// Docker stack (the AI Coding Assistant), and proxying to it means the login
+// form authenticates against a different product's user table — a 401 for an
+// account that exists and is correct. Override with UWV_API_URL if needed.
+const api = process.env.UWV_API_URL ?? 'http://127.0.0.1:8010';
 
 export default defineConfig({
   plugins: [react()],

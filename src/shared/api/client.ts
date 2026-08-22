@@ -152,11 +152,34 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return parse<T>(response);
 }
 
+/**
+ * A raw authorized request, for responses that are not JSON.
+ *
+ * Evidence imagery is the only caller. It exists because `apiRequest` parses
+ * every body as JSON, and an image is not one — not because imagery deserves a
+ * looser path. The Authorization header, the credentialed cookie and the
+ * single-flight refresh retry all behave exactly as they do for JSON.
+ */
+export async function authorizedFetch(path: string): Promise<Response> {
+  let response = await send(path, {});
+  if (response.status === 401) {
+    const token = await refreshAccessToken();
+    if (token) response = await send(path, {});
+  }
+  return response;
+}
+
 export const api = {
   get: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     apiRequest<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     apiRequest<T>(path, { ...options, method: 'POST', body }),
+  patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
+    apiRequest<T>(path, { ...options, method: 'PATCH', body }),
+  // `del`, not `delete` — a reserved word cannot be a shorthand property, and
+  // spelling it `delete:` here would force every call site to quote it.
+  del: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
+    apiRequest<T>(path, { ...options, method: 'DELETE', body }),
 };
 
 /** Test seam. Clears module state between cases. */

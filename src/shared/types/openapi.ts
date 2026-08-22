@@ -9,16 +9,26 @@
 /* eslint-disable */
 
 export const API_PATHS = [
+  "/api/v1/audit",
   "/api/v1/auth/login",
   "/api/v1/auth/logout",
   "/api/v1/auth/me",
   "/api/v1/auth/refresh",
+  "/api/v1/cameras",
+  "/api/v1/cameras/{camera_key}",
+  "/api/v1/cameras/{camera_key}/frames",
   "/api/v1/devtools/capabilities",
   "/api/v1/devtools/evidence/{blob_ref}",
   "/api/v1/devtools/live",
   "/api/v1/devtools/sessions",
   "/api/v1/devtools/state",
   "/api/v1/devtools/vision",
+  "/api/v1/evidence/{evidence_ref}",
+  "/api/v1/evidence/{evidence_ref}/image",
+  "/api/v1/incidents",
+  "/api/v1/incidents/{incident_id}",
+  "/api/v1/incidents/{incident_id}/acknowledge",
+  "/api/v1/incidents/{incident_id}/resolve",
   "/api/v1/status",
   "/health",
   "/health/ready"
@@ -40,6 +50,9 @@ export type ValidationError = {
   "type": string;
 };
 
+/** `GET /api/v1/audit` */
+export type ListAuditApiV1AuditGetResponse = Record<string, unknown>;
+
 /** `POST /api/v1/auth/login` */
 export type LoginApiV1AuthLoginPostResponse = Record<string, unknown>;
 
@@ -51,6 +64,18 @@ export type MeApiV1AuthMeGetResponse = Record<string, unknown>;
 
 /** `POST /api/v1/auth/refresh` */
 export type RefreshApiV1AuthRefreshPostResponse = Record<string, unknown>;
+
+/** `GET /api/v1/cameras` */
+export type ListCamerasApiV1CamerasGetResponse = Record<string, unknown>;
+
+/** `POST /api/v1/cameras` */
+export type CreateCameraApiV1CamerasPostResponse = Record<string, unknown>;
+
+/** `PATCH /api/v1/cameras/{camera_key}` */
+export type UpdateCameraApiV1CamerasCameraKeyPatchResponse = Record<string, unknown>;
+
+/** `GET /api/v1/cameras/{camera_key}/frames` */
+export type ListFramesApiV1CamerasCameraKeyFramesGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/capabilities` */
 export type CapabilitiesApiV1DevtoolsCapabilitiesGetResponse = Record<string, unknown>;
@@ -69,6 +94,27 @@ export type VisionStateApiV1DevtoolsStateGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/vision` */
 export type VisionDiagnosticsApiV1DevtoolsVisionGetResponse = Record<string, unknown>;
+
+/** `DELETE /api/v1/evidence/{evidence_ref}` */
+export type DeleteEvidenceApiV1EvidenceEvidenceRefDeleteResponse = Record<string, unknown>;
+
+/** `GET /api/v1/evidence/{evidence_ref}` */
+export type GetEvidenceMetadataApiV1EvidenceEvidenceRefGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/evidence/{evidence_ref}/image` */
+export type GetEvidenceImageApiV1EvidenceEvidenceRefImageGetResponse = unknown;
+
+/** `GET /api/v1/incidents` */
+export type ListIncidentsApiV1IncidentsGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/incidents/{incident_id}` */
+export type GetIncidentApiV1IncidentsIncidentIdGetResponse = Record<string, unknown>;
+
+/** `POST /api/v1/incidents/{incident_id}/acknowledge` */
+export type AcknowledgeIncidentApiV1IncidentsIncidentIdAcknowledgePostResponse = Record<string, unknown>;
+
+/** `POST /api/v1/incidents/{incident_id}/resolve` */
+export type ResolveIncidentApiV1IncidentsIncidentIdResolvePostResponse = Record<string, unknown>;
 
 /** `GET /api/v1/status` */
 export type StatusApiV1StatusGetResponse = Record<string, unknown>;

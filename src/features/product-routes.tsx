@@ -21,6 +21,9 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { healthApi, type OperatorStatus } from '@shared/api/services';
+import { incidentsApi } from '@shared/api/persistence';
+import { useAuth } from '@app/auth/AuthProvider';
+import { has, PERMISSIONS } from '@app/permissions/permissions';
 import {
   Badge,
   Card,
@@ -65,11 +68,20 @@ function ProductPage({
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
 
 export function DashboardPage() {
-  // The one product page with a real backend call. `/api/v1/status` exists, so
-  // the dashboard reports what it genuinely knows and nothing more.
   const status = useQuery({
     queryKey: ['status'],
     queryFn: () => healthApi.status(),
+    staleTime: 15_000,
+  });
+
+  // Incidents are durable as of Phase 5, so this figure is real. It is fetched
+  // separately from status on purpose: if the incident store is unreachable the
+  // card goes back to `—`, rather than the whole dashboard reporting nothing.
+  const canSeeIncidents = has(useAuth().user, PERMISSIONS.viewIncidents);
+  const openIncidents = useQuery({
+    queryKey: ['incidents', 'active'],
+    queryFn: () => incidentsApi.list('active'),
+    enabled: canSeeIncidents,
     staleTime: 15_000,
   });
 
@@ -100,10 +112,22 @@ export function DashboardPage() {
               marginBottom: 'var(--space-6)',
             }}
           >
-            {/* Every one of these is null on purpose. The backend reports them
-                under `not_yet_reported`, and inventing a zero would be the exact
-                failure this product exists to avoid. */}
-            <StatCard label="Open incidents" value={null} unavailableReason="Incidents arrive in Phase 4" />
+            {/* Real, from the durable incident store. Still `—` rather than
+                `0` whenever the count is not actually known — the account may
+                not read incidents, or the query may have failed, and both must
+                look different from "nothing is wrong". */}
+            <StatCard
+              label="Open incidents"
+              value={openIncidents.isSuccess ? openIncidents.data.count : null}
+              unavailableReason={
+                !canSeeIncidents
+                  ? 'Your account does not read incidents'
+                  : openIncidents.isError
+                    ? 'The incident store could not be reached'
+                    : 'Loading'
+              }
+              detail="Raised and not yet resolved"
+            />
             {/* Real, from the live runtime. Still refuses to imply anything it
                 does not know: zero configured cameras reads as zero configured
                 cameras, never as zero problems. */}
@@ -263,57 +287,6 @@ export function AlertsPage() {
       <EmptyState
         title="No alerts"
         body="Nothing is currently raised. This is not a compliance statement — it means no alert rule has fired, and alert delivery is not connected yet."
-      />
-    </ProductPage>
-  );
-}
-
-export function CamerasPage() {
-  return (
-    <ProductPage
-      title="Cameras"
-      description="Coverage, health and blind spots. A camera that has produced no frames is the most important thing on this page."
-      capability="camera management"
-    >
-      <EmptyState
-        title="No cameras registered"
-        body="Camera configuration arrives in Phase 3, together with the RTSP source adapter."
-      />
-    </ProductPage>
-  );
-}
-
-export function IncidentsPage() {
-  return (
-    <ProductPage
-      title="Incidents"
-      description="The work queue: open, assigned, resolved. Each incident freezes the finding that raised it, so it stays explicable after the rules change."
-      capability="incident persistence"
-    >
-      <EmptyState
-        title="No incidents"
-        body="Incident persistence arrives in Phase 4. Nothing is being suppressed — there is no store to read from yet."
-      />
-    </ProductPage>
-  );
-}
-
-export function EvidencePage() {
-  return (
-    <ProductPage
-      title="Evidence"
-      description="Imagery that supports a finding. Every view is an access event, and access is a separate privilege from reading observations."
-      capability="durable evidence storage"
-    >
-      <UnavailableState
-        title="Evidence storage is not durable yet"
-        body={
-          <>
-            The platform holds evidence in memory, so nothing survives a restart.
-            A durable, encrypted store with a working retention sweeper is
-            required before real imagery is retained.
-          </>
-        }
       />
     </ProductPage>
   );

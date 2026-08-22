@@ -23,15 +23,21 @@ import { LoginPage } from '@features/auth/LoginPage';
 import {
   AdministrationPage,
   AlertsPage,
-  CamerasPage,
   DashboardPage,
-  EvidencePage,
-  IncidentsPage,
   LiveMonitoringPage,
   NotFoundPage,
   ReportsPage,
   StaffHygienePage,
 } from '@features/product-routes';
+// The four surfaces backed by durable state. Kept in their own module so it is
+// obvious at a glance which pages read a database and which are still waiting
+// for one.
+import {
+  AuditPage,
+  CamerasPage,
+  EvidencePage,
+  IncidentsPage,
+} from '@features/persistence-routes';
 
 /**
  * The single dynamic import in the application.
@@ -61,8 +67,14 @@ export function AppRouter() {
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewObservations]} />}>
             <Route path="/hygiene" element={<StaffHygienePage />} />
             <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/incidents" element={<IncidentsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+          </Route>
+
+          {/* Incidents are not implied by observations: an incident is what the
+              organisation decided to do about a finding, and acting on one is a
+              further privilege still. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewIncidents]} />}>
+            <Route path="/incidents" element={<IncidentsPage />} />
           </Route>
 
           {/* Evidence is its own permission, never implied by observations. */}
@@ -70,8 +82,20 @@ export function AppRouter() {
             <Route path="/evidence" element={<EvidencePage />} />
           </Route>
 
-          <Route element={<RequirePermission permissions={[PERMISSIONS.viewCameraHealth]} />}>
+          <Route
+            element={
+              <RequirePermission
+                permissions={[PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth]}
+              />
+            }
+          >
             <Route path="/cameras" element={<CamerasPage />} />
+          </Route>
+
+          {/* Reading the trail is its own privilege. Knowing who looked at
+              imagery of a named employee is not an administrative by-product. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewAudit]} />}>
+            <Route path="/audit" element={<AuditPage />} />
           </Route>
 
           <Route

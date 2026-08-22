@@ -81,6 +81,9 @@ export interface OperatorStatus {
     health: CameraSignal[];
   };
   live_runtime: RuntimeSummary;
+  /** Camera rows in the durable store — what a restart would restore. */
+  cameras_registered: number;
+  cameras_enabled: number;
   /** Signals the backend deliberately does not report yet. Rendered, not hidden. */
   not_yet_reported: string[];
 }

@@ -52,9 +52,14 @@ export class ApiError extends Error {
 
   get kind(): ErrorKind {
     switch (this.code) {
+      // `NO_SESSION` is grouped here but is not a fault: nobody was signed in
+      // yet. Every page load produces one while the app tries to restore a
+      // session from the refresh cookie, which is why it is treated as routine
+      // rather than logged as an error.
       case 'UNAUTHENTICATED':
       case 'TOKEN_EXPIRED':
       case 'INVALID_CREDENTIALS':
+      case 'NO_SESSION':
         return 'unauthenticated';
       case 'FORBIDDEN':
       case 'OUT_OF_SCOPE':

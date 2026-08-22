@@ -89,7 +89,9 @@ describe('product routes do not fabricate data', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    const label = await screen.findByText('Open incidents');
+    // 'Subjects assessed' needs a live source that does not exist, so it is
+    // still unknown — and unknown renders as an em dash, never as a zero.
+    const label = await screen.findByText('Subjects assessed');
     const card = label.closest('section') as HTMLElement;
     expect(within(card).getByText('—')).toBeInTheDocument();
     expect(within(card).queryByText('0')).not.toBeInTheDocument();
@@ -99,7 +101,7 @@ describe('product routes do not fabricate data', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    expect(await screen.findByText(/incidents arrive in phase 4/i)).toBeInTheDocument();
+    expect(await screen.findByText(/requires a live source/i)).toBeInTheDocument();
   });
 
   it('surfaces the backend’s own not-yet-reported list', async () => {
@@ -107,9 +109,10 @@ describe('product routes do not fabricate data', () => {
     renderApp(<AppRouter />, '/dashboard');
 
     await screen.findByText('Not yet reported');
-    // 'cameras' left this list in Phase 3: real camera health is reported now.
+    // 'cameras' left this list in Phase 3 and 'incidents' in Phase 5, each when
+    // its store arrived. Nothing computes coverage, so it is still named.
     expect(screen.getByText('coverage')).toBeInTheDocument();
-    expect(screen.getByText('incidents')).toBeInTheDocument();
+    expect(screen.queryByText('incidents')).not.toBeInTheDocument();
   });
 
   it('never claims compliance on a page with no data', async () => {

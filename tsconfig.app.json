@@ -18,8 +18,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
-    "ignoreDeprecations": "6.0",
     "noEmit": true,
+    "ignoreDeprecations": "6.0",
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
 
