@@ -62,6 +62,14 @@ export interface ConnectionOptions {
   token: () => string | null;
   onStatus: (status: ConnectionStatus) => void;
   onEvent?: (event: LiveEvent) => void;
+  /**
+   * Obtain a fresh access token after the server rejected the current one.
+   *
+   * Injected rather than imported so this module keeps knowing nothing about
+   * the REST client, and so a test can reject a renewal without a network.
+   * Resolving `null` means the session really is over.
+   */
+  renew?: () => Promise<string | null>;
   /** Injected in tests. */
   socketFactory?: (url: string) => WebSocket;
 }
@@ -140,14 +148,26 @@ export class LiveConnection {
       if (this.closedByUs) return;
 
       if (event.code === CLOSE.unauthenticated) {
-        // Retrying with the same rejected token would loop. The access token is
-        // refreshed by the API client on its own schedule; a later reconnect
-        // will pick up a valid one.
+        // The access token expired while the socket was open — the ordinary
+        // case after fifteen minutes on the live screen, not a real end of
+        // session.
+        //
+        // This used to stop here, on the reasoning that retrying with the same
+        // rejected token would loop and that "a later reconnect will pick up a
+        // valid one". Nothing scheduled that later reconnect, so the socket
+        // never came back and the user was left reading "Session is no longer
+        // valid for live monitoring" until they reloaded the page — while the
+        // REST side of the app carried on refreshing happily.
+        //
+        // Retrying with the *same* token would indeed loop, so the token is
+        // refreshed first and only a genuine refresh failure is reported as a
+        // dead session.
         this.emit({
-          state: 'unauthorised',
+          state: 'reconnecting',
           streaming: false,
-          detail: 'Session is no longer valid for live monitoring',
+          detail: 'Renewing session',
         });
+        void this.renewAndReconnect();
         return;
       }
 
@@ -164,6 +184,47 @@ export class LiveConnection {
         event.code === CLOSE.timeout ? 'Authentication timed out' : 'Connection lost',
       );
     };
+  }
+
+  /**
+   * Renew the access token, then reconnect with it.
+   *
+   * Only a refresh that actually fails ends the session. Anything else — a
+   * slow network, a server hiccup — goes back through the ordinary reconnect
+   * backoff rather than stranding the live screen.
+   */
+  private async renewAndReconnect(): Promise<void> {
+    if (!this.options.renew) {
+      // No renewal available: report honestly rather than retry forever.
+      this.emit({
+        state: 'unauthorised',
+        streaming: false,
+        detail: 'Session is no longer valid for live monitoring',
+      });
+      return;
+    }
+
+    let token: string | null = null;
+    try {
+      token = await this.options.renew();
+    } catch {
+      token = null;
+    }
+    if (this.closedByUs) return;
+
+    if (!token) {
+      this.emit({
+        state: 'unauthorised',
+        streaming: false,
+        detail: 'Session is no longer valid for live monitoring',
+      });
+      return;
+    }
+
+    // A renewed token is a fresh start, not attempt N+1 — the backoff exists
+    // for an unreachable server, and the server was reachable enough to say no.
+    this.attempts = 0;
+    this.open();
   }
 
   private receive(event: MessageEvent): void {

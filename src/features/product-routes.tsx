@@ -277,21 +277,6 @@ export function StaffHygienePage() {
   );
 }
 
-export function AlertsPage() {
-  return (
-    <ProductPage
-      title="Alerts"
-      description="Things that need attention now, ordered by severity."
-      capability="alert delivery"
-    >
-      <EmptyState
-        title="No alerts"
-        body="Nothing is currently raised. This is not a compliance statement — it means no alert rule has fired, and alert delivery is not connected yet."
-      />
-    </ProductPage>
-  );
-}
-
 export function ReportsPage() {
   return (
     <ProductPage

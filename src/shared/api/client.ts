@@ -25,7 +25,7 @@
 
 import { ApiError, normaliseError, type ErrorEnvelope } from './errors';
 
-const BASE = (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api/v1';
+export const API_BASE = (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api/v1';
 
 /** The in-memory access token. Module-scoped so nothing can serialise it. */
 let accessToken: string | null = null;
@@ -62,7 +62,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-  return fetch(`${BASE}${path}`, {
+  return fetch(`${API_BASE}${path}`, {
     method: options.method ?? 'GET',
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -83,7 +83,7 @@ export async function refreshAccessToken(): Promise<string | null> {
 
   refreshInFlight = (async () => {
     try {
-      const response = await fetch(`${BASE}/auth/refresh`, {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
       });

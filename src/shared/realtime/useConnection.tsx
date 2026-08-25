@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { getAccessToken } from '@shared/api/client';
+import { getAccessToken, refreshAccessToken } from '@shared/api/client';
 import { useAuth } from '@app/auth/AuthProvider';
 import { hasAny, PERMISSIONS } from '@app/permissions/permissions';
 import { LiveConnection, resolveWebSocketUrl, type ConnectionStatus } from './connection';
@@ -48,6 +48,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     const live = new LiveConnection({
       url: resolveWebSocketUrl(WS_PATH),
       token: getAccessToken,
+      // The live socket must survive an access-token expiry the same way every
+      // REST call already does. Without this the socket died after fifteen
+      // minutes and never came back.
+      renew: refreshAccessToken,
       onStatus: setStatus,
     });
     connection.current = live;

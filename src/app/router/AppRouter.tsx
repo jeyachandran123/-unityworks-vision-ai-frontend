@@ -22,7 +22,6 @@ import { LoadingState } from '@shared/ui/primitives';
 import { LoginPage } from '@features/auth/LoginPage';
 import {
   AdministrationPage,
-  AlertsPage,
   DashboardPage,
   LiveMonitoringPage,
   NotFoundPage,
@@ -33,6 +32,7 @@ import {
 // obvious at a glance which pages read a database and which are still waiting
 // for one.
 import { CameraWallPage } from '@features/camera-wall';
+import { AlertsPage } from '@features/alerts';
 import {
   AuditPage,
   CamerasPage,

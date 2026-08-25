@@ -141,6 +141,29 @@ export interface Evidence {
 
 export const evidenceApi = {
   metadata: (ref: string) => api.get<Evidence>(`/evidence/${encodeURIComponent(ref)}`),
+  /**
+   * The imagery itself, as an object URL the caller must revoke.
+   *
+   * Fetched rather than put in `<img src>` because retrieval requires an
+   * Authorization header, and because every call leaves an audit row on the
+   * server — so an image must never load as a side effect of rendering a list.
+   * A screen shows this only when the manager asks for it.
+   */
+  image: async (ref: string): Promise<string> => {
+    const { getAccessToken, API_BASE } = await import('./client');
+    const token = getAccessToken();
+    const response = await fetch(
+      `${API_BASE}/evidence/${encodeURIComponent(ref)}/image`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`evidence image unavailable (${response.status})`);
+    }
+    return URL.createObjectURL(await response.blob());
+  },
   /** Erases the bytes and leaves a tombstone. The reason is mandatory. */
   remove: (ref: string, reason: string) =>
     api.del<Evidence>(`/evidence/${encodeURIComponent(ref)}`, { reason }),
