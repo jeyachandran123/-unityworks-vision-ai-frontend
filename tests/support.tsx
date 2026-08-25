@@ -161,6 +161,40 @@ export function fixtureState() {
   };
 }
 
+/** A wall with no cameras. The honest default for a stubbed backend. */
+export function emptyWall() {
+  return {
+    cameras: [],
+    total: 0,
+    live: 0,
+    wall: { cameras: 0, by_state: {}, live: 0, viewers: 0 },
+    default_wall_fps: 4,
+    default_detail_fps: 12,
+  };
+}
+
+/** One camera on the wall, in whatever state a test needs. */
+export function wallCamera(overrides: Record<string, unknown> = {}) {
+  return {
+    camera_id: 'cam-01',
+    name: 'Channel 01',
+    channel: 1,
+    stream_type: 'main',
+    enabled: true,
+    state: 'live',
+    width: 1920,
+    height: 1080,
+    viewers: 0,
+    reconnects: 0,
+    frames_decoded: 120,
+    seconds_since_frame: 0.2,
+    first_frame_latency_s: 2.4,
+    last_error: '',
+    purpose: 'live monitoring',
+    ...overrides,
+  };
+}
+
 export function emptyLiveRuntime() {
   return {
     runtime: {
@@ -244,6 +278,8 @@ export interface StubOptions {
   runtime?: unknown;
   /** Overrides /devtools/live. */
   live?: unknown;
+  /** Overrides /wall/cameras. */
+  wall?: unknown;
   /** `null` makes /auth/refresh 401 — i.e. no existing session. */
   session?: Identity | null;
   /** Envelope code returned by /auth/login. */
@@ -340,6 +376,24 @@ export function stubFetch(options: StubOptions = {}) {
     // The durable product routes. Empty by default: a test that wants rows
     // supplies them through `routes`, and a page that fabricates a count when
     // given none should fail rather than look plausible.
+    // Must precede the '/cameras' matcher below: '/wall/cameras' contains it,
+    // and the Phase 5 camera shape has no wall summary.
+    if (url.includes('/wall/cameras')) {
+      if (url.includes('/ticket')) {
+        // Echo the camera that was actually asked for. A stub that always
+        // answered 'cam-01' would let every tile carry the same stream and the
+        // identity test would pass on a broken app.
+        const asked = /\/wall\/cameras\/([^/]+)\/ticket/.exec(url)?.[1] ?? 'cam-01';
+        return jsonResponse({
+          camera_id: asked,
+          ticket: `9999999999.ticket-${asked}`,
+          expires_in: 60,
+          stream_path: `/api/v1/wall/cameras/${asked}/stream.mjpg`,
+        });
+      }
+      return jsonResponse(options.wall ?? emptyWall());
+    }
+
     if (url.includes('/incidents')) {
       return jsonResponse({ incidents: [], count: 0 });
     }

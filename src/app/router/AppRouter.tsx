@@ -32,6 +32,7 @@ import {
 // The four surfaces backed by durable state. Kept in their own module so it is
 // obvious at a glance which pages read a database and which are still waiting
 // for one.
+import { CameraWallPage } from '@features/camera-wall';
 import {
   AuditPage,
   CamerasPage,
@@ -61,7 +62,10 @@ export function AppRouter() {
           <Route path="/dashboard" element={<DashboardPage />} />
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewLive]} />}>
-            <Route path="/live" element={<LiveMonitoringPage />} />
+            <Route path="/live" element={<CameraWallPage />} />
+            {/* The Phase 3 runtime view keeps its own address; the wall is what an
+                operator opens, and the runtime page is what an engineer opens. */}
+            <Route path="/live/runtime" element={<LiveMonitoringPage />} />
           </Route>
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewObservations]} />}>

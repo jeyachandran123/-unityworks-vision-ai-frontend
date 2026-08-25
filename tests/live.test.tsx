@@ -36,11 +36,15 @@ const RUNNING_RUNTIME = {
   streaming: true,
 };
 
+// Phase 6B moved the operator's live surface to the camera wall at '/live'.
+// These assertions are about the Phase 3 *runtime* view — session state, queue
+// depth, streaming honesty — which now lives at '/live/runtime'. The properties
+// they protect are unchanged; only the address moved.
 describe('live monitoring reflects real camera state', () => {
   it('says nothing is running rather than showing an empty wall', async () => {
     installFetch({ session: identity() });
 
-    renderApp(<AppRouter />, '/live');
+    renderApp(<AppRouter />, '/live/runtime');
 
     expect(await screen.findByText(/live monitoring is not enabled/i)).toBeInTheDocument();
     // The distinction the whole product rests on.
@@ -50,7 +54,7 @@ describe('live monitoring reflects real camera state', () => {
   it('renders a tile per camera with its real health', async () => {
     installFetch({ session: identity(), cameras: ONLINE_CAMERAS, runtime: RUNNING_RUNTIME });
 
-    renderApp(<AppRouter />, '/live');
+    renderApp(<AppRouter />, '/live/runtime');
 
     expect(await screen.findByText('cam-01')).toBeInTheDocument();
     expect(screen.getByText('cam-02')).toBeInTheDocument();
@@ -61,7 +65,7 @@ describe('live monitoring reflects real camera state', () => {
   it('never shows an image for a camera the backend has no frame for', async () => {
     installFetch({ session: identity(), cameras: ONLINE_CAMERAS, runtime: RUNNING_RUNTIME });
 
-    renderApp(<AppRouter />, '/live');
+    renderApp(<AppRouter />, '/live/runtime');
     await screen.findByText('cam-01');
 
     // No <img> anywhere. A black rectangle — or worse, a stale frame — would be
@@ -73,7 +77,7 @@ describe('live monitoring reflects real camera state', () => {
   it('never labels a degraded camera as online', async () => {
     installFetch({ session: identity(), cameras: ONLINE_CAMERAS, runtime: RUNNING_RUNTIME });
 
-    renderApp(<AppRouter />, '/live');
+    renderApp(<AppRouter />, '/live/runtime');
     const degraded = (await screen.findByText('cam-02')).closest('section') as HTMLElement;
 
     expect(within(degraded).getByText('degraded')).toBeInTheDocument();

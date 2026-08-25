@@ -30,6 +30,10 @@ export const API_PATHS = [
   "/api/v1/incidents/{incident_id}/acknowledge",
   "/api/v1/incidents/{incident_id}/resolve",
   "/api/v1/status",
+  "/api/v1/wall/cameras",
+  "/api/v1/wall/cameras/{camera_id}",
+  "/api/v1/wall/cameras/{camera_id}/stream.mjpg",
+  "/api/v1/wall/cameras/{camera_id}/ticket",
   "/health",
   "/health/ready"
 ] as const;
@@ -118,6 +122,18 @@ export type ResolveIncidentApiV1IncidentsIncidentIdResolvePostResponse = Record<
 
 /** `GET /api/v1/status` */
 export type StatusApiV1StatusGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/wall/cameras` */
+export type ListWallCamerasApiV1WallCamerasGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/wall/cameras/{camera_id}` */
+export type CameraDetailApiV1WallCamerasCameraIdGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/wall/cameras/{camera_id}/stream.mjpg` */
+export type StreamCameraApiV1WallCamerasCameraIdStreamMjpgGetResponse = unknown;
+
+/** `POST /api/v1/wall/cameras/{camera_id}/ticket` */
+export type IssueTicketApiV1WallCamerasCameraIdTicketPostResponse = Record<string, unknown>;
 
 /** `GET /health` */
 export type LivenessHealthGetResponse = Record<string, unknown>;

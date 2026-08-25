@@ -47,7 +47,7 @@ export const PRODUCT_NAV: NavSection[] = [
         path: '/live',
         permissions: [PERMISSIONS.viewLive],
         glyph: '▢',
-        hint: 'What the cameras are seeing now',
+        hint: 'Every camera on the recorder, live',
       },
       {
         id: 'hygiene',
