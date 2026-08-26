@@ -14,7 +14,7 @@
  * audit row.
  */
 
-import { api } from './client';
+import { api, authorizedFetch } from './client';
 
 /* ── cameras ──────────────────────────────────────────────────────────────── */
 
@@ -118,8 +118,43 @@ export const incidentsApi = {
 
 export type EvidenceState = 'retained' | 'expired' | 'deleted';
 
+/**
+ * One object inside a stored frame, as the backend recorded it at capture.
+ *
+ * `box` is normalized `[x1, y1, x2, y2]` in the **source frame**, before the
+ * crop strategy's padding — so it is the right rectangle to draw over the full
+ * image, and the crop it names shows slightly more than it.
+ */
+export interface EvidenceObject {
+  object_id: string;
+  class: string;
+  /** `Person #2`. Presentation only; `object_id` is the identity. */
+  label: string;
+  box: [number, number, number, number];
+  /** True for the one object whose verdict raised this alert. */
+  is_subject: boolean;
+  sent_to_model: boolean;
+  /** Handle for this object's decision crop, or `''` if none was retained. */
+  crop_ref?: string;
+}
+
+/**
+ * Where the subject is in a stored frame.
+ *
+ * Absent (`null`) whenever the frame is a fallback context frame rather than
+ * the decision frame — there is then no subject geometry to be had, and the UI
+ * must draw nothing rather than guess.
+ */
+export interface EvidenceGeometry {
+  kind: 'decision-frame' | 'decision-crop';
+  frame?: { frame_ref: string; width: number; height: number };
+  subject?: EvidenceObject;
+  context?: EvidenceObject[];
+}
+
 export interface Evidence {
   evidence_ref: string;
+  geometry: EvidenceGeometry | null;
   camera_key: string;
   frame_ref: string;
   object_id: string;
@@ -150,14 +185,15 @@ export const evidenceApi = {
    * A screen shows this only when the manager asks for it.
    */
   image: async (ref: string): Promise<string> => {
-    const { getAccessToken, API_BASE } = await import('./client');
-    const token = getAccessToken();
-    const response = await fetch(
-      `${API_BASE}/evidence/${encodeURIComponent(ref)}/image`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-      },
+    // `authorizedFetch`, not a bare `fetch`. This used to call `fetch` with a
+    // hand-attached header, which meant it was the one authorized path in the
+    // application with **no refresh retry**: an access token that expired while
+    // an operator had the alert queue open turned "show me the picture" into
+    // `evidence image unavailable (401)` until they reloaded. A gallery makes
+    // several of these calls per alert, so the odds of catching the expiry were
+    // about to get worse, not better.
+    const response = await authorizedFetch(
+      `/evidence/${encodeURIComponent(ref)}/image`,
     );
     if (!response.ok) {
       throw new Error(`evidence image unavailable (${response.status})`);

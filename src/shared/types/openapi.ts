@@ -18,8 +18,11 @@ export const API_PATHS = [
   "/api/v1/cameras/{camera_key}",
   "/api/v1/cameras/{camera_key}/frames",
   "/api/v1/devtools/capabilities",
+  "/api/v1/devtools/compliance",
   "/api/v1/devtools/evidence/{blob_ref}",
   "/api/v1/devtools/live",
+  "/api/v1/devtools/metrics",
+  "/api/v1/devtools/observations",
   "/api/v1/devtools/sessions",
   "/api/v1/devtools/state",
   "/api/v1/devtools/vision",
@@ -84,11 +87,20 @@ export type ListFramesApiV1CamerasCameraKeyFramesGetResponse = Record<string, un
 /** `GET /api/v1/devtools/capabilities` */
 export type CapabilitiesApiV1DevtoolsCapabilitiesGetResponse = Record<string, unknown>;
 
+/** `GET /api/v1/devtools/compliance` */
+export type ComplianceStateApiV1DevtoolsComplianceGetResponse = Record<string, unknown>;
+
 /** `GET /api/v1/devtools/evidence/{blob_ref}` */
 export type EvidenceApiV1DevtoolsEvidenceBlobRefGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/live` */
 export type LiveRuntimeApiV1DevtoolsLiveGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/devtools/metrics` */
+export type PlatformMetricsApiV1DevtoolsMetricsGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/devtools/observations` */
+export type RealObservationsApiV1DevtoolsObservationsGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/sessions` */
 export type SessionsApiV1DevtoolsSessionsGetResponse = Record<string, unknown>;

@@ -12,6 +12,26 @@
  * A failed restore is the **normal** state for a first visit, not an error. It
  * resolves to `unauthenticated` and shows the login screen; it does not show a
  * "session expired" message to somebody who never had one.
+ *
+ * ### The 401 on a cold load is this, and it is correct
+ *
+ * A browser console shows exactly one 401 when the app is opened without a
+ * session: `POST /api/v1/auth/refresh`, unauthenticated, at boot. It is an
+ * intentional authorization rejection. The refresh cookie is httpOnly and this
+ * page cannot read it, so *"do I have a session?"* is a question only the
+ * server can answer — and asking is the only way to restore one without a
+ * login prompt.
+ *
+ * Skipping the call by remembering in `localStorage` that a session once
+ * existed was tried and reverted. It makes the client a second source of truth
+ * about sessions, and it breaks the contract this module's own suite states —
+ * *"restores a session from the refresh cookie without a login prompt"* — for
+ * anyone whose local storage was cleared while their cookie survived. A
+ * quieter console is not worth an unnecessary sign-in, and relaxing the
+ * endpoint was never on the table.
+ *
+ * What has to stay quiet is the **product**, and it does: the rejection
+ * resolves to the login screen with nothing surfaced to the operator.
  */
 
 import {
@@ -24,7 +44,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { onSessionEnd, refreshAccessToken, setAccessToken, __resetClient } from '@shared/api/client';
+import {
+  onSessionEnd,
+  refreshAccessToken,
+  setAccessToken,
+  __resetClient,
+} from '@shared/api/client';
 import { authApi, type Identity } from '@shared/api/services';
 import { isApiError } from '@shared/api/errors';
 
@@ -89,8 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled || !alive.current) return;
 
       if (!token) {
-        // Expected on a first visit. `onSessionEnd` fired and set a reason;
-        // clear it, because nothing was lost.
+        // Expected on a first visit, and the origin of the one 401 a browser
+        // console shows on a cold load: the refresh cookie is httpOnly, so this
+        // page cannot know whether a session exists and must ask. The server
+        // refusing is the correct answer, not a fault — see the note at the top
+        // of this file.
+        //
+        // `onSessionEnd` fired and set a reason; clear it, because nothing was
+        // lost. That is what keeps the rejection quiet *in the product*: a
+        // first-time visitor is never told their session expired.
         setEndedReason(null);
         setStatus('unauthenticated');
         return;

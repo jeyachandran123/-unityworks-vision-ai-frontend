@@ -16,12 +16,26 @@
  * dark is worse served than one with no wall at all, so the only thing that
  * removes a tile is authorization — enforced on the server, not here.
  *
- * ### One stream per tile, opened once
+ * ### One stream per tile, opened once — and actually opened
  *
  * Each tile fetches its own short-lived ticket once and holds a single `<img>`.
- * React StrictMode double-invokes effects in development, so ticket fetching is
- * guarded — without it every camera would open two streams and the DVR would
- * see thirty-two clients for sixteen channels.
+ * React StrictMode double-invokes effects in development, so the ticket request
+ * is shared rather than repeated — without that every camera would open two
+ * streams and the DVR would see thirty-two clients for sixteen channels.
+ *
+ * The first attempt at that guard was a boolean, and it made the page open
+ * **zero** streams instead of two: the second invocation was turned away by the
+ * guard while the first had already been cancelled by its own cleanup. See
+ * `useStream`. The lesson is in the shape — the guard holds the in-flight
+ * *promise*, so a later invocation subscribes to the request instead of being
+ * refused it.
+ *
+ * ### Live means a frame arrived
+ *
+ * `camera.state` is the **server's** view of its DVR session and can read
+ * `live` while this browser has received nothing. Only `<img onLoad>` — a
+ * decoded frame — puts a tile into `live`. A ticket that returned 200 proves
+ * only that a ticket was issued.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +46,7 @@ import {
   streamUrl,
   wallApi,
   type StreamState,
+  type StreamTicket,
   type WallCamera,
 } from '@shared/api/wall';
 import { useAuth } from '@app/auth/AuthProvider';
@@ -51,32 +66,104 @@ import {
 /** How often the wall re-reads camera state. Metadata only — not video. */
 const STATE_POLL_MS = 4000;
 
+/**
+ * How long a stream may be open without delivering a frame before the tile
+ * says so. Measured against the real DVR: the ticket call and the first frame
+ * each take a few seconds while the analysis stack shares this process, and the
+ * server's own `first_frame_latency_s` for these cameras is 1.8 s. Twenty-five
+ * seconds is far outside that and still finite — which is the point. A viewer
+ * that waits forever reports "connecting" for a camera that is never coming.
+ */
+const FIRST_FRAME_TIMEOUT_MS = 25_000;
+
+/**
+ * What the viewer itself knows, which is not what the DVR session is doing.
+ *
+ * `camera.state` describes the **server's** session and can read `live` while
+ * this browser has received nothing at all — that is exactly what the fault
+ * below looked like on screen. These phases describe *this* `<img>`.
+ */
+type ViewerPhase = 'idle' | 'opening' | 'connecting' | 'live' | 'failed';
+
+/**
+ * A 1×1 transparent GIF, and the only reliable way to hang up on an MJPEG.
+ *
+ * Removing an `<img>` from the document does **not** close a
+ * `multipart/x-mixed-replace` response in Chromium — the response never
+ * completes, so there is nothing to finish, and the socket stays up until the
+ * page unloads. Measured against the server's own viewer counter while
+ * switching cameras: four tiles gave a baseline of 4 viewers, opening and
+ * closing four detail views took it to **10**, and it stayed at 10 for the
+ * rest of the session, dropping back to 4 only when the browser exited.
+ *
+ * Every leaked viewer keeps a generator running on the server, and each one
+ * holds a worker thread while it waits for the next frame — which is why the
+ * third and fourth camera switched to never showed a picture at all.
+ *
+ * Assigning a new `src` is what actually tears the old connection down. So the
+ * element stays mounted and is pointed here instead of being unmounted.
+ */
+const BLANK_PIXEL =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
 /* ── one tile's video ─────────────────────────────────────────────────────── */
 
+/**
+ * Open one camera's MJPEG stream, and report honestly what stage it reached.
+ *
+ * ### The fault this shape exists for
+ *
+ * The previous version guarded ticket fetching with a ref so StrictMode's
+ * double-invoked effect could not open two streams. It could not open *one*
+ * either:
+ *
+ *     invoke 1   claims the ref, starts the ticket request
+ *     cleanup    sets cancelled = true
+ *     invoke 2   sees the ref already claimed, returns without fetching
+ *     ticket 200 arrives — but invoke 1 was cancelled, so the URL is dropped
+ *
+ * The ticket was issued, no `<img>` was ever created, no stream request was
+ * ever made, and Live Monitoring sat on "Opening stream…" indefinitely while
+ * the server happily reported `state=live` and 125 501 frames decoded.
+ *
+ * The guard was right that there must be one ticket per camera. It was wrong
+ * to turn the second invocation away: it has to **subscribe to the same
+ * request** instead. Holding the promise rather than a boolean does that — one
+ * network call, and every invocation that is still mounted gets the answer.
+ */
 function useStream(cameraId: string, fps: number, active: boolean) {
   const { user } = useAuth();
   const [url, setUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<ViewerPhase>('idle');
   const [error, setError] = useState<string | null>(null);
-  // Guards against StrictMode's double effect invocation opening two streams.
-  const opened = useRef<string | null>(null);
+  /** The in-flight ticket, shared by every invocation for the same key. */
+  const pending = useRef<{ key: string; promise: Promise<StreamTicket> } | null>(null);
 
   useEffect(() => {
     if (!active || !user) return;
     const key = `${cameraId}:${fps}`;
-    if (opened.current === key) return;
-    opened.current = key;
+    if (pending.current?.key !== key) {
+      pending.current = { key, promise: wallApi.ticket(cameraId) };
+    }
+    const { promise } = pending.current;
 
     let cancelled = false;
-    wallApi
-      .ticket(cameraId)
+    setPhase((current) => (current === 'live' ? current : 'opening'));
+
+    promise
       .then((ticket) => {
         if (cancelled) return;
         setUrl(streamUrl(ticket, user, fps));
+        setPhase('connecting');
         setError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        // Cleared so the next activation asks again rather than re-reading a
+        // rejected promise forever.
+        pending.current = null;
         setError(isApiError(err) ? err.message : 'This stream could not be opened.');
+        setPhase('failed');
       });
 
     return () => {
@@ -90,10 +177,81 @@ function useStream(cameraId: string, fps: number, active: boolean) {
     // the server-side viewer slot. Leaving it set would keep encoding frames
     // for a tile nobody is looking at.
     setUrl(null);
-    opened.current = null;
+    setPhase('idle');
+    setError(null);
+    pending.current = null;
   }, [active]);
 
-  return { url, error };
+  // A stream that opened and never delivered a picture must say so. Without
+  // this the honest-looking "Opening stream…" is indistinguishable from the
+  // fault above, which is how that fault survived.
+  useEffect(() => {
+    if (phase !== 'connecting') return;
+    const timer = window.setTimeout(() => {
+      setError('No video arrived from this camera. The stream timed out.');
+      setPhase('failed');
+      setUrl(null);
+      pending.current = null;
+    }, FIRST_FRAME_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase, url]);
+
+  /**
+   * The element showing this stream, so it can be hung up on explicitly.
+   *
+   * A **callback ref that keeps the last real node**, rather than a plain
+   * `useRef` handed to `ref=`. React clears a ref before it runs unmount
+   * cleanups, so by the time the cleanup below fires a plain ref is already
+   * `null` and there is nothing left to cancel — which is how the first
+   * version of this silently did nothing. Ignoring the `null` callback keeps
+   * the node reachable after detachment, and assigning `src` still aborts the
+   * request on a detached image.
+   */
+  const node = useRef<HTMLImageElement | null>(null);
+  const element = useCallback((img: HTMLImageElement | null) => {
+    if (img) node.current = img;
+  }, []);
+
+  useEffect(() => () => {
+    // On unmount — closing the detail view, or leaving the page.
+    if (node.current) node.current.src = BLANK_PIXEL;
+  }, []);
+
+  /** A frame decoded. The **only** thing that may report this viewer live. */
+  const onFrame = useCallback(() => {
+    setPhase('live');
+    setError(null);
+  }, []);
+
+  /** The browser gave up on the stream: it is gone, not merely slow. */
+  const onFailure = useCallback(() => {
+    setUrl(null);
+    pending.current = null;
+    setPhase('failed');
+    setError('The video stream stopped. Reconnecting when the camera returns.');
+  }, []);
+
+  return { url, phase, error, onFrame, onFailure, element };
+}
+
+/**
+ * What to show over the picture, or `null` once a real frame has arrived.
+ *
+ * Never derived from the server's session state: this describes what this
+ * browser has actually received.
+ */
+function viewerMessage(
+  phase: ViewerPhase,
+  error: string | null,
+  camera: Pick<WallCamera, 'state'>,
+): string | null {
+  if (phase === 'live') return null;
+  if (phase === 'failed') return error ?? 'This camera is unavailable.';
+  if (phase === 'idle') return STREAM_STATE_LABEL[camera.state];
+  if (phase === 'connecting') {
+    return camera.state === 'reconnecting' ? 'Reconnecting…' : 'Waiting for video…';
+  }
+  return 'Opening stream…';
 }
 
 function CameraTile({
@@ -105,9 +263,20 @@ function CameraTile({
   fps: number;
   onOpen: (camera: WallCamera) => void;
 }) {
+  // Deliberately *not* paused while the detail view covers the wall. That was
+  // tried, on the theory that four never-ending MJPEG responses exhaust the
+  // browser's six-connections-per-origin budget. Resource Timing says
+  // otherwise: the detail view's ticket showed `stalled = 1 ms` and
+  // `server = 5042 ms`, so it was never queued — the backend simply took five
+  // seconds. And the server shares one JPEG encode across every viewer of a
+  // camera, so a hidden tile costs almost nothing. Pausing bought nothing and
+  // charged four fresh tickets every time the detail view closed.
   const streamable = camera.state === 'live' || camera.state === 'reconnecting';
-  const { url, error } = useStream(camera.camera_id, fps, streamable);
+  const { url, phase, error, onFrame, onFailure, element } = useStream(
+    camera.camera_id, fps, streamable,
+  );
   const tone = streamTone(camera.state);
+  const message = viewerMessage(phase, error, camera);
 
   return (
     <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -121,25 +290,42 @@ function CameraTile({
         }}
       >
         <div style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden' }}>
-          {url ? (
+          {/* Mounted as soon as there is a URL, and *kept* mounted underneath
+              the message. It has to be in the document to load at all — the
+              previous version rendered the placeholder **instead of** the
+              image, so nothing ever requested the stream. */}
+          {streamable ? (
+            // Mounted for as long as this camera is streamable, and pointed at
+            // a blank pixel until the ticket arrives — never unmounted while a
+            // stream is running, because unmounting does not close one.
             <img
-              src={url}
+              ref={element}
+              src={url ?? BLANK_PIXEL}
               alt={`Live view from ${camera.camera_id}`}
+              onLoad={url ? onFrame : undefined}
+              onError={url ? onFailure : undefined}
+              data-testid={`stream-${camera.camera_id}`}
+              data-phase={phase}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
-          ) : (
+          ) : null}
+          {message ? (
             <div
+              data-testid={`viewer-message-${camera.camera_id}`}
               style={{
                 position: 'absolute', inset: 0, display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)',
                 textAlign: 'center', padding: 'var(--space-3)',
+                background: 'var(--surface-sunken, #101014)',
               }}
             >
-              {/* An honest reason, never a spinner that implies a stream is coming. */}
-              {error ?? (streamable ? 'Opening stream…' : STREAM_STATE_LABEL[camera.state])}
+              {/* An honest reason, never a spinner that implies a stream is
+                  coming. `live` shows nothing at all — the picture is the
+                  status. */}
+              {message}
             </div>
-          )}
+          ) : null}
 
           <div
             style={{
@@ -190,7 +376,10 @@ function CameraDetail({
   fps: number;
   onClose: () => void;
 }) {
-  const { url, error } = useStream(camera.camera_id, fps, true);
+  const { url, phase, error, onFrame, onFailure, element } = useStream(
+    camera.camera_id, fps, true,
+  );
+  const message = viewerMessage(phase, error, camera);
   const figure = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -240,22 +429,37 @@ function CameraDetail({
         <div
           ref={figure}
           style={{
+            position: 'relative',
             background: '#000', aspectRatio: '16 / 9', display: 'flex',
             alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)',
             overflow: 'hidden',
           }}
         >
-          {url ? (
-            <img
-              src={url}
-              alt={`Live view from ${camera.camera_id}`}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-          ) : (
-            <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
-              {error ?? 'Opening stream…'}
+          <img
+            ref={element}
+            src={url ?? BLANK_PIXEL}
+            alt={`Live view from ${camera.camera_id}`}
+            onLoad={url ? onFrame : undefined}
+            onError={url ? onFailure : undefined}
+            data-testid={`stream-detail-${camera.camera_id}`}
+            data-phase={phase}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+          {message ? (
+            // Over the image, never instead of it: an `<img>` that is not in
+            // the document never requests its stream, which is the whole fault
+            // this page had.
+            <span
+              data-testid={`viewer-message-detail-${camera.camera_id}`}
+              style={{
+                position: 'absolute', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', background: '#000',
+                color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)',
+              }}
+            >
+              {message}
             </span>
-          )}
+          ) : null}
         </div>
 
         <Card>

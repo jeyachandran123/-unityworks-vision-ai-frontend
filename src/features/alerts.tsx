@@ -42,6 +42,7 @@ import { Link } from 'react-router-dom';
 import {
   evidenceApi,
   incidentsApi,
+  type EvidenceObject,
   type Incident,
 } from '@shared/api/persistence';
 import { isApiError } from '@shared/api/errors';
@@ -107,12 +108,24 @@ export function observedAt(incident: Incident): string {
 
 /* ── evidence ─────────────────────────────────────────────────────────────── */
 
-function EvidenceImage({ evidenceRef }: { evidenceRef: string }) {
+/** The colour of the subject's box. One value, used by the frame and the crop. */
+const SUBJECT_INK = '#ff3b30';
+/** Everyone else in the same frame. Present, obviously secondary, never red. */
+const CONTEXT_INK = 'rgb(255 255 255 / 0.55)';
+
+/**
+ * Retrieve one evidence image as an object URL, revoking it on unmount.
+ *
+ * A blob URL pins the image in memory until it is revoked, and this queue can
+ * open many over a shift — including a crop each for several people.
+ */
+function useEvidenceImage(evidenceRef: string | undefined) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const objectUrl = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!evidenceRef) return;
     let cancelled = false;
     evidenceApi
       .image(evidenceRef)
@@ -134,14 +147,144 @@ function EvidenceImage({ evidenceRef }: { evidenceRef: string }) {
 
     return () => {
       cancelled = true;
-      // A blob URL pins the image in memory until it is revoked, and this queue
-      // can open many over a shift.
       if (objectUrl.current) {
         URL.revokeObjectURL(objectUrl.current);
         objectUrl.current = null;
       }
     };
   }, [evidenceRef]);
+
+  return { url, error };
+}
+
+/**
+ * One box drawn over the decision frame.
+ *
+ * Positioned from the **stored** normalized box, so it marks where the subject
+ * was when the verdict was made. Nothing here detects anything: if the backend
+ * retained no geometry, no box is drawn at all rather than a plausible one.
+ */
+function SubjectBox({ object: subject }: { object: EvidenceObject }) {
+  const [x1, y1, x2, y2] = subject.box;
+  const ink = subject.is_subject ? SUBJECT_INK : CONTEXT_INK;
+  return (
+    <div
+      data-testid={subject.is_subject ? 'subject-box' : 'context-box'}
+      data-object-id={subject.object_id}
+      style={{
+        position: 'absolute',
+        left: `${x1 * 100}%`,
+        top: `${y1 * 100}%`,
+        width: `${Math.max(0, x2 - x1) * 100}%`,
+        height: `${Math.max(0, y2 - y1) * 100}%`,
+        border: `${subject.is_subject ? 3 : 1.5}px solid ${ink}`,
+        borderRadius: '3px',
+        boxShadow: subject.is_subject ? '0 0 0 1px rgb(0 0 0 / 0.55)' : 'none',
+        pointerEvents: 'none',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          transform: 'translateY(-100%)',
+          background: subject.is_subject ? SUBJECT_INK : 'rgb(0 0 0 / 0.6)',
+          color: '#fff',
+          fontSize: 'var(--text-2xs)',
+          fontWeight: subject.is_subject ? 700 : 500,
+          letterSpacing: '0.02em',
+          padding: '1px 6px',
+          borderRadius: '3px 3px 0 0',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {subject.label}
+        {subject.is_subject ? ' · ALERT' : ''}
+      </span>
+    </div>
+  );
+}
+
+/** One crop in the gallery. The alert subject is marked; the rest are not. */
+function CropExhibit({ object: subject }: { object: EvidenceObject }) {
+  const { url, error } = useEvidenceImage(subject.crop_ref);
+
+  return (
+    <figure
+      data-testid={subject.is_subject ? 'crop-subject' : 'crop-context'}
+      data-object-id={subject.object_id}
+      style={{
+        margin: 0,
+        width: 128,
+        border: `2px solid ${subject.is_subject ? SUBJECT_INK : 'var(--border-subtle, rgb(0 0 0 / 0.12))'}`,
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+        background: '#000',
+      }}
+    >
+      <div
+        style={{
+          height: 128, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: 'var(--ink-tertiary)',
+          fontSize: 'var(--text-2xs)',
+        }}
+      >
+        {url ? (
+          <img
+            src={url}
+            alt={`Decision crop for ${subject.label}${subject.is_subject ? ', the subject of this alert' : ''}`}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        ) : error ? (
+          'Unavailable'
+        ) : (
+          <Spinner />
+        )}
+      </div>
+      <figcaption
+        style={{
+          padding: '4px 6px',
+          fontSize: 'var(--text-2xs)',
+          fontWeight: subject.is_subject ? 700 : 500,
+          textAlign: 'center',
+          background: subject.is_subject ? SUBJECT_INK : 'rgb(0 0 0 / 0.75)',
+          color: '#fff',
+        }}
+      >
+        {subject.is_subject ? `★ ${subject.label}` : subject.label}
+      </figcaption>
+    </figure>
+  );
+}
+
+/**
+ * Everything the operator is shown about one alert's imagery.
+ *
+ * The full decision frame with the subject boxed, then the crops that were
+ * actually sent to the model. Both come from the same stored frame and the
+ * same recorded geometry — nothing on this page recomputes a box, finds a
+ * nearest person, or reads the live stream. If the backend stored a fallback
+ * context frame instead of the decision frame, it says so rather than
+ * decorating it.
+ */
+export function EvidenceExhibit({ evidenceRef }: { evidenceRef: string }) {
+  const { url, error } = useEvidenceImage(evidenceRef);
+  const metadata = useQuery({
+    queryKey: ['evidence', evidenceRef],
+    queryFn: () => evidenceApi.metadata(evidenceRef),
+    staleTime: Infinity,
+  });
+
+  const geometry = metadata.data?.geometry ?? null;
+  const subject = geometry?.kind === 'decision-frame' ? geometry.subject : undefined;
+  const context = geometry?.kind === 'decision-frame' ? (geometry.context ?? []) : [];
+  const isDecisionFrame = (metadata.data?.purpose ?? '').endsWith(':decision-frame');
+
+  const gallery = useMemo(
+    () => [...(subject ? [subject] : []), ...context].filter((o) => o.crop_ref),
+    [subject, context],
+  );
 
   if (error) {
     return (
@@ -161,15 +304,74 @@ function EvidenceImage({ evidenceRef }: { evidenceRef: string }) {
       </div>
     );
   }
+
   return (
-    <img
-      src={url}
-      alt="Evidence frame from the camera at the time this was raised"
-      style={{
-        width: '100%', display: 'block', borderRadius: 'var(--radius-md)',
-        background: '#000',
-      }}
-    />
+    <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <div>
+        <div
+          style={{
+            fontSize: 'var(--text-2xs)', textTransform: 'uppercase',
+            letterSpacing: '0.06em', color: 'var(--ink-tertiary)',
+            marginBottom: 'var(--space-1)',
+          }}
+        >
+          {isDecisionFrame ? 'Decision frame' : 'Context frame'}
+        </div>
+        <div style={{ position: 'relative', lineHeight: 0 }}>
+          <img
+            src={url}
+            alt="Evidence frame from the camera at the moment this verdict was made"
+            style={{
+              width: '100%', display: 'block', borderRadius: 'var(--radius-md)',
+              background: '#000',
+            }}
+          />
+          {/* Context first, so the subject's box is never drawn under one. */}
+          {context.map((o) => (
+            <SubjectBox key={o.object_id} object={o} />
+          ))}
+          {subject ? <SubjectBox object={subject} /> : null}
+        </div>
+        {!subject && (
+          // Said out loud. An unmarked frame with several people in it invites
+          // the operator to pick one, and picking the wrong one is the whole
+          // failure this evidence path exists to prevent.
+          <div
+            style={{
+              marginTop: 'var(--space-1)', fontSize: 'var(--text-xs)',
+              color: 'var(--ink-tertiary)',
+            }}
+          >
+            {isDecisionFrame
+              ? 'No subject geometry was recorded for this frame, so nobody is highlighted.'
+              : 'The decision frame was no longer held, so this is a later view of the same camera. Nobody is highlighted, because nobody in it is the subject.'}
+          </div>
+        )}
+      </div>
+
+      {gallery.length > 0 && (
+        <div>
+          <div
+            style={{
+              fontSize: 'var(--text-2xs)', textTransform: 'uppercase',
+              letterSpacing: '0.06em', color: 'var(--ink-tertiary)',
+              marginBottom: 'var(--space-2)',
+            }}
+          >
+            Decision evidence — the {gallery.length === 1 ? 'image' : 'images'} the model
+            was asked about
+          </div>
+          <div
+            data-testid="crop-gallery"
+            style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}
+          >
+            {gallery.map((o) => (
+              <CropExhibit key={o.object_id} object={o} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -248,7 +450,7 @@ function AlertCard({ incident }: { incident: Incident }) {
           </div>
         )}
 
-        {showEvidence && evidenceRef ? <EvidenceImage evidenceRef={evidenceRef} /> : null}
+        {showEvidence && evidenceRef ? <EvidenceExhibit evidenceRef={evidenceRef} /> : null}
 
         <div
           style={{
