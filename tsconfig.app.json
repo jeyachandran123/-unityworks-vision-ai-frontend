@@ -22,13 +22,21 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
 
-    "baseUrl": ".",
+    // No "baseUrl". It is deprecated and stops functioning in TypeScript 7.0,
+    // and since TypeScript 4.1 "paths" has not needed it: a mapping that is not
+    // absolute resolves relative to THIS file, which is what the entries below
+    // now say explicitly.
+    //
+    // Removed rather than silenced with "ignoreDeprecations": "6.0", because
+    // that only buys time — the option still disappears in 7.0. Nothing here
+    // depended on it: every alias import uses an "@" prefix, and Vite resolves
+    // the same five aliases itself in vite.config.ts, so the two stay in step.
     "paths": {
-      "@/*": ["src/*"],
-      "@app/*": ["src/app/*"],
-      "@shared/*": ["src/shared/*"],
-      "@features/*": ["src/features/*"],
-      "@devtools/*": ["src/devtools/*"]
+      "@/*": ["./src/*"],
+      "@app/*": ["./src/app/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@features/*": ["./src/features/*"],
+      "@devtools/*": ["./src/devtools/*"]
     }
   },
   "include": ["src", "tests"]
