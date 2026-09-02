@@ -8,6 +8,37 @@
     <!-- No favicon request in the markup: a 404 on every page load is noise in
          the very network panel an operator might be asked to screenshot. -->
     <title>UnityWorks Vision AI</title>
+    <!--
+      Theme, resolved before the first paint.
+
+      This duplicates the precedence in `shared/theme/theme.ts` on purpose, and
+      it is the only duplication of it. The module cannot run early enough: it
+      arrives with the bundle, by which point the document has already been
+      painted in whatever palette the stylesheet defaults to, and an operator
+      who chose light would watch the application flash dark on every load.
+      Eleven lines here, running synchronously in <head>, remove that entirely.
+
+      Kept deliberately tiny and total-failure-safe — a browser that refuses
+      localStorage falls through to the OS preference, and one with no
+      `matchMedia` falls through to dark, which is the same floor the module
+      uses.
+    -->
+    <script>
+      (function () {
+        try {
+          var saved = null;
+          try { saved = window.localStorage.getItem('uwv.theme'); } catch (e) { /* storage blocked */ }
+          var theme;
+          if (saved === 'dark' || saved === 'light') theme = saved;
+          else if (window.matchMedia) theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          else theme = 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

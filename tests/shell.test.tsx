@@ -89,9 +89,15 @@ describe('product routes do not fabricate data', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    // 'Subjects assessed' needs a live source that does not exist, so it is
-    // still unknown — and unknown renders as an em dash, never as a zero.
-    const label = await screen.findByText('Subjects assessed');
+    // 'Cameras online' has no value while no camera is configured, and unknown
+    // renders as an em dash, never as a zero.
+    //
+    // This assertion used to point at 'Subjects assessed', which was a
+    // permanent placeholder. That tile now reads real observation counts, so a
+    // zero there would be a *correct* answer — the cameras were read and nobody
+    // was seen. The property under test is unchanged; only the tile that still
+    // genuinely lacks a value has moved.
+    const label = await screen.findByText('Cameras online');
     const card = label.closest('section') as HTMLElement;
     expect(within(card).getByText('—')).toBeInTheDocument();
     expect(within(card).queryByText('0')).not.toBeInTheDocument();
@@ -101,7 +107,10 @@ describe('product routes do not fabricate data', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    expect(await screen.findByText(/requires a live source/i)).toBeInTheDocument();
+    // Was /requires a live source/, the reason on the old placeholder tile.
+    // Same property — an unavailable figure says why — against the reason that
+    // still applies now that observations are real.
+    expect(await screen.findByText(/no camera is configured yet/i)).toBeInTheDocument();
   });
 
   it('surfaces the backend’s own not-yet-reported list', async () => {
@@ -313,5 +322,34 @@ describe('accessibility baseline', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /collapse navigation/i })).toBeInTheDocument();
+  });
+
+  /**
+   * The theme control, in the rendered shell.
+   *
+   * The resolution matrix itself lives in `theme.test.ts`, which needs no React
+   * at all. This is the half that only exists once the shell is on screen: that
+   * the control is reachable from the keyboard, and that its name states both
+   * the theme that is on and what pressing it will do.
+   */
+  it('offers a keyboard-reachable theme toggle that names the theme and the action', async () => {
+    installFetch({ session: identity() });
+    const user = userEvent.setup();
+    renderApp(<AppRouter />, '/dashboard');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+
+    const toggle = screen.getByRole('button', { name: /theme .* switch to/i });
+    toggle.focus();
+    expect(toggle).toHaveFocus();
+
+    const before = document.documentElement.getAttribute('data-theme');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-theme')).not.toBe(before),
+    );
+    // The name follows the new state rather than going stale.
+    expect(screen.getByRole('button', { name: /theme .* switch to/i })).toBeInTheDocument();
   });
 });

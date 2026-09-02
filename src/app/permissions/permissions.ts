@@ -38,6 +38,47 @@ export const PERMISSIONS = {
   /** Who looked at imagery of whom. Its own privilege, not an admin side effect. */
   viewAudit: 'view_audit',
 
+  /* ── modules with a schema and no data source yet ────────────────────────
+     Declared here for the same reason as every other key: navigation and route
+     guards must be written against typed names, and a typo in a permission
+     string fails open. */
+
+  viewPeopleCount: 'view_people_count',
+  /** Never implied by `viewPeopleCount`. Counting people and inferring their
+      age or gender are different purposes with different lawful bases. */
+  viewDemography: 'view_demography',
+
+  viewTableOccupancy: 'view_table_occupancy',
+  /** The floor plan: which tables exist and which camera watches them. */
+  manageTableOccupancy: 'manage_table_occupancy',
+
+  viewCuttingBoard: 'view_cutting_board',
+  /** The colour-to-ingredient policy. Changing it changes what is a violation. */
+  manageCuttingBoard: 'manage_cutting_board',
+
+  viewMealDetection: 'view_meal_detection',
+
+  /** The most sensitive read in the product. Never implied by anything. */
+  viewPatronId: 'view_patron_id',
+  /** Held by super_admin alone, and even then the write path still refuses. */
+  managePatronId: 'manage_patron_id',
+
+  viewPosIntegration: 'view_pos_integration',
+  /** Points a connector at a credential that reaches sales and payment data. */
+  managePosIntegration: 'manage_pos_integration',
+
+  /** Run a report on screen. Never grants the underlying data on its own —
+      a report also requires the permission for every source it reads. */
+  viewReports: 'view_reports',
+  /** Take a copy away. Separate from viewing: an exported file leaves the
+      system and outlives every retention policy this application enforces. */
+  exportReports: 'export_reports',
+
+  /** Model evaluation artifacts. Its own permission, not implied by
+      `viewReports`: this answers "should we ship this model", and it is candid
+      about the product's weaknesses in a way an operational report is not. */
+  viewModelEvaluation: 'view_model_evaluation',
+
   accessDevtools: 'access_devtools',
   /** Spends money and causes computation. Not a read. */
   registerDemand: 'register_demand',

@@ -65,6 +65,71 @@ export const PRODUCT_NAV: NavSection[] = [
         glyph: '◬',
         hint: 'Things that need attention now',
       },
+      {
+        id: 'cutting-boards',
+        label: 'Cutting Boards',
+        // Beside Staff Hygiene rather than under Analyse: it is a food-safety
+        // surface with the same four states and the same consequences, not a
+        // business report.
+        path: '/cutting-boards',
+        permissions: [PERMISSIONS.viewCuttingBoard],
+        glyph: '▥',
+        hint: 'Board colour against the ingredient being prepared',
+      },
+      {
+        id: 'tables',
+        label: 'Table Occupancy',
+        path: '/tables',
+        permissions: [PERMISSIONS.viewTableOccupancy],
+        glyph: '⊞',
+        hint: 'Which tables are occupied, free or waiting to be cleared',
+      },
+    ],
+  },
+  {
+    // Its own section because the question is different. Everything under
+    // Monitor answers "what is happening now"; everything here answers "what
+    // has been happening", and mixing the two puts a marketing report next to
+    // a food-safety alert.
+    id: 'analyse',
+    label: 'Analyse',
+    items: [
+      {
+        id: 'people-counting',
+        label: 'People Counting',
+        path: '/people-counting',
+        permissions: [PERMISSIONS.viewPeopleCount],
+        glyph: '◷',
+        hint: 'Entries, exits and peak hours, with the coverage behind them',
+      },
+      {
+        id: 'demography',
+        label: 'Demography',
+        path: '/demography',
+        // Its own permission, deliberately. A role that may read footfall has
+        // no automatic claim on inferred age or gender.
+        permissions: [PERMISSIONS.viewDemography],
+        glyph: '◑',
+        hint: 'Aggregate category breakdown — never per person',
+      },
+      {
+        id: 'meals',
+        label: 'Meal Detection',
+        path: '/meals',
+        permissions: [PERMISSIONS.viewMealDetection],
+        glyph: '◔',
+        hint: 'Dishes recognised, against what the till says was sold',
+      },
+      {
+        id: 'model-evaluation',
+        label: 'Model Evaluation',
+        // Under Analyse rather than Vision OS: these are committed artifacts a
+        // product owner can read, not a live engineering view of the platform.
+        path: '/model-evaluation',
+        permissions: [PERMISSIONS.viewModelEvaluation],
+        glyph: '◎',
+        hint: 'How the perception stack scores against annotated data',
+      },
     ],
   },
   {
@@ -100,7 +165,10 @@ export const PRODUCT_NAV: NavSection[] = [
         id: 'reports',
         label: 'Reports',
         path: '/reports',
-        permissions: [PERMISSIONS.viewObservations],
+        // Its own permission. The catalogue reaches incidents, cameras and the
+        // audit trail, so gating it on observations would be both too narrow
+        // and, for an account with observations alone, misleading.
+        permissions: [PERMISSIONS.viewReports],
         glyph: '▦',
         hint: 'Periods, trends and export',
       },
@@ -127,6 +195,24 @@ export const PRODUCT_NAV: NavSection[] = [
         permissions: [PERMISSIONS.manageUsers, PERMISSIONS.manageOrganization],
         glyph: '⚙',
         hint: 'Restaurants, users and roles',
+      },
+      {
+        id: 'pos',
+        label: 'POS Integration',
+        path: '/integrations/pos',
+        permissions: [PERMISSIONS.viewPosIntegration],
+        glyph: '⇄',
+        hint: 'The seam between this system and the till',
+      },
+      {
+        id: 'patron-id',
+        label: 'Patron ID',
+        path: '/patron-id',
+        // Its own permission, held by org_admin and super_admin only. The page
+        // reports that the module is blocked; it offers nothing to operate.
+        permissions: [PERMISSIONS.viewPatronId],
+        glyph: '⛨',
+        hint: 'Returning-visitor identification — blocked pending legal review',
       },
     ],
   },

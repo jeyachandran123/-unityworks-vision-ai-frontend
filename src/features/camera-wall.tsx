@@ -286,7 +286,11 @@ function CameraTile({
         aria-label={`Open ${camera.camera_id}, channel ${camera.channel}, ${STREAM_STATE_LABEL[camera.state]}`}
         style={{
           display: 'block', width: '100%', padding: 0, border: 'none',
-          background: 'var(--surface-sunken, #101014)', cursor: 'pointer',
+          // Footage letterboxes against black, not against an application
+          // surface. `--surface-sunken` resolves to a pale grey in the light
+          // theme, which framed every tile in grey and made a dark scene read
+          // as a rendering fault rather than a dark scene.
+          background: 'var(--video-ground)', cursor: 'pointer',
         }}
       >
         <div style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden' }}>
@@ -315,9 +319,9 @@ function CameraTile({
               style={{
                 position: 'absolute', inset: 0, display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)',
+                color: 'var(--video-ink)', fontSize: 'var(--text-xs)',
                 textAlign: 'center', padding: 'var(--space-3)',
-                background: 'var(--surface-sunken, #101014)',
+                background: 'var(--video-ground)',
               }}
             >
               {/* An honest reason, never a spinner that implies a stream is
@@ -401,7 +405,13 @@ function CameraDetail({
       aria-label={`${camera.camera_id} detail view`}
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 60, background: 'rgb(0 0 0 / 0.82)',
+        position: 'fixed', inset: 0,
+        // Modal tier. This was a bare `60`, which is `--z-toast`: the camera
+        // dialog and the toast layer shared a level, so a session-expiry
+        // notice — the one message that arrives without the operator doing
+        // anything — could be painted underneath a fullscreen camera.
+        zIndex: 'var(--z-modal)' as unknown as number,
+        background: 'rgb(0 0 0 / 0.82)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 'var(--space-6)',
       }}
@@ -430,7 +440,7 @@ function CameraDetail({
           ref={figure}
           style={{
             position: 'relative',
-            background: '#000', aspectRatio: '16 / 9', display: 'flex',
+            background: 'var(--video-ground)', aspectRatio: '16 / 9', display: 'flex',
             alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)',
             overflow: 'hidden',
           }}
@@ -453,8 +463,9 @@ function CameraDetail({
               data-testid={`viewer-message-detail-${camera.camera_id}`}
               style={{
                 position: 'absolute', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center', background: '#000',
-                color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)',
+                alignItems: 'center', justifyContent: 'center',
+                background: 'var(--video-ground)',
+                color: 'var(--video-ink)', fontSize: 'var(--text-sm)',
               }}
             >
               {message}

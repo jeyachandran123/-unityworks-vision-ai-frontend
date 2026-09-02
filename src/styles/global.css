@@ -40,12 +40,19 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* One focus ring, everywhere. `:focus-visible` so a mouse click does not draw
-   it and a Tab press always does. */
+   it and a Tab press always does.
+
+   An outline rather than a box-shadow: the gap `outline-offset` opens is
+   transparent, so the ring never has to guess which surface is behind the
+   control. It also inherits the element's own border-radius, so a pill stays a
+   pill and a card-cornered control keeps its corners — the reason the blanket
+   `border-radius: var(--radius-xs)` that used to live here is gone. That
+   override reshaped every focused element to a 3px radius regardless of what
+   it actually was. */
 :focus { outline: none; }
 :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-  border-radius: var(--radius-xs);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Skip link: the first thing a keyboard user reaches, invisible until focused. */

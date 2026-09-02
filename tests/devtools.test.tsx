@@ -26,7 +26,18 @@ describe('DevTools authorization', () => {
 
     renderApp(<AppRouter />, '/devtools/vision');
 
-    expect(await screen.findByRole('heading', { name: /vision os overview/i })).toBeInTheDocument();
+    // The same assertion as before, with the same route and the same identity —
+    // only the allowance is different. This heading is behind `React.lazy`, so
+    // reaching it means waiting for a dynamic import of the DevTools chunk, and
+    // Testing Library's default budget for that is one second. That was enough
+    // while ten suites shared the workers and stopped being enough the moment an
+    // eleventh joined them: the chunk is ~1000 lines and Vitest transforms it on
+    // demand, so the wait is real work competing for a core, not a fixed cost.
+    // `timeout: 4000` is the allowance `live-stream.test.tsx` already gives every
+    // one of its nine async assertions, for the same reason.
+    expect(
+      await screen.findByRole('heading', { name: /vision os overview/i }, { timeout: 4000 }),
+    ).toBeInTheDocument();
   });
 
   it('a manager is redirected away', async () => {

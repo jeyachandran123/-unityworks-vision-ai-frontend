@@ -18,10 +18,10 @@
  * it becomes real nobody will know which readings were which.
  */
 
-import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { healthApi, type OperatorStatus } from '@shared/api/services';
 import { incidentsApi } from '@shared/api/persistence';
+import { observationsApi } from '@shared/api/observations';
 import { useAuth } from '@app/auth/AuthProvider';
 import { has, PERMISSIONS } from '@app/permissions/permissions';
 import {
@@ -37,33 +37,10 @@ import {
 } from '@shared/ui/primitives';
 import { isApiError } from '@shared/api/errors';
 
-/** Marks a surface whose backend does not exist yet. Visible, never subtle. */
-function NotConnected({ capability }: { capability: string }) {
-  return (
-    <Badge>
-      <span aria-hidden="true">◌</span> awaiting {capability}
-    </Badge>
-  );
-}
-
-function ProductPage({
-  title,
-  description,
-  capability,
-  children,
-}: {
-  title: string;
-  description: string;
-  capability: string;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <PageHeader title={title} description={description} meta={<NotConnected capability={capability} />} />
-      {children}
-    </>
-  );
-}
+// `NotConnected` and `ProductPage` lived here for the pages that had no
+// backend. Reports was the last of them, and it now reads real data — so both
+// helpers are gone rather than left as dead code. The equivalent for the seven
+// modules that genuinely have no data source is `@features/awaiting`.
 
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
 
@@ -77,11 +54,27 @@ export function DashboardPage() {
   // Incidents are durable as of Phase 5, so this figure is real. It is fetched
   // separately from status on purpose: if the incident store is unreachable the
   // card goes back to `—`, rather than the whole dashboard reporting nothing.
-  const canSeeIncidents = has(useAuth().user, PERMISSIONS.viewIncidents);
+  const user = useAuth().user;
+  const canSeeIncidents = has(user, PERMISSIONS.viewIncidents);
   const openIncidents = useQuery({
     queryKey: ['incidents', 'active'],
     queryFn: () => incidentsApi.list('active'),
     enabled: canSeeIncidents,
+    staleTime: 15_000,
+  });
+
+  // Fetched separately from status for the same reason incidents are: if the
+  // observation log cannot be read, that one tile goes back to `—` rather than
+  // the whole dashboard reporting nothing.
+  const canSeeObservations = has(user, PERMISSIONS.viewObservations);
+  const observed = useQuery({
+    queryKey: ['observations', 'dashboard-1h'],
+    queryFn: () =>
+      observationsApi.list({
+        since: new Date(Date.now() - 3_600_000).toISOString(),
+        limit: 500,
+      }),
+    enabled: canSeeObservations,
     staleTime: 15_000,
   });
 
@@ -141,7 +134,27 @@ export function DashboardPage() {
               unavailableReason="No camera is configured yet"
               detail={`${status.data.cameras.configured} configured · ${status.data.cameras.streaming} streaming`}
             />
-            <StatCard label="Subjects assessed" value={null} unavailableReason="Requires a live source" />
+            {/* Real as of this phase: the observation API reads Vision OS's
+                durable log, so this is a count of subjects actually observed in
+                the last hour. Still `—` rather than `0` whenever the platform
+                could not be read — `available: false` and "watched, saw nobody"
+                are different answers and only one of them is a zero. */}
+            <StatCard
+              label="Subjects observed"
+              value={
+                observed.isSuccess && observed.data.available ? observed.data.count : null
+              }
+              unavailableReason={
+                !canSeeObservations
+                  ? 'Your account does not read observations'
+                  : observed.isError
+                    ? 'Observations could not be read'
+                    : observed.isSuccess && !observed.data.available
+                      ? observed.data.reason
+                      : 'Loading'
+              }
+              detail="Seen by any camera in the last hour"
+            />
             <StatCard
               label="Service"
               value={status.data.service.ok ? 'OK' : 'Degraded'}
@@ -262,50 +275,18 @@ function cameraTone(health: string): 'online' | 'degraded' | 'offline' | 'idle' 
   return 'idle';
 }
 
-export function StaffHygienePage() {
-  return (
-    <ProductPage
-      title="Staff Hygiene"
-      description="PPE observations by person and zone, with the four observation states kept distinct."
-      capability="observation history"
-    >
-      <EmptyState
-        title="No observations yet"
-        body="Once a camera is acquiring, each subject appears here with head, face and hand coverings — each shown as present, absent, not visible or unknown."
-      />
-    </ProductPage>
-  );
-}
+// Staff Hygiene now lives in `@features/hygiene`: it reads the product
+// observation API and renders every PPE value through `StateBadge`, so it is no
+// longer one of the pages waiting for a backend.
 
-export function ReportsPage() {
-  return (
-    <ProductPage
-      title="Reports"
-      description="Periods, trends and export. Every figure carries the coverage it was computed from and the rule version in force."
-      capability="reporting"
-    >
-      <EmptyState
-        title="No reporting period available"
-        body="Reports need observation history. They arrive with the data that makes them meaningful."
-      />
-    </ProductPage>
-  );
-}
+// Reports now lives in : it aggregates incidents,
+// observations, the camera estate and the audit trail over real periods, and
+// exports PDF, Excel, CSV and JSON. It is the densest page in the product and
+// the one where coverage discipline matters most, so it has its own module.
 
-export function AdministrationPage() {
-  return (
-    <ProductPage
-      title="Administration"
-      description="Restaurants, zones, users and roles."
-      capability="organisation management"
-    >
-      <EmptyState
-        title="Administration is not connected"
-        body="User and organisation management endpoints arrive in Phase 4. Accounts are provisioned directly for now."
-      />
-    </ProductPage>
-  );
-}
+// Administration now lives in `@features/administration`: sites and zones are
+// real CRUD against the organisation API, and the account list is real and
+// read-only. See that module for why the user write path is deliberately absent.
 
 export function NotFoundPage() {
   return (

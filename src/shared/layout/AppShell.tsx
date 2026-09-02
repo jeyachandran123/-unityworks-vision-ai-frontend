@@ -20,6 +20,7 @@ import {
   visibleItems,
 } from '@app/router/navigation';
 import { useConnectionStatus } from '@shared/realtime/useConnection';
+import { useTheme } from '@shared/theme/theme';
 import { Button, IconButton, StatusBadge, type HealthTone } from '@shared/ui/primitives';
 
 const COLLAPSE_KEY = 'uwv.sidebar.collapsed';
@@ -200,6 +201,8 @@ export function AppShell() {
             </ol>
           </nav>
 
+          <ThemeToggle />
+
           <ConnectionIndicator />
 
           <div style={{ position: 'relative' }}>
@@ -330,6 +333,30 @@ function SidebarLink({
       </span>
       {collapsed ? <span className="sr-only">{label}</span> : label}
     </NavLink>
+  );
+}
+
+/**
+ * The theme switch.
+ *
+ * Glyph and position are deliberately fixed. A control whose icon changes shape
+ * every time it is used is a control the operator has to find again on each
+ * shift, and this one sits in a topbar people scan rather than read. The state
+ * and the action live in the accessible name instead — announced by a screen
+ * reader, and shown as the native tooltip on hover.
+ *
+ * `IconButton` rather than a bespoke control, so it inherits the ghost button
+ * surface, the focus ring and the required accessible name that every other
+ * icon-only control in this shell already has.
+ */
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const label = theme === 'dark' ? 'Dark theme — switch to light' : 'Light theme — switch to dark';
+
+  return (
+    <IconButton label={label} onClick={toggle}>
+      <span aria-hidden="true">◐</span>
+    </IconButton>
   );
 }
 

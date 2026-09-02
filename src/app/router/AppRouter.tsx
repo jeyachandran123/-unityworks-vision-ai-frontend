@@ -20,14 +20,33 @@ import { PERMISSIONS } from '@app/permissions/permissions';
 import { AppShell } from '@shared/layout/AppShell';
 import { LoadingState } from '@shared/ui/primitives';
 import { LoginPage } from '@features/auth/LoginPage';
+import { DashboardPage, LiveMonitoringPage, NotFoundPage } from '@features/product-routes';
+// Reports left  when it stopped being a placeholder: it reads
+// incidents, observations, cameras and the audit trail, and is the densest page
+// in the product.
+import { ReportsPage } from '@features/reports';
+// Staff Hygiene and Administration left `product-routes` when they stopped
+// being placeholders: both now read a real backend, and both are large enough
+// that keeping them beside the pages still awaiting one would hide which is
+// which.
+import { StaffHygienePage } from '@features/hygiene';
+import { AdministrationPage } from '@features/administration';
+// The seven modules with a schema, a permission and no data source. Each page
+// states the specific real-world input it is waiting for; none renders a
+// number. Patron ID is separate because it is blocked by a decision rather
+// than waiting on work, and that must not read as the same thing.
 import {
-  AdministrationPage,
-  DashboardPage,
-  LiveMonitoringPage,
-  NotFoundPage,
-  ReportsPage,
-  StaffHygienePage,
-} from '@features/product-routes';
+  CuttingBoardPage,
+  DemographyPage,
+  MealDetectionPage,
+  PeopleCountingPage,
+  PosIntegrationPage,
+  TableOccupancyPage,
+} from '@features/module-routes';
+import { PatronIdPage } from '@features/patron-id';
+// Reads the evaluation artifacts `tools/vision_eval` and `experiments/vlm_prompt`
+// already produce. Read-only: no evaluation can be triggered from the product.
+import { ModelEvaluationPage } from '@features/model-evaluation';
 // The four surfaces backed by durable state. Kept in their own module so it is
 // obvious at a glance which pages read a database and which are still waiting
 // for one.
@@ -71,7 +90,49 @@ export function AppRouter() {
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewObservations]} />}>
             <Route path="/hygiene" element={<StaffHygienePage />} />
             <Route path="/alerts" element={<AlertsPage />} />
+          </Route>
+
+          {/* Reports gates on its own permission rather than on observations.
+              The catalogue spans incidents, cameras and the audit trail, and
+              each report separately requires the permission for every source it
+              reads — so reaching this page grants nothing by itself. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewReports]} />}>
             <Route path="/reports" element={<ReportsPage />} />
+          </Route>
+
+          {/* Each module gates on its own permission. Deliberately not grouped
+              under one `RequirePermission`: reading footfall and reading
+              inferred demography are different purposes, and a shared guard
+              would make holding one imply reaching the other. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewPeopleCount]} />}>
+            <Route path="/people-counting" element={<PeopleCountingPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewDemography]} />}>
+            <Route path="/demography" element={<DemographyPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewTableOccupancy]} />}>
+            <Route path="/tables" element={<TableOccupancyPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewCuttingBoard]} />}>
+            <Route path="/cutting-boards" element={<CuttingBoardPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewMealDetection]} />}>
+            <Route path="/meals" element={<MealDetectionPage />} />
+          </Route>
+          {/* Its own permission. Evaluation artifacts are candid about how well
+              the model actually scores, which is not something an operational
+              read of the product implies access to. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewModelEvaluation]} />}>
+            <Route path="/model-evaluation" element={<ModelEvaluationPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewPosIntegration]} />}>
+            <Route path="/integrations/pos" element={<PosIntegrationPage />} />
+          </Route>
+          {/* The most sensitive surface in the product, and it operates
+              nothing. Gated anyway: reading that a biometric module exists is
+              itself a disclosure about what this deployment could do. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewPatronId]} />}>
+            <Route path="/patron-id" element={<PatronIdPage />} />
           </Route>
 
           {/* Incidents are not implied by observations: an incident is what the

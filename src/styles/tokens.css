@@ -25,10 +25,39 @@
   --surface-hover: #1f2830;
   --surface-selected: #1b2f36;
 
+  /**
+   * The ground a video frame is letterboxed against.
+   *
+   * Deliberately NOT a surface token, and deliberately identical in both
+   * themes. A camera tile is a picture from a recorder, not a panel in the
+   * application: letterboxing it against the light theme's pale surface put a
+   * grey border around footage and made a dark scene look like a rendering
+   * fault. Black is what every other monitoring client does, and it is what the
+   * detail view already did — this token is what makes the tile agree with it.
+   */
+  --video-ground: #000000;
+
+  /**
+   * Text laid over `--video-ground`, and fixed in both themes for the same
+   * reason it is.
+   *
+   * "Waiting for video…" sits inside the picture area, so it takes its contrast
+   * from the video ground rather than from the page. Left as `--ink-tertiary`
+   * it would be dark grey on black once the light theme became reachable —
+   * 3.87:1, a fail, on the one surface in the product that cannot change
+   * colour to accommodate it. This value is 9.39:1 on black.
+   */
+  --video-ink: #9fb0ba;
+
   /* ── Ink ── */
   --ink-primary: #e8eef1;
   --ink-secondary: #9fb0ba;
-  --ink-tertiary: #6d7f8a;
+  /* Lightened from #6d7f8a: that value cleared 4.5:1 on the two darkest
+     surfaces but fell to 4.22 on --surface-raised and 3.83 on
+     --surface-overlay, and this token carries StatCard's `unavailableReason`
+     — the sentence explaining why a safety figure reads `—` — at 11–13px,
+     where the large-text exemption does not apply. Now 4.58:1 at worst. */
+  --ink-tertiary: #7c8c96;
   --ink-inverse: #0c1013;
   --ink-on-accent: #04191d;
 
@@ -138,22 +167,48 @@
   --topbar-height: 3.25rem;
   --content-max: 96rem;
 
-  /* ── Focus. One ring everywhere, always visible. ── */
-  --focus-ring: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--accent);
+  /**
+   * Focus. One ring everywhere, always visible.
+   *
+   * Drawn as an `outline`, not a stacked `box-shadow`. The previous ring spaced
+   * itself off the control with a 2px band of `--surface-base`, which is only
+   * the correct colour when the control sits directly on the page. Inside a
+   * Card, Drawer, Modal or menu that band painted the page background over the
+   * raised surface and the ring arrived wearing a halo of the wrong colour.
+   *
+   * An outline needs no painted spacer: `outline-offset` leaves a genuinely
+   * transparent gap, so whatever surface is actually behind the control shows
+   * through. It also follows the element's own border-radius, which is why the
+   * global radius override that used to accompany this token is gone.
+   */
+  --focus-ring-color: var(--accent);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 }
 
 /* Light theme. Same tokens, re-pointed — never a separate set of components. */
 :root[data-theme="light"] {
   --surface-base: #f5f7f8;
   --surface-raised: #ffffff;
-  --surface-overlay: #ffffff;
+  /* Was #ffffff — identical to --surface-raised, a separation ratio of exactly
+     1.000, so a Drawer, Modal, toast or menu dissolved into the Card beneath
+     it and only a 1.22:1 hairline said otherwise. Raised is already pure white
+     and cannot go lighter, so the elevated surface takes a cool tint instead:
+     1.046:1 against raised, while staying lighter than --surface-base so it
+     still reads as sitting above the page rather than part of it. */
+  --surface-overlay: #f8fafc;
   --surface-sunken: #e8edef;
   --surface-hover: #eef2f4;
   --surface-selected: #e0f0f3;
 
+  /* --video-ground is deliberately NOT re-pointed here. Footage letterboxes
+     against black in both themes; see the dark block. */
+
   --ink-primary: #10171b;
   --ink-secondary: #46565f;
-  --ink-tertiary: #6b7c86;
+  /* Darkened from #6b7c86, which failed 4.5:1 on all four light surfaces
+     (3.67 on --surface-sunken at worst). Now 4.53:1 at worst. */
+  --ink-tertiary: #5d6c75;
   --ink-inverse: #ffffff;
   --ink-on-accent: #ffffff;
 

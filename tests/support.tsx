@@ -16,6 +16,14 @@ import { AuthProvider } from '@app/auth/AuthProvider';
 import { ConnectionProvider } from '@shared/realtime/useConnection';
 import { ToastProvider } from '@shared/ui/primitives';
 import type { Identity } from '@shared/api/services';
+// The evaluation fixtures are annotated with the real API types rather than
+// left to inference. A fixture that drifts from the contract would let a test
+// pass against a payload the backend cannot produce.
+import type {
+  ArtifactListing,
+  EvaluationSummary,
+  MetricEntry,
+} from '@shared/api/evaluation';
 
 /** Must equal the backend's `FIXTURE_OBSERVATION_COUNT`. */
 export const FIXTURE_OBSERVATION_COUNT = 6;
@@ -36,6 +44,8 @@ export function identity(overrides: Partial<Identity> = {}): Identity {
       'view_evidence',
       'view_incidents',
       'view_live',
+      // The role the evaluation dashboard is actually for.
+      'view_model_evaluation',
       'view_observations',
     ],
     camera_scope: { breadth: 'listed', camera_ids: ['cam-fixture-01'] },
@@ -56,11 +66,20 @@ export const managerIdentity = (): Identity =>
       'resolve_incidents',
       'view_camera_health',
       'view_cameras',
+      // Operational reads for the site they run. No view_demography: inferring
+      // age or gender is a separate purpose and is not inherited by running a
+      // restaurant.
+      'view_cutting_board',
       'view_evidence',
       'view_incidents',
       'view_live',
+      'view_meal_detection',
       'view_observations',
+      'view_people_count',
+      'view_reports',
+      'view_table_occupancy',
       'view_users',
+      'export_reports',
     ],
   });
 
@@ -75,9 +94,15 @@ export const supervisorIdentity = (): Identity =>
       'acknowledge_incidents',
       'view_camera_health',
       'view_cameras',
+      // Board compliance is this role's actual job. It is the only new module
+      // that belongs on a screen anyone in the kitchen can see.
+      'view_cutting_board',
       'view_incidents',
       'view_live',
       'view_observations',
+      // Reads a report on screen; deliberately no export. The kitchen screen is
+      // shared, and a downloaded file is not.
+      'view_reports',
     ],
   });
 
@@ -88,7 +113,18 @@ export const auditorIdentity = (): Identity =>
     roles: ['auditor'],
     // The narrowest interesting role: reads the trail, reads evidence, and can
     // change nothing at all.
-    permissions: ['view_audit', 'view_evidence', 'view_incidents', 'view_observations'],
+    // Reads the food-safety record, which now includes board usage. Not the
+    // commercial modules: footfall, demography, dish detection and POS are
+    // business analytics, and this role's basis does not reach a company's sales.
+    permissions: [
+      'export_reports',
+      'view_audit',
+      'view_cutting_board',
+      'view_evidence',
+      'view_incidents',
+      'view_observations',
+      'view_reports',
+    ],
   });
 
 export const adminIdentity = (): Identity =>
@@ -100,18 +136,35 @@ export const adminIdentity = (): Identity =>
       'acknowledge_incidents',
       'delete_evidence',
       'manage_cameras',
+      'manage_cutting_board',
       'manage_organization',
+      'manage_pos_integration',
+      'manage_table_occupancy',
       'manage_users',
       'register_demand',
       'resolve_incidents',
       'view_audit',
       'view_camera_health',
       'view_cameras',
+      'view_cutting_board',
+      'view_demography',
       'view_evidence',
       'view_incidents',
       'view_live',
+      'view_meal_detection',
+      // An org admin answers for what the system claims, so they may see how
+      // well it actually scores.
+      'view_model_evaluation',
       'view_observations',
+      // Reads that patron identification exists and is blocked. Deliberately
+      // NOT manage_patron_id, which super_admin alone holds.
+      'view_patron_id',
+      'view_people_count',
+      'view_pos_integration',
+      'view_reports',
+      'view_table_occupancy',
       'view_users',
+      'export_reports',
     ],
     camera_scope: { breadth: 'all_in_tenant', camera_ids: [] },
   });
@@ -271,6 +324,516 @@ export function replayLiveRuntime() {
   };
 }
 
+/**
+ * The report catalogue, matching `GET /api/v1/reports/types`.
+ *
+ * Five reports backed by real stores and seven for modules with no data source.
+ * The unconnected ones are present on purpose: a catalogue that omitted them
+ * would let their absence read as "nothing to report", which is the confusion
+ * this whole product is built to prevent.
+ */
+export function reportCatalogue(overrides: Record<string, unknown> = {}) {
+  const data = [
+    ['incident_summary', 'Incident summary', ['view_reports', 'view_incidents']],
+    ['hygiene_observations', 'Hygiene observations', ['view_reports', 'view_observations']],
+    ['camera_estate', 'Camera estate and zone history', ['view_reports', 'view_cameras']],
+    ['audit_activity', 'Audit activity', ['view_reports', 'view_audit']],
+    ['operations_overview', 'Operations overview', ['view_reports', 'view_incidents']],
+  ] as const;
+  const modules = [
+    ['module_people_counting', 'People counting', 'people_counting'],
+    ['module_demography', 'Demography', 'demography'],
+    ['module_table_occupancy', 'Table occupancy', 'table_occupancy'],
+    ['module_cutting_board', 'Cutting board compliance', 'cutting_board'],
+    ['module_meal_detection', 'Meal detection', 'meal_detection'],
+    ['module_pos_integration', 'POS / ERP integration', 'pos_integration'],
+    ['module_patron_id', 'Unique patron ID', 'patron_id'],
+  ] as const;
+
+  return {
+    reports: [
+      ...data.map(([id, title, requires]) => ({
+        id,
+        title,
+        summary: `${title} over the selected period.`,
+        granularities: id === 'incident_summary' ? ['total', 'day', 'week', 'month'] : ['total'],
+        requires: [...requires],
+        permitted: true,
+        kind: 'data',
+        capability_module: '',
+      })),
+      ...modules.map(([id, title, module]) => ({
+        id,
+        title,
+        summary: `${title} has no data source yet.`,
+        granularities: ['total'],
+        requires: ['view_reports'],
+        permitted: true,
+        kind: 'capability',
+        capability_module: module,
+      })),
+    ],
+    count: data.length + modules.length,
+    can_export: true,
+    formats: {
+      json: { available: true, reason: '' },
+      csv: { available: true, reason: '' },
+      xlsx: { available: true, reason: '' },
+      pdf: { available: true, reason: '' },
+    },
+    max_window_days: 366,
+    ...overrides,
+  };
+}
+
+/**
+ * A generated report, matching `GET /api/v1/reports/{id}`.
+ *
+ * Complete by default with one populated and one empty section, because the
+ * empty section is what proves a page renders `empty_note` rather than a bare
+ * header row. A capability report carries the module's blocked state instead.
+ */
+export function reportPayload(id: string, overrides: Record<string, unknown> = {}) {
+  const capability = id.startsWith('module_');
+  return {
+    report_id: id,
+    title: capability ? 'Unique patron ID' : 'Incident summary',
+    subtitle: 'What this report covers.',
+    coverage: {
+      since: '2026-08-01T00:00:00+00:00',
+      until: '2026-09-01T00:00:00+00:00',
+      timezone: 'Asia/Singapore',
+      timezone_resolved: true,
+      granularity: 'total',
+      complete: !capability,
+      basis: 'Rows in the durable incident store.',
+      sources: capability
+        ? [
+            {
+              source: 'patron_id',
+              available: false,
+              reason: 'Blocked pending legal review.',
+              rows: 0,
+              truncated: false,
+              earliest: null,
+            },
+          ]
+        : [
+            {
+              source: 'incidents',
+              available: true,
+              reason: '',
+              rows: 2,
+              truncated: false,
+              earliest: null,
+            },
+          ],
+      gaps: capability
+        ? [{ kind: 'source_unavailable', detail: 'Blocked pending legal review.', since: null, until: null }]
+        : [],
+    },
+    sections: [
+      {
+        key: 'populated',
+        title: 'Incidents by period',
+        columns: [
+          { key: 'period', header: 'Period', numeric: false },
+          { key: 'raised', header: 'Raised', numeric: true },
+        ],
+        rows: [{ period: '2026-08', raised: 2 }],
+        empty_note: 'No incident was raised in this period.',
+        note: 'Bucketed on when the incident was raised.',
+      },
+      {
+        key: 'empty',
+        title: 'By zone',
+        columns: [
+          { key: 'zone', header: 'Zone', numeric: false },
+          { key: 'count', header: 'Incidents', numeric: true },
+        ],
+        rows: [],
+        empty_note: 'No incident was raised in this period, so there is nothing to break down.',
+        note: 'The zone recorded on the incident when it was raised.',
+      },
+    ],
+    capability_state: capability ? 'blocked' : '',
+    capability_reason: capability ? 'Blocked pending legal review.' : '',
+    awaiting: capability ? [{ id: 'legal_review', detail: 'A completed DPIA.' }] : [],
+    generated_at: '2026-09-02T00:00:00+00:00',
+    ...overrides,
+  };
+}
+
+/**
+ * One metric with full provenance, matching `app/evaluation/model.py`.
+ *
+ * Provenance is mandatory in the backend type, so it is mandatory here: a
+ * fixture that omitted it would let a test pass against a payload the real API
+ * cannot produce.
+ */
+export function metric(overrides: Partial<MetricEntry> = {}): MetricEntry {
+  return {
+    key: 'head_covering.agreement',
+    label: 'Attribute agreement',
+    kind: 'attribute_agreement',
+    value: 0.23255813953488372,
+    definition:
+      'Correct answers divided by matched subjects, for this one attribute, against human annotation on this split. Not overall model accuracy and not a compliance pass rate.',
+    undefined_reason: '',
+    unit: '',
+    support: 43,
+    provenance: {
+      artifact: 'datasets/kitchen-01/results/baseline.json',
+      source: 'ppe_evaluation',
+      run_id: 'baseline',
+      model: 'nvidia (understander.nvidia_vl)',
+      configuration: 'kitchen-safety.example.json / nvidia (understander.nvidia_vl)',
+      dataset: 'kitchen-01',
+      split: 'test',
+      // Undated on purpose: the real PPE reports carry no timestamp, and that
+      // is the interesting case.
+      evaluated_at: null,
+      timestamp_source: 'absent',
+      sample_size: 43,
+      limitations: [
+        'This report records no evaluation date.',
+        'kitchen-01 annotates only detector proposals, so it cannot measure detection recall.',
+      ],
+    },
+    ...overrides,
+  };
+}
+
+/**
+ * The evaluation summary, matching `GET /api/v1/evaluation`.
+ *
+ * Deliberately mixed: one undated family, one dated family, one undefined
+ * metric and two comparison sets that must never merge. A uniform fixture would
+ * let a page that flattened all of those pass.
+ */
+export function evaluationSummary(overrides: Partial<EvaluationSummary> = {}): EvaluationSummary {
+  return {
+    families: [
+      {
+        key: 'ppe_evaluation',
+        title: 'PPE attribute evaluation',
+        description: 'Offline evaluation against the human-annotated kitchen-01 split.',
+        available: true,
+        reason: '',
+        expected_artifacts: ['datasets/kitchen-01/results/baseline.json'],
+        runs: [
+          {
+            run_id: 'baseline',
+            title: 'Baseline',
+            summary: 'The shipped configuration at the time.',
+            source: 'ppe_evaluation',
+            available: true,
+            reason: '',
+            completeness: 'complete',
+            freshness: 'undated',
+            provenance: metric().provenance,
+            comparability: {
+              metric_kind: 'attribute_agreement',
+              model: 'nvidia (understander.nvidia_vl)',
+              dataset: 'kitchen-01',
+              split: 'test',
+              configuration: 'kitchen-safety.example.json',
+            },
+            groups: [
+              {
+                key: 'head_covering',
+                title: 'Head covering',
+                description: 'Agreement against human annotation.',
+                metrics: [
+                  metric(),
+                  metric({
+                    key: 'head_covering.absent.recall',
+                    label: 'absent recall',
+                    kind: 'recall',
+                    value: null,
+                    support: 0,
+                    definition:
+                      "Of the subjects that truly were 'absent', the share the system found.",
+                    undefined_reason:
+                      'No annotated example of this state exists in the split, so the metric has no denominator. Undefined, not zero.',
+                  }),
+                ],
+                confusion: {
+                  present: { present: 8, absent: 20 },
+                  not_visible: { absent: 11, not_visible: 2 },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        key: 'vlm_prompt',
+        title: 'VLM prompt experiments',
+        description: 'Recorded prompt variants scored against one corpus.',
+        available: true,
+        reason: '',
+        expected_artifacts: ['experiments/vlm_prompt/runs/scores.json'],
+        runs: [
+          {
+            run_id: 'variant_A',
+            title: 'Variant A',
+            summary: 'Production baseline.',
+            source: 'vlm_prompt',
+            available: true,
+            reason: '',
+            completeness: 'complete',
+            freshness: 'recent',
+            provenance: {
+              ...metric().provenance,
+              artifact: 'experiments/vlm_prompt/runs/scores.json',
+              source: 'vlm_prompt',
+              run_id: 'variant_A',
+              model: 'meta/llama-3.2-11b-vision-instruct',
+              evaluated_at: '2026-08-27T07:49:39+00:00',
+              timestamp_source: 'artifact',
+            },
+            comparability: {
+              metric_kind: 'accuracy_over_parsed',
+              model: 'meta/llama-3.2-11b-vision-instruct',
+              dataset: 'kitchen-01',
+              split: 'test',
+              configuration: 'corpus:bbe9e0559523b9b0',
+            },
+            groups: [
+              {
+                key: 'ungated',
+                title: 'Ungated',
+                description: 'Every subject reaches the model.',
+                metrics: [
+                  metric({
+                    key: 'ungated.accuracy_over_parsed',
+                    label: 'Accuracy over parsed',
+                    kind: 'accuracy_over_parsed',
+                    value: 0.6341463414634146,
+                    definition:
+                      'Agreement with human annotation over the responses that parsed. The experiment own name for this figure.',
+                  }),
+                ],
+                confusion: null,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    datasets: [
+      {
+        name: 'kitchen-01',
+        artifact: 'datasets/kitchen-01/dataset.json',
+        frames: 15,
+        subjects: 43,
+        splits: { train: [], validation: [], test: ['kitchen-01'] },
+        split_by: 'video_id',
+        attribute_counts: { head_covering: { present: 30, not_visible: 13 } },
+        status: '',
+        limitations: [
+          'Boxes are detector proposals visually confirmed to be real people. This dataset CANNOT measure detection recall.',
+        ],
+        annotation_source: 'human_visual_inspection',
+        available: true,
+        reason: '',
+      },
+      {
+        name: 'vision-phase5',
+        artifact: 'datasets/vision-phase5/manifest.json',
+        // No counts, not zero counts: this set is awaiting footage.
+        frames: null,
+        subjects: null,
+        splits: {},
+        split_by: '',
+        attribute_counts: {},
+        status: 'AWAITING FOOTAGE',
+        limitations: ['Measure whether a reported PPE violation is real.'],
+        annotation_source: 'human_visual_inspection',
+        available: true,
+        reason: 'AWAITING FOOTAGE',
+      },
+    ],
+    configuration: {
+      available: true,
+      reason: '',
+      groups: [
+        {
+          key: 'config/policies/kitchen-safety.example.json',
+          title: 'kitchen-safety v2.1.0',
+          description: 'Thresholds the deployment is configured with.',
+          metrics: [
+            metric({
+              key: 'scope.min_confidence',
+              label: 'Minimum detection confidence',
+              kind: 'configured_threshold',
+              value: 0.4,
+              support: null,
+              definition:
+                'Detections below this score are not considered for attribute evaluation at all.',
+              provenance: {
+                ...metric().provenance,
+                artifact: 'config/policies/kitchen-safety.example.json',
+                source: 'policy_configuration',
+                timestamp_source: 'not_applicable',
+              },
+            }),
+          ],
+          confusion: null,
+        },
+      ],
+    },
+    comparison_sets: [
+      {
+        key: 'ppe',
+        metric_kind: 'attribute_agreement',
+        model: 'nvidia (understander.nvidia_vl)',
+        dataset: 'kitchen-01',
+        split: 'test',
+        configuration: 'kitchen-safety.example.json',
+        run_ids: ['baseline'],
+        comparable: false,
+        dated: false,
+        why: 'The only run with this combination. A single point is a snapshot, not a trend.',
+      },
+      {
+        key: 'vlm',
+        metric_kind: 'accuracy_over_parsed',
+        model: 'meta/llama-3.2-11b-vision-instruct',
+        dataset: 'kitchen-01',
+        split: 'test',
+        configuration: 'corpus:bbe9e0559523b9b0',
+        run_ids: ['variant_A'],
+        comparable: false,
+        dated: true,
+        why: 'The only run with this combination. A single point is a snapshot, not a trend.',
+      },
+    ],
+    totals: {
+      families: 2,
+      families_available: 2,
+      runs: 2,
+      runs_available: 2,
+      runs_dated: 1,
+      runs_undated: 1,
+    },
+    latest_evaluation_at: '2026-08-27T07:49:39+00:00',
+    headline_metric: null,
+    headline_reason:
+      'No single figure summarises these artifacts. Any combined score would be a number with no definition.',
+    tenant_id: 'org-test',
+    ...overrides,
+  };
+}
+
+export function evaluationArtifacts(overrides: Partial<ArtifactListing> = {}): ArtifactListing {
+  return {
+    families: [
+      {
+        key: 'ppe_evaluation',
+        title: 'PPE attribute evaluation',
+        available: true,
+        reason: '',
+        expected_artifacts: ['datasets/kitchen-01/results/baseline.json'],
+        runs: [
+          {
+            run_id: 'baseline',
+            available: true,
+            reason: '',
+            artifact: 'datasets/kitchen-01/results/baseline.json',
+            timestamp_source: 'absent',
+            freshness: 'undated',
+          },
+        ],
+      },
+    ],
+    imagery_available: false,
+    imagery_reason:
+      'Dataset frames and evaluation crops exist on disk and are deliberately not reachable through this API.',
+    run_evaluation_available: false,
+    run_evaluation_reason:
+      'No evaluation harness in this repository can be invoked with bounded parameters without either a paid network dependency or overwriting a historical artifact.',
+    ...overrides,
+  };
+}
+
+/** Path fragment → module id, longest first so `/patron-id/gate` never wins. */
+const MODULE_BY_PATH: ReadonlyArray<readonly [string, string]> = [
+  ['/modules/people-counting', 'people_counting'],
+  ['/modules/demography', 'demography'],
+  ['/modules/table-occupancy', 'table_occupancy'],
+  ['/modules/cutting-board', 'cutting_board'],
+  ['/modules/meal-detection', 'meal_detection'],
+  ['/modules/pos-integration', 'pos_integration'],
+  ['/modules/patron-id', 'patron_id'],
+];
+
+/**
+ * The honest not-connected shape, matching `app/api/capability.py`.
+ *
+ * `available` is false and `stored_records` is zero for every module, which is
+ * exactly what the real backend returns today. The per-module extras below are
+ * the fields each route genuinely adds — the four reading states, the six table
+ * states, the schema guarantees — so a test asserting on them is asserting on a
+ * real contract rather than on a fixture somebody invented.
+ */
+export function moduleCapability(module: string, overrides: Record<string, unknown> = {}) {
+  const extra: Record<string, Record<string, unknown>> = {
+    demography: {
+      aggregate_only: true,
+      aggregate_only_detail:
+        'demography_snapshots has no object_id, track_id or evidence reference.',
+    },
+    table_occupancy: {
+      states: ['vacant', 'occupied', 'needs_cleaning', 'out_of_service', 'not_visible', 'unknown'],
+    },
+    cutting_board: { reading_states: ['present', 'absent', 'not_visible', 'unknown'] },
+    meal_detection: {
+      reconciliation_states: ['unreconciled', 'matched', 'unmatched', 'not_applicable'],
+    },
+    pos_integration: {
+      adapter: {
+        bound: true,
+        id: 'pos.not_configured',
+        vendor: '',
+        display_name: 'No POS adapter bound',
+        available: false,
+        reason: 'No point-of-sale adapter is bound.',
+        capabilities: [],
+      },
+      write_available: false,
+      write_unavailable_reason: 'No vendor has been chosen.',
+    },
+    patron_id: {
+      gate: { available: false, reason: 'blocked', missing: ['legal_review'] },
+      schema_guarantees: [
+        'patron_tokens.token_hash is String(64) — a hex SHA-256 digest fits, a biometric template does not.',
+        'patron_tokens has no binary column.',
+      ],
+      write_available: false,
+      write_unavailable_reason: 'No route accepts a patron token.',
+    },
+  };
+
+  return {
+    module,
+    title: module === 'patron_id' ? 'Unique Patron ID' : 'Module',
+    purpose: `What ${module} would report if it were connected.`,
+    available: false,
+    state: module === 'patron_id' ? 'blocked' : 'not_configured',
+    reason: `No source is bound for ${module}.`,
+    awaiting: [{ id: 'a_real_input', detail: 'A specific real-world input, named.' }],
+    storage_ready: true,
+    tables: [`${module}_rows`],
+    stored_records: 0,
+    records_by_table: {},
+    documentation: 'docs/architecture/NOT_YET_CONNECTED.md',
+    ...(extra[module] ?? {}),
+    ...overrides,
+  };
+}
+
 export interface StubOptions {
   /** Overrides the camera block on /status. */
   cameras?: unknown;
@@ -280,6 +843,32 @@ export interface StubOptions {
   live?: unknown;
   /** Overrides /wall/cameras. */
   wall?: unknown;
+  /** Overrides /observations. */
+  observations?: unknown;
+  /** Overrides /restaurants. */
+  restaurants?: unknown;
+  /** Overrides /users. */
+  users?: unknown;
+  /**
+   * Overrides a module capability route, keyed by module id — e.g.
+   * `{ patron_id: { ...} }`. The default is the real not-connected shape, so a
+   * page that fabricated a reading from it would fail rather than look plausible.
+   */
+  modules?: Record<string, unknown>;
+  /** Overrides /pos-connectors. */
+  posConnectors?: unknown;
+  /** Overrides /reports/types. */
+  reportTypes?: unknown;
+  /** Overrides /evaluation. */
+  evaluation?: unknown;
+  /** Overrides /evaluation/artifacts. */
+  evaluationArtifacts?: unknown;
+  /**
+   * Overrides a generated report, keyed by report id. The default is a real
+   * report shape with a complete window — a test that wants an incomplete one
+   * says so, because that is the interesting case.
+   */
+  reports?: Record<string, unknown>;
   /** `null` makes /auth/refresh 401 — i.e. no existing session. */
   session?: Identity | null;
   /** Envelope code returned by /auth/login. */
@@ -396,6 +985,91 @@ export function stubFetch(options: StubOptions = {}) {
 
     if (url.includes('/incidents')) {
       return jsonResponse({ incidents: [], count: 0 });
+    }
+
+    // Observations: available and empty by default, which is the honest shape
+    // of a working backend that has seen nobody. `available: false` is a
+    // different answer and a test that wants it says so through `routes`.
+    if (url.includes('/observations')) {
+      return jsonResponse(
+        options.observations ?? {
+          available: true,
+          reason: '',
+          subjects: [],
+          count: 0,
+          observation_count: 0,
+          cameras_queried: [],
+          window: { since: '2026-09-01T00:00:00Z', until: '2026-09-01T08:00:00Z' },
+          window_fully_observable: true,
+        },
+      );
+    }
+
+    // Evaluation. `/artifacts` first, since it is the longer path.
+    if (url.includes('/evaluation/artifacts')) {
+      return jsonResponse(options.evaluationArtifacts ?? evaluationArtifacts());
+    }
+    if (url.includes('/evaluation')) {
+      return jsonResponse(options.evaluation ?? evaluationSummary());
+    }
+
+    // Reports. `/reports/types` first: it is a longer path than `/reports/`
+    // and a bare `includes('/reports')` would swallow it.
+    if (url.includes('/reports/types')) {
+      return jsonResponse(options.reportTypes ?? reportCatalogue());
+    }
+
+    if (url.includes('/reports/')) {
+      const id = /\/reports\/([^/?]+)/.exec(url)?.[1] ?? '';
+      if (url.includes('/export')) {
+        // A real Blob, so the download path in the page is exercised rather
+        // than stubbed around.
+        return new Response('report-bytes', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${id}.pdf"`,
+            'Cache-Control': 'no-store, private',
+          },
+        });
+      }
+      return jsonResponse(options.reports?.[id] ?? reportPayload(id));
+    }
+
+    // The seven modules. Every default here is `available: false` with a real
+    // reason and a real checklist, because that is what the backend actually
+    // returns — a stub that answered `available: true` with empty rows would
+    // let a page pass its own test while rendering a fabricated clean result.
+    if (url.includes('/modules/')) {
+      const id = MODULE_BY_PATH.find(([fragment]) => url.includes(fragment))?.[1] ?? '';
+      const override = options.modules?.[id];
+      return jsonResponse(override ?? moduleCapability(id));
+    }
+
+    if (url.includes('/pos-connectors')) {
+      return jsonResponse(
+        options.posConnectors ?? { connectors: [], count: 0, write_available: false },
+      );
+    }
+
+    if (url.includes('/restaurants')) {
+      return jsonResponse(options.restaurants ?? { restaurants: [], count: 0 });
+    }
+
+    if (url.includes('/zones')) {
+      return jsonResponse({ zones: [], count: 0 });
+    }
+
+    if (url.includes('/users')) {
+      return jsonResponse(
+        options.users ?? {
+          users: [],
+          count: 0,
+          write_available: false,
+          write_unavailable_reason:
+            'Creating an account issues a credential, and this deployment has no invitation channel yet.',
+        },
+      );
     }
 
     if (url.includes('/cameras')) {
