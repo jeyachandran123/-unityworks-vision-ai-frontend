@@ -113,10 +113,10 @@ describe('the camera page', () => {
 
     await screen.findByRole('heading', { name: 'Cameras' });
 
-    const registered = (await screen.findByText('Registered')).closest('section') as HTMLElement;
+    const registered = (await screen.findByText('Registered')).closest('[data-figure]') as HTMLElement;
     expect(within(registered).getByText('2')).toBeInTheDocument();
 
-    const notProcessed = screen.getByText('Not processed').closest('section') as HTMLElement;
+    const notProcessed = screen.getByText('Not processed').closest('[data-figure]') as HTMLElement;
     // One camera exists and is deliberately not being processed. That must be
     // legible as a fact, not inferable only by subtraction.
     expect(within(notProcessed).getByText('1')).toBeInTheDocument();
@@ -429,7 +429,7 @@ describe('the audit trail', () => {
     installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     expect(screen.queryByRole('link', { name: /audit trail/i })).not.toBeInTheDocument();
   });
 });
@@ -439,29 +439,65 @@ describe('the audit trail', () => {
 describe('the dashboard incident count', () => {
   beforeEach(() => vi.unstubAllGlobals());
 
-  it('reports the real open count once the store answers', async () => {
+  // The open-incident count is no longer a stat card among four equal ones. It
+  // is the Command Center's primary attention region: one statement, at display
+  // scale, about whether anything is wrong. The property being protected is the
+  // same and slightly stronger — an unreachable store must produce a statement
+  // of *unknown* at the same weight as a statement of violations, because
+  // anything quieter teaches an operator that silence means safety.
+  it('reports the real unresolved count once the store answers', async () => {
     installFetch({
       session: managerIdentity(),
-      routes: { '/incidents': { incidents: [incident(), incident({ id: 'inc-2' })], count: 2 } },
+      routes: {
+        // Routed per status, because the Command Center now asks for both.
+        // Reading only `active` was the previous bug: an acknowledged incident
+        // is also unresolved, and it fell silently out of the figure while the
+        // label claimed to count everything "raised and not yet resolved".
+        '/incidents?status=active': { incidents: [incident()], count: 1 },
+        '/incidents?status=acknowledged': {
+          incidents: [incident({ id: 'inc-2', status: 'acknowledged' })],
+          count: 1,
+        },
+      },
     });
     renderApp(<AppRouter />, '/dashboard');
 
-    const label = await screen.findByText('Open incidents');
-    const card = label.closest('section') as HTMLElement;
-    await waitFor(() => expect(within(card).getByText('2')).toBeInTheDocument());
+    const attention = await screen.findByRole('region', { name: 'Primary attention' });
+    await waitFor(() =>
+      expect(within(attention).getByText(/2 violations are open/i)).toBeInTheDocument(),
+    );
+    expect(within(attention).getByText(/1 not yet acknowledged/i)).toBeInTheDocument();
+    expect(within(attention).getByText(/1 acknowledged and still open/i)).toBeInTheDocument();
   });
 
-  it('falls back to an em dash — never a zero — when the store cannot be reached', async () => {
+  it('says the queue is unknown — never zero, never clear — when the store cannot be reached', async () => {
     installFetch({
       session: managerIdentity(),
       routes: { '/incidents': new Response('', { status: 503 }) },
     });
     renderApp(<AppRouter />, '/dashboard');
 
-    const label = await screen.findByText('Open incidents');
-    const card = label.closest('section') as HTMLElement;
-    await waitFor(() => expect(within(card).getByText('—')).toBeInTheDocument());
-    expect(within(card).queryByText('0')).not.toBeInTheDocument();
-    expect(within(card).getByText(/could not be reached/i)).toBeInTheDocument();
+    const attention = await screen.findByRole('region', { name: 'Primary attention' });
+    await waitFor(() =>
+      expect(within(attention).getByText(/could not be read/i)).toBeInTheDocument(),
+    );
+    expect(within(attention).getByText(/not a report of zero/i)).toBeInTheDocument();
+    // The one reading this must never produce.
+    expect(within(attention).queryByText(/no compliance violation is currently open/i)).toBeNull();
+  });
+
+  it('claims the kitchen is clear only from a successful read', async () => {
+    installFetch({
+      session: managerIdentity(),
+      routes: { '/incidents': { incidents: [], count: 0 } },
+    });
+    renderApp(<AppRouter />, '/dashboard');
+
+    const attention = await screen.findByRole('region', { name: 'Primary attention' });
+    await waitFor(() =>
+      expect(
+        within(attention).getByText(/no compliance violation is currently open/i),
+      ).toBeInTheDocument(),
+    );
   });
 });

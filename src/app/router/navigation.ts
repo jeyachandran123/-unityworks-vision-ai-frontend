@@ -7,55 +7,107 @@
  *
  * Each entry names the **permission** it needs — never a role. Roles change;
  * "who may see evidence" does not, and the backend already owns the mapping.
+ *
+ * ── Stage 2's three structural changes ──────────────────────────────────────
+ *
+ * **Five areas, grouped by what a thing is rather than by how ready it is.**
+ * The previous four sections — Monitor, Analyse, Investigate, Manage — were
+ * built for the union of all roles, which is why a developer's "Analyse"
+ * section contained exactly one item and an auditor's "Investigate" section had
+ * a hole where Cameras should be. Grouping by domain means nothing has to be
+ * re-filed on the day a module connects, and every role gets whole areas rather
+ * than fragments.
+ *
+ * **`register` replaces a hand-written branch in the shell.** DevTools used to
+ * be a separate export rendered by its own conditional, which meant the
+ * permission filter had to be remembered twice. Engineering is now an ordinary
+ * area that declares itself, so there is one code path and one filter.
+ *
+ * **`readiness` says so before the click.** Seven of an org admin's eighteen
+ * entries opened a page reporting it had no data source. Each page was honest;
+ * collectively they taught the operator that clicking things leads nowhere.
+ * `awaiting` and `blocked` stay distinct because waiting for engineering work
+ * and waiting for a DPIA are different facts — the backend's own capability
+ * envelope draws that line and the navigation used to discard it.
  */
 
 import { PERMISSIONS, type Permission } from '@app/permissions/permissions';
+
+/**
+ * How ready a destination is, declared statically.
+ *
+ * A sidebar must render before any query resolves, and fetching seven
+ * capability endpoints to draw one would be absurd — so this is a declaration
+ * rather than a reading. It is kept honest by a test that asserts the set of
+ * entries marked `awaiting` or `blocked` is exactly the set of routes whose
+ * page renders the awaiting shell. Connect a module and the test fails until
+ * the marker comes off.
+ */
+export type Readiness = 'live' | 'awaiting' | 'blocked';
+
+/** Which half of the product a destination belongs to. Drives the register. */
+export type Register = 'product' | 'engineering';
 
 export interface NavItem {
   id: string;
   label: string;
   path: string;
-  /** Any one of these admits. Empty means every signed-in user. */
+  /** By default any one of these admits; `require: 'all'` demands every one. */
   permissions: Permission[];
+  /**
+   * `all` for a destination that genuinely needs several permissions.
+   *
+   * `RequirePermission` has supported `mode="all"` since Phase 1 and this model
+   * did not, so a route could be gated more tightly than its own navigation
+   * entry — which is exactly the disagreement Stage 1 found at
+   * `/live/runtime`. The two now express the same thing.
+   */
+  require?: 'any' | 'all';
   glyph: string;
   /** A one-line explanation, used as the link's title and in the command list. */
   hint: string;
+  readiness?: Readiness;
 }
 
 export interface NavSection {
   id: string;
   label: string;
+  /** One line naming the question this area answers. Shown under the label. */
+  blurb: string;
+  register: Register;
   items: NavItem[];
 }
 
+/**
+ * The five areas.
+ *
+ * Operations is "what is happening now". Compliance is "the record, and its
+ * defence". Intelligence is "the business question". Platform is "the estate".
+ * Engineering is "the system itself". A person works inside one of these at a
+ * time, which is the test a section has to pass to exist.
+ */
 export const PRODUCT_NAV: NavSection[] = [
   {
-    id: 'monitor',
-    label: 'Monitor',
+    id: 'operations',
+    label: 'Operations',
+    blurb: 'What is happening now',
+    register: 'product',
     items: [
       {
         id: 'dashboard',
-        label: 'Dashboard',
+        label: 'Command Center',
         path: '/dashboard',
         permissions: [],
-        glyph: '◱',
-        hint: 'Today at a glance',
+        glyph: '⌾',
+        hint: 'What needs attention, and what the system is seeing',
       },
       {
         id: 'live',
-        label: 'Live Monitoring',
+        label: 'Live Wall',
         path: '/live',
         permissions: [PERMISSIONS.viewLive],
-        glyph: '▢',
+        glyph: '▣',
         hint: 'Every camera on the recorder, live',
-      },
-      {
-        id: 'hygiene',
-        label: 'Staff Hygiene',
-        path: '/hygiene',
-        permissions: [PERMISSIONS.viewObservations],
-        glyph: '⬡',
-        hint: 'PPE observations by person and zone',
       },
       {
         id: 'alerts',
@@ -63,86 +115,42 @@ export const PRODUCT_NAV: NavSection[] = [
         path: '/alerts',
         permissions: [PERMISSIONS.viewObservations],
         glyph: '◬',
-        hint: 'Things that need attention now',
+        hint: 'Open violations, most urgent first',
       },
-      {
-        id: 'cutting-boards',
-        label: 'Cutting Boards',
-        // Beside Staff Hygiene rather than under Analyse: it is a food-safety
-        // surface with the same four states and the same consequences, not a
-        // business report.
-        path: '/cutting-boards',
-        permissions: [PERMISSIONS.viewCuttingBoard],
-        glyph: '▥',
-        hint: 'Board colour against the ingredient being prepared',
-      },
-      {
-        id: 'tables',
-        label: 'Table Occupancy',
-        path: '/tables',
-        permissions: [PERMISSIONS.viewTableOccupancy],
-        glyph: '⊞',
-        hint: 'Which tables are occupied, free or waiting to be cleared',
-      },
-    ],
-  },
-  {
-    // Its own section because the question is different. Everything under
-    // Monitor answers "what is happening now"; everything here answers "what
-    // has been happening", and mixing the two puts a marketing report next to
-    // a food-safety alert.
-    id: 'analyse',
-    label: 'Analyse',
-    items: [
-      {
-        id: 'people-counting',
-        label: 'People Counting',
-        path: '/people-counting',
-        permissions: [PERMISSIONS.viewPeopleCount],
-        glyph: '◷',
-        hint: 'Entries, exits and peak hours, with the coverage behind them',
-      },
-      {
-        id: 'demography',
-        label: 'Demography',
-        path: '/demography',
-        // Its own permission, deliberately. A role that may read footfall has
-        // no automatic claim on inferred age or gender.
-        permissions: [PERMISSIONS.viewDemography],
-        glyph: '◑',
-        hint: 'Aggregate category breakdown — never per person',
-      },
-      {
-        id: 'meals',
-        label: 'Meal Detection',
-        path: '/meals',
-        permissions: [PERMISSIONS.viewMealDetection],
-        glyph: '◔',
-        hint: 'Dishes recognised, against what the till says was sold',
-      },
-      {
-        id: 'model-evaluation',
-        label: 'Model Evaluation',
-        // Under Analyse rather than Vision OS: these are committed artifacts a
-        // product owner can read, not a live engineering view of the platform.
-        path: '/model-evaluation',
-        permissions: [PERMISSIONS.viewModelEvaluation],
-        glyph: '◎',
-        hint: 'How the perception stack scores against annotated data',
-      },
-    ],
-  },
-  {
-    id: 'investigate',
-    label: 'Investigate',
-    items: [
       {
         id: 'incidents',
         label: 'Incidents',
         path: '/incidents',
         permissions: [PERMISSIONS.viewIncidents],
-        glyph: '▤',
-        hint: 'The work queue — open, acknowledged, resolved',
+        glyph: '≡',
+        hint: 'The ledger — open, acknowledged, resolved',
+      },
+    ],
+  },
+  {
+    id: 'compliance',
+    label: 'Compliance',
+    blurb: 'The record, and its defence',
+    register: 'product',
+    items: [
+      {
+        id: 'hygiene',
+        label: 'Staff Hygiene',
+        path: '/hygiene',
+        permissions: [PERMISSIONS.viewObservations],
+        glyph: '⬡',
+        hint: 'PPE observations by subject and zone',
+      },
+      {
+        id: 'cutting-boards',
+        label: 'Cutting Boards',
+        // Food safety, whether or not it has data yet. Filed by what it is, so
+        // it does not move on the day a source is connected.
+        path: '/cutting-boards',
+        permissions: [PERMISSIONS.viewCuttingBoard],
+        glyph: '▥',
+        hint: 'Board colour against the ingredient being prepared',
+        readiness: 'awaiting',
       },
       {
         id: 'evidence',
@@ -154,14 +162,6 @@ export const PRODUCT_NAV: NavSection[] = [
         hint: 'Imagery that supports a finding',
       },
       {
-        id: 'cameras',
-        label: 'Cameras',
-        path: '/cameras',
-        permissions: [PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth],
-        glyph: '◎',
-        hint: 'Coverage, health and blind spots',
-      },
-      {
         id: 'reports',
         label: 'Reports',
         path: '/reports',
@@ -170,14 +170,8 @@ export const PRODUCT_NAV: NavSection[] = [
         // and, for an account with observations alone, misleading.
         permissions: [PERMISSIONS.viewReports],
         glyph: '▦',
-        hint: 'Periods, trends and export',
+        hint: 'Periods, coverage, trends and export',
       },
-    ],
-  },
-  {
-    id: 'manage',
-    label: 'Manage',
-    items: [
       {
         id: 'audit',
         label: 'Audit Trail',
@@ -188,21 +182,84 @@ export const PRODUCT_NAV: NavSection[] = [
         glyph: '❑',
         hint: 'Who did what, and who looked at whom',
       },
+    ],
+  },
+  {
+    id: 'intelligence',
+    label: 'Intelligence',
+    blurb: 'The business question',
+    register: 'product',
+    items: [
+      {
+        id: 'people-counting',
+        label: 'People Counting',
+        path: '/people-counting',
+        permissions: [PERMISSIONS.viewPeopleCount],
+        glyph: '◷',
+        hint: 'Entries, exits and peak hours, with the coverage behind them',
+        readiness: 'awaiting',
+      },
+      {
+        id: 'demography',
+        label: 'Demography',
+        path: '/demography',
+        // Its own permission, deliberately. A role that may read footfall has
+        // no automatic claim on inferred age or gender.
+        permissions: [PERMISSIONS.viewDemography],
+        glyph: '◑',
+        hint: 'Aggregate category breakdown — never per person',
+        readiness: 'awaiting',
+      },
+      {
+        id: 'tables',
+        label: 'Table Occupancy',
+        path: '/tables',
+        permissions: [PERMISSIONS.viewTableOccupancy],
+        glyph: '⊞',
+        hint: 'Which tables are occupied, free or waiting to be cleared',
+        readiness: 'awaiting',
+      },
+      {
+        id: 'meals',
+        label: 'Meal Detection',
+        path: '/meals',
+        permissions: [PERMISSIONS.viewMealDetection],
+        glyph: '◔',
+        hint: 'Dishes recognised, against what the till says was sold',
+        readiness: 'awaiting',
+      },
+    ],
+  },
+  {
+    id: 'platform',
+    label: 'Platform',
+    blurb: 'The estate and its configuration',
+    register: 'product',
+    items: [
+      {
+        id: 'cameras',
+        label: 'Cameras',
+        path: '/cameras',
+        permissions: [PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth],
+        glyph: '⌗',
+        hint: 'The estate — configuration, health and blind spots',
+      },
+      {
+        id: 'pos',
+        label: 'Integrations',
+        path: '/integrations/pos',
+        permissions: [PERMISSIONS.viewPosIntegration],
+        glyph: '⇄',
+        hint: 'The seam between this system and the till',
+        readiness: 'awaiting',
+      },
       {
         id: 'admin',
         label: 'Administration',
         path: '/admin',
         permissions: [PERMISSIONS.manageUsers, PERMISSIONS.manageOrganization],
         glyph: '⚙',
-        hint: 'Restaurants, users and roles',
-      },
-      {
-        id: 'pos',
-        label: 'POS Integration',
-        path: '/integrations/pos',
-        permissions: [PERMISSIONS.viewPosIntegration],
-        glyph: '⇄',
-        hint: 'The seam between this system and the till',
+        hint: 'Restaurants, zones, users and roles',
       },
       {
         id: 'patron-id',
@@ -213,25 +270,62 @@ export const PRODUCT_NAV: NavSection[] = [
         permissions: [PERMISSIONS.viewPatronId],
         glyph: '⛨',
         hint: 'Returning-visitor identification — blocked pending legal review',
+        readiness: 'blocked',
+      },
+    ],
+  },
+  {
+    /**
+     * Engineering.
+     *
+     * An area with its own register rather than a link hanging below the
+     * product. `UI_UX_ARCHITECTURE.md` §3 asked for this in Phase 0 —
+     * *"DevTools must not look like a hidden corner of the product… so a
+     * developer with both roles always knows which surface they are looking
+     * at, and so a screenshot in a bug report is unambiguous"* — and it was
+     * never built.
+     */
+    id: 'engineering',
+    label: 'Engineering',
+    blurb: 'The system itself',
+    register: 'engineering',
+    items: [
+      {
+        id: 'devtools',
+        label: 'Vision OS',
+        path: '/devtools/vision',
+        permissions: [PERMISSIONS.accessDevtools],
+        glyph: '◈',
+        hint: 'Engineering view of the perception platform',
+      },
+      {
+        id: 'model-evaluation',
+        label: 'Model Evaluation',
+        // Moved out of Analyse. The gate was always correct; the placement was
+        // not. Confusion matrices and a dataset's written admission that it
+        // cannot measure detection recall do not belong in the list an
+        // organisation admin scans for footfall.
+        path: '/model-evaluation',
+        permissions: [PERMISSIONS.viewModelEvaluation],
+        glyph: '◎',
+        hint: 'How the perception stack scores against annotated data',
+      },
+      {
+        id: 'runtime',
+        label: 'Runtime Diagnostics',
+        // Orphaned until now: implemented, permission-gated, and reachable only
+        // by typing the URL. It reports camera *session* state and shows no
+        // imagery, which is a diagnostic rather than an operator view — so it
+        // arrives here with a tightened gate rather than in Operations.
+        path: '/live/runtime',
+        permissions: [PERMISSIONS.viewLive, PERMISSIONS.accessDevtools],
+        require: 'all',
+        glyph: '◇',
+        hint: 'Camera sessions, runtime state and why a stream is not running',
       },
     ],
   },
 ];
-
-/**
- * DevTools — one entry in product navigation, a full tree of its own inside.
- *
- * Kept out of `PRODUCT_NAV` so that a manager's sidebar cannot grow an
- * engineering section by accident, and so the lazy chunk has exactly one door.
- */
-export const DEVTOOLS_ENTRY: NavItem = {
-  id: 'devtools',
-  label: 'Vision OS',
-  path: '/devtools/vision',
-  permissions: [PERMISSIONS.accessDevtools],
-  glyph: '◈',
-  hint: 'Engineering view of the perception platform',
-};
 
 export interface DevToolsSection {
   id: string;
@@ -293,26 +387,66 @@ export const DEVTOOLS_NAV: DevToolsSection[] = [
   },
 ];
 
+/**
+ * The Vision OS entry, kept as a named export because the DevTools layout and
+ * several tests address it directly. It is now a *lookup into* `PRODUCT_NAV`
+ * rather than a parallel declaration, so the two cannot disagree.
+ */
+export const DEVTOOLS_ENTRY: NavItem = (() => {
+  const engineering = PRODUCT_NAV.find((section) => section.id === 'engineering');
+  const entry = engineering?.items.find((item) => item.id === 'devtools');
+  if (!entry) {
+    // Unreachable in practice; a throw rather than a fallback so that deleting
+    // the entry fails loudly at import instead of silently ungating DevTools.
+    throw new Error('the Vision OS navigation entry is missing from PRODUCT_NAV');
+  }
+  return entry;
+})();
+
+/** Whether a holder admits an item, honouring its `require` mode. */
+export function admits(
+  item: NavItem,
+  can: (permissions: Permission[], mode: 'any' | 'all') => boolean,
+): boolean {
+  if (item.permissions.length === 0) return true;
+  return can(item.permissions, item.require ?? 'any');
+}
+
 export function visibleItems(
   sections: NavSection[],
-  can: (permissions: Permission[]) => boolean,
+  can: (permissions: Permission[], mode?: 'any' | 'all') => boolean,
 ): NavSection[] {
   return sections
-    .map((section) => ({ ...section, items: section.items.filter((item) => can(item.permissions)) }))
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => admits(item, (permissions, mode) => can(permissions, mode))),
+    }))
     .filter((section) => section.items.length > 0);
+}
+
+/** Every navigable path, for the tests that assert the router and this agree. */
+export function allNavPaths(): string[] {
+  return PRODUCT_NAV.flatMap((section) => section.items.map((item) => item.path));
+}
+
+/** The item that owns a pathname, if any. Longest match wins. */
+export function itemFor(pathname: string): { section: NavSection; item: NavItem } | null {
+  let best: { section: NavSection; item: NavItem } | null = null;
+  for (const section of PRODUCT_NAV) {
+    for (const item of section.items) {
+      if (pathname === item.path || pathname.startsWith(`${item.path}/`)) {
+        if (!best || item.path.length > best.item.path.length) best = { section, item };
+      }
+    }
+  }
+  return best;
 }
 
 /** Breadcrumb trail for a path. Falls back to the path itself rather than nothing. */
 export function trailFor(pathname: string): string[] {
-  for (const section of PRODUCT_NAV) {
-    for (const item of section.items) {
-      if (pathname === item.path || pathname.startsWith(`${item.path}/`)) {
-        return [section.label, item.label];
-      }
-    }
-  }
+  const owner = itemFor(pathname);
 
-  if (pathname.startsWith(DEVTOOLS_ENTRY.path)) {
+  if (owner && owner.item.path === DEVTOOLS_ENTRY.path) {
     for (const section of DEVTOOLS_NAV) {
       for (const item of section.items) {
         if (pathname === item.path) return ['Vision OS', section.label, item.label];
@@ -321,5 +455,6 @@ export function trailFor(pathname: string): string[] {
     return ['Vision OS'];
   }
 
+  if (owner) return [owner.section.label, owner.item.label];
   return [pathname];
 }

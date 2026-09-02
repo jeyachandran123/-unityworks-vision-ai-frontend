@@ -59,5 +59,24 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     css: false,
+    // Headroom above `asyncUtilTimeout` in `tests/setup.ts`. A test that waits
+    // eight seconds for an assertion must not be killed by the runner
+    // before the wait it was given can expire.
+    testTimeout: 25_000,
+    /**
+     * One file at a time.
+     *
+     * Left parallel, vitest sizes the pool to the core count and every worker
+     * transforms the DevTools lazy chunk independently. On this machine that
+     * saturates the CPU, and a run's failures were not a set — they moved
+     * between files from one run to the next while every one of them passed
+     * when its own file was run alone. That is the classic shape of a flaky
+     * suite that is not testing anything flaky, and no timeout fixes it:
+     * raising the bound just moves which waits lose the race.
+     *
+     * Sequential files cost wall-clock and buy a result that is the same twice,
+     * which is the only property a test suite is actually for.
+     */
+    fileParallelism: false,
   },
 });

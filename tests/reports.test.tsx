@@ -299,7 +299,7 @@ describe('the reports route is gated on its own permission', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/reports');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     expect(screen.queryByRole('heading', { name: 'Reports' })).not.toBeInTheDocument();
   });
 });

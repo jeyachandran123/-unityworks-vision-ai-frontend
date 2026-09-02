@@ -152,9 +152,11 @@ export const adminIdentity = (): Identity =>
       'view_incidents',
       'view_live',
       'view_meal_detection',
-      // An org admin answers for what the system claims, so they may see how
-      // well it actually scores.
-      'view_model_evaluation',
+      // No `view_model_evaluation`. Removed from ORG_ADMIN on the backend in
+      // Stage 3: evaluation artifacts answer a shipping question, and the
+      // accountability this role has for what the system claims is served by
+      // reports, which carry coverage and the ruleset version behind every
+      // figure. Holders are now super_admin and developer.
       'view_observations',
       // Reads that patron identification exists and is blocked. Deliberately
       // NOT manage_patron_id, which super_admin alone holds.

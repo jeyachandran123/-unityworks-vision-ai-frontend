@@ -21,7 +21,7 @@ describe('session restore', () => {
 
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     // The reload path: refresh first, then identity.
     expect(calls.some((call) => call.includes('/auth/refresh'))).toBe(true);
@@ -49,7 +49,7 @@ describe('session restore', () => {
     installFetch();
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     const stored = JSON.stringify({
       local: { ...window.localStorage },
@@ -74,7 +74,7 @@ describe('login', () => {
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
   });
 
   it('reports invalid credentials without distinguishing the cause', async () => {
@@ -132,7 +132,7 @@ describe('logout', () => {
     const user = userEvent.setup();
 
     renderApp(<AppRouter />, '/dashboard');
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /dev user/i }));
     await user.click(screen.getByRole('menuitem', { name: /sign out/i }));

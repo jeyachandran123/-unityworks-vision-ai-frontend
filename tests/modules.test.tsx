@@ -179,7 +179,7 @@ describe('patron id reads as blocked, not as unbuilt', () => {
     installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/patron-id');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     expect(screen.queryByText(/blocked pending legal review/i)).not.toBeInTheDocument();
   });
 });
@@ -222,13 +222,13 @@ describe('pos integration', () => {
 });
 
 describe('module navigation is permission-gated', () => {
-  it('an org admin sees the analyse section', async () => {
+  it('an org admin sees the intelligence and platform modules', async () => {
     installFetch({ session: adminIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     const nav = screen.getByRole('navigation', { name: 'Primary' });
-    for (const label of ['People Counting', 'Demography', 'Patron ID', 'POS Integration']) {
+    for (const label of ['People Counting', 'Demography', 'Patron ID', 'Integrations']) {
       expect(within(nav).getByRole('link', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     }
   });
@@ -238,7 +238,7 @@ describe('module navigation is permission-gated', () => {
     installFetch({ session: supervisorIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: /cutting boards/i })).toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: /demography/i })).not.toBeInTheDocument();
@@ -249,11 +249,11 @@ describe('module navigation is permission-gated', () => {
     installFetch({ session: auditorIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: /cutting boards/i })).toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: /meal detection/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole('link', { name: /pos integration/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: /integrations/i })).not.toBeInTheDocument();
   });
 
   it('demography is not implied by people counting', () => {

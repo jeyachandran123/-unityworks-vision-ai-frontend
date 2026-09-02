@@ -78,7 +78,7 @@ describe('live monitoring reflects real camera state', () => {
     installFetch({ session: identity(), cameras: ONLINE_CAMERAS, runtime: RUNNING_RUNTIME });
 
     renderApp(<AppRouter />, '/live/runtime');
-    const degraded = (await screen.findByText('cam-02')).closest('section') as HTMLElement;
+    const degraded = (await screen.findByText('cam-02')).closest('[data-camera-id]') as HTMLElement;
 
     expect(within(degraded).getByText('degraded')).toBeInTheDocument();
     expect(within(degraded).queryByText('online')).not.toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('the dashboard reports real camera counts', () => {
     installFetch({ session: identity() });
 
     renderApp(<AppRouter />, '/dashboard');
-    const card = (await screen.findByText('Cameras online')).closest('section') as HTMLElement;
+    const card = (await screen.findByText('Producing frames')).closest('[data-figure]') as HTMLElement;
 
     expect(within(card).getByText('—')).toBeInTheDocument();
     expect(within(card).getByText(/no camera is configured yet/i)).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('the dashboard reports real camera counts', () => {
     installFetch({ session: identity(), cameras: ONLINE_CAMERAS, runtime: RUNNING_RUNTIME });
 
     renderApp(<AppRouter />, '/dashboard');
-    const card = (await screen.findByText('Cameras online')).closest('section') as HTMLElement;
+    const card = (await screen.findByText('Producing frames')).closest('[data-figure]') as HTMLElement;
 
     // One of two is online — and the detail keeps "configured" and "streaming"
     // visible so the count cannot be read as a clean bill of health.
@@ -177,7 +177,7 @@ describe('the connection badge separates connected from streaming', () => {
     installFetch({ session: identity() });
 
     renderApp(<AppRouter />, '/dashboard');
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     // The socket may be idle in jsdom; what must never appear is a bare "LIVE".
     const text = document.body.textContent ?? '';

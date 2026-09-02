@@ -47,6 +47,12 @@ import {
 } from '@shared/api/persistence';
 import { isApiError } from '@shared/api/errors';
 import {
+  attributeLabel,
+  cameraLabel,
+  failedConditions,
+  observedAt,
+} from '@shared/semantics/finding';
+import {
   Button,
   Card,
   EmptyState,
@@ -63,48 +69,25 @@ const ALERT_POLL_MS = 5000;
 
 /* ── reading a finding ────────────────────────────────────────────────────── */
 
-interface FailedCondition {
-  attribute: string;
-  observed: string;
-}
-
 /**
- * The conditions that actually failed, from the **frozen** finding.
+ * Moved to `@shared/semantics/finding` in Stage 3 and re-exported here.
  *
- * Read defensively: this is a stored snapshot, and a finding written by an
- * older ruleset must still render rather than crash the queue.
+ * The incident readout now has three call sites — this queue, the ledger's
+ * drawer and the incident detail route — and three copies of "which conditions
+ * failed" is exactly where one of them eventually starts treating
+ * `not_visible` as a failure. Same reasoning as the Phase 3 close-out that put
+ * the four-state fold in one module.
+ *
+ * Re-exported rather than moved outright because these names are part of this
+ * module's public surface and are imported by tests.
  */
-export function failedConditions(incident: Incident): FailedCondition[] {
-  const raw = incident.finding as { conditions?: unknown } | null;
-  const conditions = Array.isArray(raw?.conditions) ? raw.conditions : [];
-  return conditions
-    .filter((c): c is Record<string, unknown> => typeof c === 'object' && c !== null)
-    .filter((c) => c['outcome'] === 'failed')
-    .map((c) => ({
-      attribute: String(c['attribute'] ?? ''),
-      observed: String(c['observed'] ?? ''),
-    }))
-    .filter((c) => c.attribute);
-}
-
-/** `head_covering` → `Head covering`. The attribute key, made readable. */
-export function attributeLabel(key: string): string {
-  const words = key.replace(/_/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-/** The camera key as an operator says it: `cam-12` → `Camera 12`. */
-export function cameraLabel(key: string): string {
-  const match = /^cam-0*(\d+)$/.exec(key);
-  return match ? `Camera ${match[1]}` : key;
-}
-
-export function observedAt(incident: Incident): string {
-  const value = incident.observed_at ?? incident.created_at;
-  if (!value) return '—';
-  const when = new Date(value);
-  return Number.isNaN(when.getTime()) ? '—' : when.toLocaleString();
-}
+export {
+  attributeLabel,
+  cameraLabel,
+  failedConditions,
+  observedAt,
+  type FailedCondition,
+} from '@shared/semantics/finding';
 
 /* ── evidence ─────────────────────────────────────────────────────────────── */
 

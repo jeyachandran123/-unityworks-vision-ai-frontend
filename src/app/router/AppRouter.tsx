@@ -54,8 +54,11 @@ import { CameraWallPage } from '@features/camera-wall';
 import { AlertsPage } from '@features/alerts';
 import {
   AuditPage,
+  CameraDetailPage,
   CamerasPage,
+  EvidenceDetailPage,
   EvidencePage,
+  IncidentDetailPage,
   IncidentsPage,
 } from '@features/persistence-routes';
 
@@ -82,8 +85,23 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewLive]} />}>
             <Route path="/live" element={<CameraWallPage />} />
-            {/* The Phase 3 runtime view keeps its own address; the wall is what an
-                operator opens, and the runtime page is what an engineer opens. */}
+          </Route>
+
+          {/* Runtime diagnostics. Gated on **both** permissions, `mode="all"`.
+              It was reachable by any account holding `view_live` — including a
+              kitchen supervisor — while appearing in no navigation at all, so
+              route access and navigation visibility disagreed in the one
+              direction that matters. Stage 2 tightened the gate rather than
+              loosening the navigation: the page reports session state and shows
+              no imagery, which is a diagnostic and not an operator view. */}
+          <Route
+            element={
+              <RequirePermission
+                permissions={[PERMISSIONS.viewLive, PERMISSIONS.accessDevtools]}
+                mode="all"
+              />
+            }
+          >
             <Route path="/live/runtime" element={<LiveMonitoringPage />} />
           </Route>
 
@@ -140,11 +158,25 @@ export function AppRouter() {
               further privilege still. */}
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewIncidents]} />}>
             <Route path="/incidents" element={<IncidentsPage />} />
+            {/* An address per incident. This is the reason a router exists at
+                all — `FRONTEND_MIGRATION_MATRIX.md` names "no view has a URL,
+                so no view can be linked, bookmarked, deep-linked from an alert"
+                as the first structural absence of the validation console, and
+                three of those four were solved while this one was not. Same
+                permission as the list: an object route must never be a way in
+                to something the list would refuse. */}
+            <Route path="/incidents/:incidentId" element={<IncidentDetailPage />} />
           </Route>
 
           {/* Evidence is its own permission, never implied by observations. */}
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewEvidence]} />}>
             <Route path="/evidence" element={<EvidencePage />} />
+            {/* Resolves the **record**, never the image. Arriving at this
+                address must not be what causes an access — otherwise a link in
+                an email becomes an audit row against a named person's likeness,
+                fired by a mail client's link preview. The imagery still
+                requires the explicit request it always did. */}
+            <Route path="/evidence/:evidenceRef" element={<EvidenceDetailPage />} />
           </Route>
 
           <Route
@@ -155,6 +187,7 @@ export function AppRouter() {
             }
           >
             <Route path="/cameras" element={<CamerasPage />} />
+            <Route path="/cameras/:cameraKey" element={<CameraDetailPage />} />
           </Route>
 
           {/* Reading the trail is its own privilege. Knowing who looked at

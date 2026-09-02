@@ -22,10 +22,10 @@ describe('role-aware navigation', () => {
     installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     const nav = screen.getByRole('navigation', { name: 'Primary' });
 
-    for (const label of ['Dashboard', 'Live Monitoring', 'Staff Hygiene', 'Incidents']) {
+    for (const label of ['Command Center', 'Live Wall', 'Staff Hygiene', 'Incidents']) {
       expect(within(nav).getByRole('link', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     }
   });
@@ -34,7 +34,7 @@ describe('role-aware navigation', () => {
     installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('link', { name: /administration/i })).not.toBeInTheDocument();
   });
@@ -47,7 +47,7 @@ describe('role-aware navigation', () => {
     });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: /staff hygiene/i })).toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: /vision os/i })).not.toBeInTheDocument();
@@ -61,7 +61,7 @@ describe('the shell', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Incidents' })).toBeInTheDocument());
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(crumbs).getByText('Investigate')).toBeInTheDocument();
+    expect(within(crumbs).getByText('Operations')).toBeInTheDocument();
     expect(within(crumbs).getByText('Incidents')).toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe('the shell', () => {
     const user = userEvent.setup();
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /collapse navigation/i }));
     expect(await screen.findByRole('button', { name: /expand navigation/i })).toBeInTheDocument();
   });
@@ -79,7 +79,7 @@ describe('the shell', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /skip to content/i })).toHaveAttribute('href', '#main');
   });
 });
@@ -97,8 +97,8 @@ describe('product routes do not fabricate data', () => {
     // zero there would be a *correct* answer — the cameras were read and nobody
     // was seen. The property under test is unchanged; only the tile that still
     // genuinely lacks a value has moved.
-    const label = await screen.findByText('Cameras online');
-    const card = label.closest('section') as HTMLElement;
+    const label = await screen.findByText('Producing frames');
+    const card = label.closest('[data-figure]') as HTMLElement;
     expect(within(card).getByText('—')).toBeInTheDocument();
     expect(within(card).queryByText('0')).not.toBeInTheDocument();
   });
@@ -296,7 +296,7 @@ describe('accessibility baseline', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument();
   });
@@ -320,7 +320,7 @@ describe('accessibility baseline', () => {
     installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /collapse navigation/i })).toBeInTheDocument();
   });
 
@@ -337,7 +337,7 @@ describe('accessibility baseline', () => {
     const user = userEvent.setup();
     renderApp(<AppRouter />, '/dashboard');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     const toggle = screen.getByRole('button', { name: /theme .* switch to/i });
     toggle.focus();

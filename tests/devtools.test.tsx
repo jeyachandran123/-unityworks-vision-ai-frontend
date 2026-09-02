@@ -46,7 +46,7 @@ describe('DevTools authorization', () => {
     renderApp(<AppRouter />, '/devtools/vision');
 
     // Redirected to the dashboard rather than shown an accusatory dead end.
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     expect(screen.queryByRole('heading', { name: /vision os overview/i })).not.toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe('DevTools authorization', () => {
     installFetch({ session: managerIdentity() });
 
     renderApp(<AppRouter />, '/dashboard');
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('link', { name: /vision os/i })).not.toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('DevTools authorization', () => {
     installFetch({ session: identity() });
 
     renderApp(<AppRouter />, '/dashboard');
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: /vision os/i })).toBeInTheDocument();
@@ -230,7 +230,7 @@ describe('evidence privilege', () => {
     installFetch({ session: supervisorIdentity() });
 
     renderApp(<AppRouter />, '/dashboard');
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
 
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('link', { name: /^evidence$/i })).not.toBeInTheDocument();
@@ -241,6 +241,6 @@ describe('evidence privilege', () => {
 
     renderApp(<AppRouter />, '/evidence');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
   });
 });

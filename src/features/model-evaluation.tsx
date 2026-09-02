@@ -42,11 +42,17 @@ import {
 } from '@shared/api/evaluation';
 import { isApiError } from '@shared/api/errors';
 import {
+  EngineeringSurface,
+  Eyebrow,
+  Figure,
+  PageIntro,
+  SectionRule,
+} from '@shared/ui/product';
+import {
   Badge,
   Card,
   ErrorState,
   LoadingState,
-  PageHeader,
   StatusBadge,
   UnavailableState,
 } from '@shared/ui/primitives';
@@ -74,13 +80,10 @@ export function ModelEvaluationPage() {
     return map;
   }, [summary.data]);
 
-  const description =
-    'What the perception stack scores against human-annotated data. Every figure states its dataset, its split, the model it measured and what it means — because none of them is "model accuracy".';
-
   if (summary.isPending) {
     return (
       <>
-        <PageHeader title="Model Evaluation" description={description} />
+        <EvaluationIntro />
         <LoadingState label="Reading evaluation artifacts" />
       </>
     );
@@ -89,7 +92,7 @@ export function ModelEvaluationPage() {
   if (summary.isError) {
     return (
       <>
-        <PageHeader title="Model Evaluation" description={description} />
+        <EvaluationIntro />
         <ErrorState
           body={
             isApiError(summary.error)
@@ -107,9 +110,7 @@ export function ModelEvaluationPage() {
 
   return (
     <>
-      <PageHeader
-        title="Model Evaluation"
-        description={description}
+      <EvaluationIntro
         meta={
           <>
             <Badge mono>{data.totals.runs_available} runs</Badge>
@@ -121,24 +122,20 @@ export function ModelEvaluationPage() {
         }
       />
 
-      <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+      <EngineeringSurface>
+      <div style={{ display: 'grid', gap: 'var(--space-10)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <NoHeadline reason={data.headline_reason} totals={data.totals} latest={data.latest_evaluation_at} />
 
         {data.families.map((family) => (
           <section key={family.key}>
-            <Card>
-              <h2 style={{ fontSize: 'var(--text-lg)' }}>{family.title}</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', maxWidth: '76ch', marginTop: 'var(--space-2)' }}>
-                {family.description}
-              </p>
-            </Card>
+            <SectionRule label={family.title} detail={family.description} />
 
             {!family.available ? (
               <div style={{ marginTop: 'var(--space-4)' }}>
                 <UnavailableState title={`${family.title} could not be read`} body={family.reason} />
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
                 {family.runs.map((run) => (
                   <RunCard
                     key={run.run_id}
@@ -164,7 +161,29 @@ export function ModelEvaluationPage() {
           failed={artifacts.isError}
         />
       </div>
+      </EngineeringSurface>
     </>
+  );
+}
+
+/**
+ * The page opening, in the engineering register.
+ *
+ * Stage 2 moved this page out of "Analyse", where it sat between Meal Detection
+ * and Demography, and into Engineering — and Stage 3 removed
+ * `view_model_evaluation` from ORG_ADMIN, so its readers are now super_admin
+ * and developer. The eyebrow says so on the page itself, because a screenshot
+ * of confusion matrices should never be mistakable for an operational reading
+ * of a kitchen.
+ */
+function EvaluationIntro({ meta }: { meta?: React.ReactNode }) {
+  return (
+    <PageIntro
+      eyebrow="Engineering"
+      title="Model Evaluation"
+      standfirst='What the perception stack scores against human-annotated data. Every figure states its dataset, its split, the model it measured and what it means — because none of them is "model accuracy".'
+      meta={meta}
+    />
   );
 }
 
@@ -180,25 +199,16 @@ function NoHeadline({
   latest: string | null;
 }) {
   return (
-    <Card>
+    <section aria-label="Overall score">
       <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <div>
-          <div
-            style={{
-              fontSize: 'var(--text-2xs)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--tracking-wider)',
-              color: 'var(--ink-tertiary)',
-            }}
-          >
-            Overall model score
-          </div>
+          <Eyebrow>Overall model score</Eyebrow>
           {/* Where a KPI would be. The em dash is the answer, and the sentence
               beneath it is why — the same discipline `StatCard` applies, at the
               scale of a whole page. */}
           <div
             style={{
-              fontSize: 'var(--text-3xl)',
+              fontSize: 'var(--text-4xl)',
               fontFamily: 'var(--font-mono)',
               fontWeight: 'var(--weight-semibold)',
               color: 'var(--ink-tertiary)',
@@ -220,29 +230,36 @@ function NoHeadline({
           </p>
         </div>
 
-        <dl
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))',
-            gap: 'var(--space-4)',
-            paddingTop: 'var(--space-4)',
-            borderTop: '1px solid var(--line-subtle)',
-          }}
+        <div
+          className="uwv-figures"
+          style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--engineering-line)' }}
         >
-          <Fact label="Evaluation runs">{totals.runs}</Fact>
-          <Fact label="With a recorded date">{totals.runs_dated}</Fact>
-          <Fact label="With no date recorded">
-            {totals.runs_undated}
-            <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--ink-tertiary)' }}>
-              Undated is not old — nobody wrote a date down
-            </span>
-          </Fact>
-          <Fact label="Most recent evaluation">
-            {latest ? new Date(latest).toLocaleDateString() : '—'}
-          </Fact>
-        </dl>
+          {/* Ranked rather than tabulated. The undated count is the one that
+              matters and it is the one nobody looks for, so it gets the same
+              weight as the total and a sentence saying what it is not. */}
+          <Figure label="Evaluation runs" scale="lead" value={totals.runs} detail="Readable artifacts on disk" />
+          <Figure
+            label="With a recorded date"
+            scale="lead"
+            value={totals.runs_dated}
+            detail="A real timestamp inside the artifact"
+          />
+          <Figure
+            label="With no date recorded"
+            scale="lead"
+            value={totals.runs_undated}
+            detail="Undated is not old — nobody wrote a date down, and no file's modification time is used as a substitute"
+          />
+          <Figure
+            label="Most recent evaluation"
+            scale="lead"
+            value={latest ? new Date(latest).toLocaleDateString() : null}
+            unavailableReason="No artifact carries an evaluation date"
+            detail="From inside an artifact, never from the filesystem"
+          />
+        </div>
       </div>
-    </Card>
+    </section>
   );
 }
 

@@ -101,3 +101,124 @@ a:hover { text-decoration: underline; }
 @keyframes uwv-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Interaction surfaces
+
+   Everything below is a *state* that inline styles cannot express: hover,
+   active, and the entrance of a surface that arrives from off-screen. They live
+   here rather than in a component because `:hover` has no inline form, and
+   because a product where nothing responds to the pointer reads as a document
+   rather than an instrument.
+
+   All of it is prefixed `uwv-` so a class can never collide with one of the
+   feature modules, and all of it is neutralised by the reduced-motion block
+   above — these rules deliberately sit after it so the `!important` durations
+   still win.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* An interactive surface: a camera tile, an incident row, a report in the
+   picker. Lifts its border rather than its shadow — a raised shadow on a dark
+   operations screen reads as glow, and glow is decoration. */
+.uwv-interactive {
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+.uwv-interactive:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+}
+.uwv-interactive:active { transform: translateY(1px); }
+
+/* A row in a ledger. Quieter than a tile: the whole row is the target, so the
+   feedback has to be legible without being loud. */
+.uwv-row { transition: background var(--motion-fast) var(--ease-out); }
+.uwv-row:hover { background: var(--surface-hover); }
+
+/* A control that reveals more of what is already on screen. */
+.uwv-quiet { transition: color var(--motion-fast) var(--ease-out); }
+.uwv-quiet:hover { color: var(--ink-primary); }
+
+/* Entrance for a panel that slides in from the edge. */
+@keyframes uwv-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes uwv-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* A value that has just changed. One pulse, no loop: it marks the change and
+   then stops, because a permanently animated number is a number nobody reads. */
+@keyframes uwv-settle {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* The live indicator. The only looping animation in the product, and it is
+   here because "a frame arrived recently" is a continuous fact — a static dot
+   claiming live is the frozen-last-frame problem in miniature. */
+@keyframes uwv-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Wide content scrolls inside itself. Never the page. */
+.uwv-scroll-x { overflow-x: auto; overscroll-behavior-x: contain; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Composition
+
+   Three layout primitives, expressed in CSS because they are the two or three
+   things inline styles genuinely cannot do: respond to width.
+
+   `uwv-rail` is the composition that makes the dense screens feel like one
+   product — a wide primary column and a narrower column of context beside it,
+   never two equal halves. Below the breakpoint the rail stops being a column
+   and becomes the end of the page, which is the correct reading order: context
+   follows the thing it is context for.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-rail {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 72rem) {
+  .uwv-rail { grid-template-columns: minmax(0, 1fr) var(--rail-width); gap: var(--space-8); }
+}
+
+/* An asymmetric split for a hero region: dominant left, supporting right. Not
+   50/50 — equal halves are how a composition becomes a card grid. */
+.uwv-lead {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+@media (min-width: 62rem) {
+  .uwv-lead { grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); gap: var(--space-6); }
+}
+
+/* A tile field that keeps tiles legible rather than keeping columns equal. */
+.uwv-tiles {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+}
+.uwv-tiles-wide {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+}
+
+/* A measured run of figures. `auto-fit` rather than a fixed count, and a
+   minimum wide enough that a five-digit tabular number never wraps. */
+.uwv-figures {
+  display: grid;
+  gap: var(--space-5) var(--space-8);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}

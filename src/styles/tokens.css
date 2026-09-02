@@ -26,6 +26,23 @@
   --surface-selected: #1b2f36;
 
   /**
+   * The engineering register.
+   *
+   * Stage 2 committed to making the engineering area *look* different without
+   * becoming a second design system. The difference is carried by ground and
+   * type register, never by a second palette: every state, severity and health
+   * colour is identical on an engineering surface, because an engineer reading
+   * `not_visible` must see exactly what an operator sees.
+   *
+   * Cooler and one step deeper than `--surface-base`, so a screenshot of an
+   * engineering page is unambiguous even with the chrome cropped out — which is
+   * the stated purpose in `UI_UX_ARCHITECTURE.md` §3.
+   */
+  --surface-engineering: #090d11;
+  --engineering-line: #1b2530;
+  --engineering-ink: #8fa3b4;
+
+  /**
    * The ground a video frame is letterboxed against.
    *
    * Deliberately NOT a surface token, and deliberately identical in both
@@ -110,6 +127,24 @@
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
   --text-3xl: 2.25rem;
+  /**
+   * The display end of the scale.
+   *
+   * ### Why there is no webfont
+   *
+   * This product is deployed inside restaurants, frequently on a network that
+   * cannot reach a font CDN and sometimes on one that must not. A typeface
+   * fetched from a third party would make the product's identity depend on an
+   * outbound request from a kitchen, and the fallback — which is what would
+   * actually render — would be unconsidered.
+   *
+   * So identity is built from what is guaranteed to be there, treated
+   * properly: three registers (display, text, data), a real scale, optical
+   * tracking that tightens as size grows, and tabular figures wherever numbers
+   * are compared. That is typography doing work, rather than a font doing it.
+   */
+  --text-4xl: 3rem;
+  --text-5xl: 4rem;
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -119,8 +154,20 @@
   --leading-tight: 1.2;
   --leading-normal: 1.5;
   --leading-relaxed: 1.65;
+  /* Optical tracking. Type tightens as it grows; labels open as they shrink. */
+  --tracking-display: -0.035em;
+  --tracking-tight: -0.018em;
   --tracking-wide: 0.08em;
   --tracking-wider: 0.14em;
+
+  /**
+   * The measure. Running prose stops here; data does not.
+   *
+   * Named rather than repeated, because the value that was scattered across
+   * pages as `62ch` is a typographic decision and belongs beside the scale.
+   */
+  --measure: 66ch;
+  --measure-tight: 46ch;
 
   /* ── Space (4px base) ── */
   --space-0: 0;
@@ -152,6 +199,16 @@
   --motion-base: 180ms;
   --motion-slow: 280ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /**
+   * Entrance easing for a surface that arrives from off-screen.
+   *
+   * Distinct from `--ease-out` because a drawer sliding in and a colour
+   * changing on hover are different events: one moves through space and needs a
+   * settle, the other does not move at all. Every duration here is still under
+   * a third of a second, and all of it is disabled by the reduced-motion block
+   * in `global.css`.
+   */
+  --ease-entrance: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* ── Layers ── */
   --z-base: 0;
@@ -162,10 +219,28 @@
   --z-tooltip: 70;
 
   /* ── Layout ── */
-  --sidebar-width: 15rem;
+  --sidebar-width: 15.5rem;
   --sidebar-width-collapsed: 3.5rem;
   --topbar-height: 3.25rem;
   --content-max: 96rem;
+  /**
+   * The inspector rail.
+   *
+   * Composition on the dense screens is a wide primary column and a narrower
+   * rail of context beside it, not two equal halves. This is that rail, and it
+   * is a token because the Command Center, the Camera Wall and the incident
+   * ledger all use the same one — which is what makes them feel like one
+   * product rather than three layouts.
+   */
+  --rail-width: 22rem;
+  /**
+   * Below this width the sidebar stops being furniture and becomes a drawer.
+   *
+   * A media query cannot read a custom property, so the number is repeated in
+   * `AppShell`'s matchMedia call; this declaration is the one a reader finds
+   * first, and a test asserts the two agree.
+   */
+  --shell-breakpoint: 62rem;
 
   /**
    * Focus. One ring everywhere, always visible.
@@ -200,6 +275,14 @@
   --surface-sunken: #e8edef;
   --surface-hover: #eef2f4;
   --surface-selected: #e0f0f3;
+
+  /* The engineering register, light. Cooler and one step deeper than the page,
+     for the same reason it is one step deeper on dark: the ground is what makes
+     a cropped screenshot unambiguous. `--engineering-ink` is `#46565f`, which
+     is 7.4:1 on this surface. */
+  --surface-engineering: #e6ebee;
+  --engineering-line: #cbd6db;
+  --engineering-ink: #46565f;
 
   /* --video-ground is deliberately NOT re-pointed here. Footage letterboxes
      against black in both themes; see the dark block. */

@@ -38,6 +38,12 @@ import {
 } from '@shared/api/reports';
 import { organizationApi } from '@shared/api/observations';
 import { isApiError } from '@shared/api/errors';
+import {
+  CoverageSeal,
+  Eyebrow,
+  PageIntro,
+  SectionRule,
+} from '@shared/ui/product';
 import { useAuth } from '@app/auth/AuthProvider';
 import { has, PERMISSIONS } from '@app/permissions/permissions';
 import {
@@ -48,7 +54,6 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  PageHeader,
   Select,
   StatusBadge,
   UnavailableState,
@@ -132,9 +137,10 @@ export function ReportsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Compliance"
         title="Reports"
-        description="Periods, trends and export. Every figure states the window and the sources it was computed from, because a count without its coverage cannot be read."
+        standfirst="Periods, coverage and export. Every figure states the window and the sources it was computed from, because a count without its coverage cannot be read — and a period that has not finished is never presented as one that has."
         meta={
           catalogue.isSuccess ? (
             <>
@@ -530,6 +536,11 @@ function ReportBody({
         />
       ) : null}
 
+      <SectionRule
+        label="Figures"
+        detail="Counts of what was recorded in the window above. An empty section says which kind of nothing it is."
+      />
+
       {report.sections.map((section) => (
         <SectionCard key={section.key} section={section} />
       ))}
@@ -547,164 +558,145 @@ function ReportBody({
   );
 }
 
+/**
+ * Coverage, before the figures — and at the weight of a verdict.
+ *
+ * The brief's requirement is that an incomplete report must not look like a
+ * complete one with a small warning somewhere. The previous panel was a `Card`
+ * identical to every other `Card` on the page, carrying a status badge among
+ * other badges; a reader scanning for numbers met the numbers first.
+ *
+ * `CoverageSeal` gives it a band, a colour that changes with the verdict and a
+ * headline written as a sentence rather than a label. It stays when coverage is
+ * complete, deliberately: a treatment that only appears when something is wrong
+ * is a treatment readers learn to skip, and "this period is whole" is itself
+ * worth stating before a figure is compared with another month.
+ *
+ * Every fact the old panel carried is still here — window, timezone and whether
+ * it resolved, granularity, basis, per-source availability, every gap — and the
+ * strings a reader relies on are unchanged.
+ */
 function CoveragePanel({ report }: { report: Report }) {
   const { coverage } = report;
-  const complete = coverage.complete;
 
   return (
-    <Card>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 'var(--space-3)',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div>
-          <h2 style={{ fontSize: 'var(--text-lg)' }}>{report.title}</h2>
-          <p
-            style={{
-              fontSize: 'var(--text-sm)',
-              color: 'var(--ink-secondary)',
-              maxWidth: '70ch',
-              marginTop: 'var(--space-1)',
-            }}
-          >
-            {report.subtitle}
-          </p>
-        </div>
-        <StatusBadge tone={complete ? 'online' : 'degraded'}>
-          {complete ? 'Coverage complete' : 'Coverage incomplete'}
-        </StatusBadge>
+    <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+      <div>
+        <h2
+          style={{
+            fontSize: 'var(--text-xl)',
+            letterSpacing: 'var(--tracking-tight)',
+          }}
+        >
+          {report.title}
+        </h2>
+        <p
+          style={{
+            fontSize: 'var(--text-sm)',
+            color: 'var(--ink-secondary)',
+            maxWidth: 'var(--measure)',
+            marginTop: 'var(--space-2)',
+          }}
+        >
+          {report.subtitle}
+        </p>
       </div>
 
-      <dl
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
-          gap: 'var(--space-3)',
-          marginTop: 'var(--space-4)',
-          paddingTop: 'var(--space-4)',
-          borderTop: '1px solid var(--line-subtle)',
-        }}
-      >
-        <Fact label="Window">
-          {formatInstant(coverage.since)} — {formatInstant(coverage.until)}
-        </Fact>
-        <Fact label="Timezone">
-          {coverage.timezone}
-          {!coverage.timezone_resolved ? (
-            // Not swallowed. A zone that did not resolve means the boundaries
-            // are UTC and may be a day out, and that must be visible.
-            <span style={{ color: 'var(--state-absent)' }}>
-              {' '}
-              — unresolved, boundaries computed in UTC
-            </span>
-          ) : null}
-        </Fact>
-        <Fact label="Granularity">{GRANULARITY_LABELS[coverage.granularity]}</Fact>
-        {coverage.basis ? <Fact label="Computed from">{coverage.basis}</Fact> : null}
-      </dl>
-
-      {coverage.sources.length > 0 ? (
-        <ul
-          style={{
-            listStyle: 'none',
-            display: 'flex',
-            gap: 'var(--space-2)',
-            flexWrap: 'wrap',
-            marginTop: 'var(--space-4)',
-          }}
-        >
-          {coverage.sources.map((source) => (
-            <li key={source.source}>
-              {/* Availability and emptiness look different, because they are. */}
-              <StatusBadge tone={source.available ? 'online' : 'offline'}>
-                {source.source}:{' '}
-                {source.available
-                  ? `${source.rows} rows${source.truncated ? ' (truncated)' : ''}`
-                  : 'not available'}
-              </StatusBadge>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <CoverageSeal
+        complete={coverage.complete}
+        headline={
+          coverage.complete
+            ? 'Every source this report reads answered for the whole period.'
+            : 'Part of this period is not represented. Read the gaps before comparing these figures with another period.'
+        }
+        basis={
+          <>
+            {coverage.basis ? <>{coverage.basis} </> : null}
+            Figures are counts of what was recorded, not estimates — nothing here is
+            interpolated across a gap.
+          </>
+        }
+        facts={[
+          {
+            key: 'Window',
+            value: (
+              <>
+                {formatInstant(coverage.since)} — {formatInstant(coverage.until)}
+              </>
+            ),
+          },
+          {
+            key: 'Timezone',
+            value: (
+              <>
+                {coverage.timezone}
+                {!coverage.timezone_resolved ? (
+                  // Not swallowed. A zone that did not resolve means the
+                  // boundaries are UTC and may be a day out, and that must be
+                  // visible next to the window it distorts.
+                  <span style={{ color: 'var(--state-absent)' }}>
+                    {' '}
+                    — unresolved, boundaries computed in UTC
+                  </span>
+                ) : null}
+              </>
+            ),
+          },
+          { key: 'Granularity', value: GRANULARITY_LABELS[coverage.granularity] },
+        ]}
+        gaps={coverage.gaps.map((gap, index) => ({
+          key: `${gap.kind}-${index}`,
+          detail: (
+            <>
+              <Badge mono>{gap.kind}</Badge> {gap.detail}
+            </>
+          ),
+        }))}
+      />
 
       {coverage.gaps.length > 0 ? (
-        <div
+        <p
           style={{
-            marginTop: 'var(--space-4)',
-            padding: 'var(--space-4)',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--health-degraded)',
-            background: 'var(--surface-sunken)',
+            fontSize: 'var(--text-2xs)',
+            textTransform: 'uppercase',
+            letterSpacing: 'var(--tracking-wider)',
+            color: 'var(--health-degraded)',
+            fontWeight: 'var(--weight-semibold)',
           }}
         >
-          <div
+          Read this before comparing these figures
+        </p>
+      ) : null}
+
+      {coverage.sources.length > 0 ? (
+        <div>
+          <Eyebrow>Sources</Eyebrow>
+          <ul
             style={{
-              fontSize: 'var(--text-xs)',
-              fontWeight: 'var(--weight-semibold)',
-              color: 'var(--health-degraded)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--tracking-wider)',
+              listStyle: 'none',
+              display: 'flex',
+              gap: 'var(--space-2) var(--space-4)',
+              flexWrap: 'wrap',
+              marginTop: 'var(--space-3)',
             }}
           >
-            Read this before comparing these figures
-          </div>
-          <ul style={{ listStyle: 'none', display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
-            {coverage.gaps.map((gap, index) => (
-              <li
-                key={`${gap.kind}-${index}`}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr',
-                  gap: 'var(--space-3)',
-                  alignItems: 'baseline',
-                }}
-              >
-                <Badge mono>{gap.kind}</Badge>
-                <span
-                  style={{
-                    fontSize: 'var(--text-sm)',
-                    color: 'var(--ink-secondary)',
-                    maxWidth: '70ch',
-                  }}
-                >
-                  {gap.detail}
-                </span>
+            {coverage.sources.map((source) => (
+              <li key={source.source}>
+                {/* Availability and emptiness look different, because they are.
+                    A source that could not be read is not a source that
+                    returned nothing, and collapsing the two is how a report
+                    comes to say "0 violations" about a camera that was off. */}
+                <StatusBadge tone={source.available ? 'online' : 'offline'}>
+                  {source.source}:{' '}
+                  {source.available
+                    ? `${source.rows} rows${source.truncated ? ' (truncated)' : ''}`
+                    : 'not available'}
+                </StatusBadge>
               </li>
             ))}
           </ul>
         </div>
       ) : null}
-    </Card>
-  );
-}
-
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt
-        style={{
-          fontSize: 'var(--text-2xs)',
-          textTransform: 'uppercase',
-          letterSpacing: 'var(--tracking-wider)',
-          color: 'var(--ink-tertiary)',
-        }}
-      >
-        {label}
-      </dt>
-      <dd
-        style={{
-          margin: 'var(--space-1) 0 0',
-          fontSize: 'var(--text-sm)',
-          color: 'var(--ink-primary)',
-        }}
-      >
-        {children}
-      </dd>
     </div>
   );
 }

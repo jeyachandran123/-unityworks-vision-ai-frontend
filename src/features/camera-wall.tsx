@@ -39,6 +39,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   STREAM_STATE_LABEL,
@@ -51,17 +52,17 @@ import {
 } from '@shared/api/wall';
 import { useAuth } from '@app/auth/AuthProvider';
 import { isApiError } from '@shared/api/errors';
+import { Badge, Button, ErrorState, KeyValue, LoadingState } from '@shared/ui/primitives';
 import {
-  Badge,
-  Button,
-  Card,
-  ErrorState,
-  KeyValue,
-  LoadingState,
-  PageHeader,
-  StatCard,
-  StatusBadge,
-} from '@shared/ui/primitives';
+  CameraSurface,
+  Eyebrow,
+  Figure,
+  GoTo,
+  LiveDot,
+  Meter,
+  PageIntro,
+  SectionRule,
+} from '@shared/ui/product';
 
 /** How often the wall re-reads camera state. Metadata only — not video. */
 const STATE_POLL_MS = 4000;
@@ -254,13 +255,33 @@ function viewerMessage(
   return 'Opening stream…';
 }
 
+/**
+ * One tile.
+ *
+ * ### The streaming lifecycle below is untouched
+ *
+ * Everything Stage 3 changed here is presentation. `useStream`, the streamable
+ * predicate, the deliberate refusal to pause a hidden tile, the blank-pixel
+ * teardown, the `data-testid` and `data-phase` hooks and the honest viewer
+ * message are exactly as they were — that logic was hard-won against a real
+ * DVR and a redesign has no business touching it.
+ *
+ * What changed is that a tile stopped being a `Card` containing a picture and
+ * became a picture with chrome over it. A `Card` puts footage on the page's
+ * surface with the page's padding and border radius; a monitoring client
+ * letterboxes against black and hangs its metadata on top. The distinction is
+ * the difference between a dashboard that happens to show video and something
+ * an operator will watch for eight hours.
+ */
 function CameraTile({
   camera,
   fps,
+  selected,
   onOpen,
 }: {
   camera: WallCamera;
   fps: number;
+  selected: boolean;
   onOpen: (camera: WallCamera) => void;
 }) {
   // Deliberately *not* paused while the detail view covers the wall. That was
@@ -275,33 +296,25 @@ function CameraTile({
   const { url, phase, error, onFrame, onFailure, element } = useStream(
     camera.camera_id, fps, streamable,
   );
-  const tone = streamTone(camera.state);
   const message = viewerMessage(phase, error, camera);
 
   return (
-    <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <button
-        type="button"
-        onClick={() => onOpen(camera)}
-        aria-label={`Open ${camera.camera_id}, channel ${camera.channel}, ${STREAM_STATE_LABEL[camera.state]}`}
-        style={{
-          display: 'block', width: '100%', padding: 0, border: 'none',
-          // Footage letterboxes against black, not against an application
-          // surface. `--surface-sunken` resolves to a pale grey in the light
-          // theme, which framed every tile in grey and made a dark scene read
-          // as a rendering fault rather than a dark scene.
-          background: 'var(--video-ground)', cursor: 'pointer',
-        }}
-      >
-        <div style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden' }}>
+    <CameraSurface
+      name={camera.name || camera.camera_id}
+      identifier={camera.camera_id}
+      context={`CH${String(camera.channel).padStart(2, '0')} · ${camera.stream_type}`}
+      tone={streamTone(camera.state)}
+      stateLabel={STREAM_STATE_LABEL[camera.state]}
+      selected={selected}
+      onSelect={() => onOpen(camera)}
+      label={`Open ${camera.camera_id}, channel ${camera.channel}, ${STREAM_STATE_LABEL[camera.state]}`}
+      media={
+        <>
           {/* Mounted as soon as there is a URL, and *kept* mounted underneath
-              the message. It has to be in the document to load at all — the
-              previous version rendered the placeholder **instead of** the
-              image, so nothing ever requested the stream. */}
+              the message. It has to be in the document to load at all — an
+              earlier version rendered the placeholder **instead of** the image,
+              so nothing ever requested the stream. */}
           {streamable ? (
-            // Mounted for as long as this camera is streamable, and pointed at
-            // a blank pixel until the ticket arrives — never unmounted while a
-            // stream is running, because unmounting does not close one.
             <img
               ref={element}
               src={url ?? BLANK_PIXEL}
@@ -320,7 +333,7 @@ function CameraTile({
                 position: 'absolute', inset: 0, display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 color: 'var(--video-ink)', fontSize: 'var(--text-xs)',
-                textAlign: 'center', padding: 'var(--space-3)',
+                textAlign: 'center', padding: 'var(--space-4)',
                 background: 'var(--video-ground)',
               }}
             >
@@ -330,47 +343,30 @@ function CameraTile({
               {message}
             </div>
           ) : null}
-
-          <div
-            style={{
-              position: 'absolute', top: 0, left: 0, right: 0,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)',
-              background: 'linear-gradient(rgb(0 0 0 / 0.65), transparent)',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)',
-                color: '#fff', letterSpacing: 'var(--tracking-wide)',
-              }}
-            >
-              {camera.camera_id}
-              <span style={{ opacity: 0.7 }}> · CH{String(camera.channel).padStart(2, '0')}</span>
-            </span>
-            <StatusBadge tone={tone}>{STREAM_STATE_LABEL[camera.state]}</StatusBadge>
-          </div>
-        </div>
-      </button>
-
-      <div
-        style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)',
-          fontSize: 'var(--text-2xs)', color: 'var(--ink-tertiary)',
-        }}
-      >
-        <span>{camera.name || '—'}</span>
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
-          {camera.width ? `${camera.width}×${camera.height}` : '—'}
+        </>
+      }
+      meta={
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)' }}>
+          {camera.width ? `${camera.width}×${camera.height}` : 'resolution unknown'}
+          {camera.seconds_since_frame !== null ? ` · ${camera.seconds_since_frame}s since frame` : ''}
         </span>
-      </div>
-    </Card>
+      }
+    />
   );
 }
 
 /* ── detail ───────────────────────────────────────────────────────────────── */
 
+/**
+ * The focused camera: one picture, at size, with its operational context beside
+ * it rather than beneath it.
+ *
+ * The previous version was the same picture over a flat key/value grid of ten
+ * rows, every row the same weight. What an operator actually asks when they
+ * focus a camera is *is this healthy, how do I know, and where do I go next* —
+ * so the numbers that answer the first are given rank, and the edges that
+ * answer the third exist at all.
+ */
 function CameraDetail({
   camera,
   fps,
@@ -411,89 +407,152 @@ function CameraDetail({
         // notice — the one message that arrives without the operator doing
         // anything — could be painted underneath a fullscreen camera.
         zIndex: 'var(--z-modal)' as unknown as number,
-        background: 'rgb(0 0 0 / 0.82)',
+        background: 'rgb(0 0 0 / 0.86)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 'var(--space-6)',
+        animation: 'uwv-fade-in var(--motion-fast) var(--ease-out)',
       }}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ width: 'min(1200px, 100%)', display: 'grid', gap: 'var(--space-4)' }}
+        style={{ width: 'min(1280px, 100%)', display: 'grid', gap: 'var(--space-5)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <h2 style={{ fontSize: 'var(--text-lg)', color: '#fff', margin: 0 }}>
-            {camera.camera_id}
-            <span style={{ opacity: 0.6, fontWeight: 400 }}>
-              {' '}· CH{String(camera.channel).padStart(2, '0')}
-            </span>
-          </h2>
-          <StatusBadge tone={streamTone(camera.state)}>
-            {STREAM_STATE_LABEL[camera.state]}
-          </StatusBadge>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-2xs)',
+                letterSpacing: 'var(--tracking-wider)',
+                textTransform: 'uppercase',
+                color: 'var(--video-ink)',
+              }}
+            >
+              Focused camera · CH{String(camera.channel).padStart(2, '0')} · {camera.stream_type}
+            </div>
+            <h2
+              style={{
+                fontSize: 'var(--text-2xl)',
+                color: '#fff',
+                margin: 0,
+                marginTop: 'var(--space-2)',
+                letterSpacing: 'var(--tracking-tight)',
+              }}
+            >
+              {camera.camera_id}
+            </h2>
+          </div>
+          <LiveDot tone={streamTone(camera.state)} label={STREAM_STATE_LABEL[camera.state]} />
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             <Button size="sm" onClick={fullscreen}>Fullscreen</Button>
             <Button size="sm" variant="secondary" onClick={onClose}>Close</Button>
           </div>
         </div>
 
-        <div
-          ref={figure}
-          style={{
-            position: 'relative',
-            background: 'var(--video-ground)', aspectRatio: '16 / 9', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)',
-            overflow: 'hidden',
-          }}
-        >
-          <img
-            ref={element}
-            src={url ?? BLANK_PIXEL}
-            alt={`Live view from ${camera.camera_id}`}
-            onLoad={url ? onFrame : undefined}
-            onError={url ? onFailure : undefined}
-            data-testid={`stream-detail-${camera.camera_id}`}
-            data-phase={phase}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-          {message ? (
-            // Over the image, never instead of it: an `<img>` that is not in
-            // the document never requests its stream, which is the whole fault
-            // this page had.
-            <span
-              data-testid={`viewer-message-detail-${camera.camera_id}`}
-              style={{
-                position: 'absolute', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: 'var(--video-ground)',
-                color: 'var(--video-ink)', fontSize: 'var(--text-sm)',
-              }}
-            >
-              {message}
-            </span>
-          ) : null}
-        </div>
+        <div className="uwv-rail">
+          <div
+            ref={figure}
+            style={{
+              position: 'relative',
+              background: 'var(--video-ground)', aspectRatio: '16 / 9', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)',
+              overflow: 'hidden',
+            }}
+          >
+            <img
+              ref={element}
+              src={url ?? BLANK_PIXEL}
+              alt={`Live view from ${camera.camera_id}`}
+              onLoad={url ? onFrame : undefined}
+              onError={url ? onFailure : undefined}
+              data-testid={`stream-detail-${camera.camera_id}`}
+              data-phase={phase}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+            {message ? (
+              // Over the image, never instead of it: an `<img>` that is not in
+              // the document never requests its stream, which is the whole fault
+              // this page had.
+              <span
+                data-testid={`viewer-message-detail-${camera.camera_id}`}
+                style={{
+                  position: 'absolute', inset: 0, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--video-ground)',
+                  color: 'var(--video-ink)', fontSize: 'var(--text-sm)',
+                }}
+              >
+                {message}
+              </span>
+            ) : null}
+          </div>
 
-        <Card>
-          <KeyValue
-            items={[
-              { key: 'Camera', value: camera.camera_id },
-              { key: 'Name', value: camera.name || '—' },
-              { key: 'DVR channel', value: String(camera.channel) },
-              { key: 'Stream', value: camera.stream_type },
-              { key: 'State', value: STREAM_STATE_LABEL[camera.state] },
-              { key: 'Resolution', value: camera.width ? `${camera.width}×${camera.height}` : '—' },
-              { key: 'Frames decoded', value: String(camera.frames_decoded) },
-              { key: 'Reconnects', value: String(camera.reconnects) },
-              {
-                key: 'First frame',
-                value: camera.first_frame_latency_s !== null
-                  ? `${camera.first_frame_latency_s}s`
-                  : '—',
-              },
-              { key: 'Last error', value: camera.last_error || '—' },
-            ]}
-          />
-        </Card>
+          <aside style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start' }}>
+            {/* Ranked rather than listed. Frames decoded is the number that
+                says whether this camera has ever worked; the rest is context
+                for it. */}
+            <Figure
+              label="Frames decoded"
+              scale="lead"
+              value={camera.frames_decoded}
+              detail={`${camera.viewers} viewer(s) on this camera`}
+              tone={camera.frames_decoded > 0 ? 'accent' : 'default'}
+            />
+            <div className="uwv-figures">
+              <Figure
+                label="Reconnects"
+                scale="quiet"
+                value={camera.reconnects}
+                tone={camera.reconnects > 0 ? 'critical' : 'default'}
+                detail="Since this session opened"
+              />
+              <Figure
+                label="First frame"
+                scale="quiet"
+                // `null` rather than `0` when the server has never reported one:
+                // "no frame has arrived" is not "it arrived instantly".
+                value={camera.first_frame_latency_s !== null ? `${camera.first_frame_latency_s}s` : null}
+                unavailableReason="No frame has arrived yet"
+                detail="Time to the first picture"
+              />
+            </div>
+
+            <div>
+              <Eyebrow>Signal</Eyebrow>
+              <div style={{ marginTop: 'var(--space-3)' }}>
+                <KeyValue
+                  items={[
+                    { key: 'Name', value: camera.name || '—' },
+                    { key: 'DVR channel', value: String(camera.channel) },
+                    { key: 'Stream', value: camera.stream_type },
+                    { key: 'State', value: STREAM_STATE_LABEL[camera.state] },
+                    { key: 'Resolution', value: camera.width ? `${camera.width}×${camera.height}` : '—' },
+                    {
+                      key: 'Since frame',
+                      value:
+                        camera.seconds_since_frame === null
+                          ? 'no frame yet'
+                          : `${camera.seconds_since_frame}s`,
+                    },
+                    { key: 'Purpose', value: camera.purpose || '—' },
+                    { key: 'Last error', value: camera.last_error || '—' },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Eyebrow>Go to</Eyebrow>
+              <ul style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+                <li>
+                  <Link to={`/cameras/${encodeURIComponent(camera.camera_id)}`} style={{ textDecoration: 'none' }}>
+                    <GoTo>Everything about this camera</GoTo>
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );
@@ -537,51 +596,75 @@ export function CameraWallPage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Operations"
         title="Camera Wall"
-        description="Every channel on the recorder, live. This view performs no analysis — opening a tile costs a video decode, never a model call."
-        meta={<Badge>{data.total} channels</Badge>}
+        standfirst="Every channel on the recorder, live. This view performs no analysis — opening a tile costs a video decode, never a model call. A camera is never hidden for being dark: an operator who cannot see that channel 7 is black is worse served than one with no wall at all."
+        meta={
+          <>
+            <Badge>{data.total} channels</Badge>
+            <LiveDot tone={data.live > 0 ? 'online' : 'idle'} label={`${data.live} live`} />
+          </>
+        }
       />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))',
-          gap: 'var(--space-4)',
-          marginBottom: 'var(--space-6)',
-        }}
-      >
-        <StatCard label="Channels" value={data.total} detail="Every configured DVR channel" />
-        <StatCard
-          label="Live"
-          value={data.live}
-          tone={data.live > 0 ? 'accent' : 'default'}
-          detail="Frames arriving now"
-        />
-        <StatCard
-          label="Not live"
-          value={notLive}
-          detail={
-            Object.entries(counts)
-              .filter(([state]) => state !== 'live')
-              .map(([state, n]) => `${n} ${state}`)
-              .join(' · ') || 'None'
-          }
-        />
+      {/* The state of the estate, ranked: one dominant figure, the rest
+          supporting, and a real proportion over a real denominator. */}
+      <div className="uwv-lead" style={{ marginBottom: 'var(--space-8)' }}>
+        <div style={{ display: 'grid', gap: 'var(--space-5)', alignContent: 'start' }}>
+          <Meter
+            caption="Channels by stream state"
+            total={data.total}
+            emptyNote="The recorder reports no channel at all. Nothing is being watched."
+            segments={STREAM_STATES.map((state) => ({
+              key: state,
+              label: STREAM_STATE_LABEL[state],
+              value: counts[state] ?? 0,
+              color: STREAM_STATE_COLOR[state],
+            }))}
+          />
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', maxWidth: 'var(--measure)' }}>
+            Only <strong>Live</strong> means pictures are actually moving. The server sets it from
+            genuine frame arrival, never from a session that merely opened — which is why a tile can
+            read <em>Connecting</em> for a camera that is never coming, and says so rather than
+            showing the last frame it had.
+          </p>
+        </div>
+
+        <div className="uwv-figures" style={{ alignContent: 'start' }}>
+          <Figure
+            label="Live"
+            scale="hero"
+            value={data.live}
+            tone={data.live > 0 ? 'accent' : 'default'}
+            detail="Frames arriving now"
+          />
+          <Figure
+            label="Not live"
+            scale="lead"
+            value={notLive}
+            detail={
+              Object.entries(counts)
+                .filter(([state]) => state !== 'live')
+                .map(([state, n]) => `${n} ${state}`)
+                .join(' · ') || 'None'
+            }
+          />
+        </div>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))',
-          gap: 'var(--space-4)',
-        }}
-      >
+      <SectionRule
+        label="Channels"
+        detail="Every configured channel, in recorder order. Selecting a tile focuses it; it does not start analysis."
+      />
+
+      <div className="uwv-tiles-wide">
         {cameras.map((camera) => (
           <CameraTile
             key={camera.camera_id}
             camera={camera}
             fps={data.default_wall_fps}
+            selected={selected?.camera_id === camera.camera_id}
             onOpen={setOpen}
           />
         ))}
@@ -597,5 +680,32 @@ export function CameraWallPage() {
     </>
   );
 }
+
+/**
+ * The stream states, in the order an operator cares about them, with a colour
+ * each.
+ *
+ * Reusing the health tones rather than inventing a palette: `live` is the same
+ * green as an online camera everywhere else in the product, and `offline` the
+ * same red. `disabled` is deliberately the neutral idle grey — a camera
+ * somebody switched off is not a fault.
+ */
+const STREAM_STATES: ReadonlyArray<StreamState> = [
+  'live',
+  'connecting',
+  'reconnecting',
+  'offline',
+  'error',
+  'disabled',
+];
+
+const STREAM_STATE_COLOR: Record<StreamState, string> = {
+  live: 'var(--health-online)',
+  connecting: 'var(--health-degraded)',
+  reconnecting: 'var(--health-degraded)',
+  offline: 'var(--health-offline)',
+  error: 'var(--severity-critical)',
+  disabled: 'var(--health-idle)',
+};
 
 export type { StreamState };

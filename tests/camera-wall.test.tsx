@@ -160,11 +160,9 @@ describe('the camera wall', () => {
     // The stat card, not a tile badge: the count must come from the backend
     // summary rather than from counting rendered tiles.
     await screen.findByRole('heading', { name: 'Camera Wall' });
-    const card = screen
-      .getAllByText('Live')
-      .map((node) => node.closest('section'))
-      .find((section) => section?.textContent?.includes('Frames arriving now')) as HTMLElement;
+    const card = document.querySelector('[data-figure="Live"]') as HTMLElement;
     expect(card).toBeTruthy();
+    expect(card.textContent).toContain('Frames arriving now');
     expect(within(card).getByText('14')).toBeInTheDocument();
   });
 

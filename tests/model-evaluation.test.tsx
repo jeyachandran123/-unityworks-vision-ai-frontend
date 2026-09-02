@@ -244,9 +244,20 @@ describe('the route is gated on its own permission', () => {
     expect(await openDashboard()).toBeInTheDocument();
   });
 
-  it('admits an org admin', async () => {
+  it('redirects an org admin', async () => {
+    // Stage 3 removed `view_model_evaluation` from ORG_ADMIN. Evaluation
+    // artifacts answer "should we ship this model" — attribute agreement on a
+    // 43-subject split, per-state confusion matrices — which is an engineering
+    // question. The accountability an organisation administrator has for what
+    // the system claims is served by reports, which carry coverage and the
+    // ruleset version behind every figure, and which this role still holds.
     installFetch({ session: adminIdentity() });
-    expect(await openDashboard()).toBeInTheDocument();
+    renderApp(<AppRouter />, '/model-evaluation');
+
+    await screen.findByRole('heading', { name: 'Command Center' });
+    expect(
+      screen.queryByRole('heading', { name: 'Model Evaluation' }),
+    ).not.toBeInTheDocument();
   });
 
   it('redirects a restaurant manager', async () => {
@@ -254,19 +265,33 @@ describe('the route is gated on its own permission', () => {
     installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/model-evaluation');
 
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
     expect(
       screen.queryByRole('heading', { name: 'Model Evaluation' }),
     ).not.toBeInTheDocument();
   });
 
   it('appears in navigation only for accounts that hold the permission', async () => {
-    installFetch({ session: adminIdentity() });
+    installFetch({ session: identity() });
     renderApp(<AppRouter />, '/dashboard');
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: 'Command Center' });
 
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getByRole('link', { name: /model evaluation/i })).toBeInTheDocument();
+  });
+
+  it('is absent from an org admin’s navigation, and the route agrees', async () => {
+    // Navigation visibility and route access must say the same thing. Hiding
+    // the entry is not closing the door; the route redirect above is the door,
+    // and the backend refuses the request underneath both.
+    installFetch({ session: adminIdentity() });
+    renderApp(<AppRouter />, '/dashboard');
+    await screen.findByRole('heading', { name: 'Command Center' });
+
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).queryByRole('link', { name: /model evaluation/i })).not.toBeInTheDocument();
+    // And no engineering area at all for this role.
+    expect(within(nav).queryByText('Engineering')).not.toBeInTheDocument();
   });
 });
 
