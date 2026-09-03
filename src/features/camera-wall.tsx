@@ -61,6 +61,8 @@ import {
   LiveDot,
   Meter,
   PageIntro,
+  Plane,
+  Region,
   SectionRule,
 } from '@shared/ui/product';
 
@@ -308,6 +310,13 @@ function CameraTile({
       selected={selected}
       onSelect={() => onOpen(camera)}
       label={`Open ${camera.camera_id}, channel ${camera.channel}, ${STREAM_STATE_LABEL[camera.state]}`}
+      // The viewfinder's ticks light only when frames are genuinely arriving,
+      // which is the same fact `phase === 'live'` already gates the message on
+      // — not `camera.state`, which says a session exists rather than that a
+      // picture does. A channel with no feed at all is ruled with a hatch, so
+      // that an operator can tell "no signal" from "a dark room", which two
+      // identical black rectangles could not.
+      signal={phase === 'live' ? 'live' : streamable ? 'dark' : 'none'}
       media={
         <>
           {/* Mounted as soon as there is a URL, and *kept* mounted underneath
@@ -599,7 +608,7 @@ export function CameraWallPage() {
       <PageIntro
         eyebrow="Operations"
         title="Camera Wall"
-        standfirst="Every channel on the recorder, live. This view performs no analysis — opening a tile costs a video decode, never a model call. A camera is never hidden for being dark: an operator who cannot see that channel 7 is black is worse served than one with no wall at all."
+        standfirst="Every channel on the recorder, live. This view performs no analysis — opening a tile costs a video decode, never a model call."
         meta={
           <>
             <Badge>{data.total} channels</Badge>
@@ -608,67 +617,99 @@ export function CameraWallPage() {
         }
       />
 
-      {/* The state of the estate, ranked: one dominant figure, the rest
-          supporting, and a real proportion over a real denominator. */}
-      <div className="uwv-lead" style={{ marginBottom: 'var(--space-8)' }}>
-        <div style={{ display: 'grid', gap: 'var(--space-5)', alignContent: 'start' }}>
-          <Meter
-            caption="Channels by stream state"
-            total={data.total}
-            emptyNote="The recorder reports no channel at all. Nothing is being watched."
-            segments={STREAM_STATES.map((state) => ({
-              key: state,
-              label: STREAM_STATE_LABEL[state],
-              value: counts[state] ?? 0,
-              color: STREAM_STATE_COLOR[state],
-            }))}
-          />
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', maxWidth: 'var(--measure)' }}>
-            Only <strong>Live</strong> means pictures are actually moving. The server sets it from
-            genuine frame arrival, never from a session that merely opened — which is why a tile can
-            read <em>Connecting</em> for a camera that is never coming, and says so rather than
-            showing the last frame it had.
-          </p>
-        </div>
+      {/* The wall leads.
 
-        <div className="uwv-figures" style={{ alignContent: 'start' }}>
-          <Figure
-            label="Live"
-            scale="hero"
-            value={data.live}
-            tone={data.live > 0 ? 'accent' : 'default'}
-            detail="Frames arriving now"
-          />
-          <Figure
-            label="Not live"
-            scale="lead"
-            value={notLive}
-            detail={
-              Object.entries(counts)
-                .filter(([state]) => state !== 'live')
-                .map(([state, n]) => `${n} ${state}`)
-                .join(' · ') || 'None'
-            }
-          />
-        </div>
-      </div>
+          Stage 5's critique measured where the footage started on this page:
+          y≈630, behind a display heading, four lines of prose, a meter, two
+          figures and another paragraph. On a page whose subject is a wall of
+          cameras, the cameras were below the fold. They are now the first thing
+          under the title, and everything that describes them follows.
 
+          They are laid on `--ground` rather than on the reading plane. A
+          monitoring wall is a dark backdrop with lit rectangles on it — the
+          picture is the content and the surface is meant to disappear, which is
+          the opposite of what a page of cards asks a surface to do. */}
       <SectionRule
+        lead
+        order={2}
         label="Channels"
         detail="Every configured channel, in recorder order. Selecting a tile focuses it; it does not start analysis."
       />
+      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
+        <div
+          className="uwv-wall"
+          style={{
+            background: 'var(--ground)',
+            border: '1px solid var(--line-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-3)',
+          }}
+        >
+          {cameras.map((camera) => (
+            <CameraTile
+              key={camera.camera_id}
+              camera={camera}
+              fps={data.default_wall_fps}
+              selected={selected?.camera_id === camera.camera_id}
+              onOpen={setOpen}
+            />
+          ))}
+        </div>
+      </Region>
 
-      <div className="uwv-tiles-wide">
-        {cameras.map((camera) => (
-          <CameraTile
-            key={camera.camera_id}
-            camera={camera}
-            fps={data.default_wall_fps}
-            selected={selected?.camera_id === camera.camera_id}
-            onOpen={setOpen}
-          />
-        ))}
-      </div>
+      {/* What the wall adds up to. Supporting, and after the thing it is about. */}
+      <SectionRule
+        order={3}
+        label="State of the estate"
+        detail="A real proportion over a real denominator: every channel the recorder reports, by the state the server assigns it."
+      />
+      <Region order={3}>
+        <div className="uwv-lead">
+          <div style={{ display: 'grid', gap: 'var(--space-5)', alignContent: 'start' }}>
+            <Meter
+              caption="Channels by stream state"
+              total={data.total}
+              emptyNote="The recorder reports no channel at all. Nothing is being watched."
+              segments={STREAM_STATES.map((state) => ({
+                key: state,
+                label: STREAM_STATE_LABEL[state],
+                value: counts[state] ?? 0,
+                color: STREAM_STATE_COLOR[state],
+              }))}
+            />
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', maxWidth: 'var(--measure)' }}>
+              Only <strong>Live</strong> means pictures are actually moving. The server sets it from
+              genuine frame arrival, never from a session that merely opened — which is why a tile can
+              read <em>Connecting</em> for a camera that is never coming, and says so rather than
+              showing the last frame it had. A camera is never hidden for being dark: an operator who
+              cannot see that channel 7 is black is worse served than one with no wall at all.
+            </p>
+          </div>
+
+          <Plane
+            style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start', alignSelf: 'start' }}
+          >
+            <Figure
+              label="Live"
+              scale="hero"
+              value={data.live}
+              tone={data.live > 0 ? 'accent' : 'default'}
+              detail="Frames arriving now"
+            />
+            <Figure
+              label="Not live"
+              scale="quiet"
+              value={notLive}
+              detail={
+                Object.entries(counts)
+                  .filter(([state]) => state !== 'live')
+                  .map(([state, n]) => `${n} ${state}`)
+                  .join(' · ') || 'None'
+              }
+            />
+          </Plane>
+        </div>
+      </Region>
 
       {selected ? (
         <CameraDetail

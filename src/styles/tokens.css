@@ -17,13 +17,45 @@
  */
 
 :root {
-  /* ── Surfaces (dark is the default: an operations screen runs all day) ── */
+  /**
+   * ── Surfaces: a stack with a light source, not a plane ────────────────
+   *
+   * Stage 5's critique found that every region in the product sat on the same
+   * value with a hairline around it, which is why a page read as assembled
+   * rather than composed. There are now four grounds and they mean four
+   * different things:
+   *
+   *   --ground          the canvas the application is built on. Deepest. Only
+   *                     the shell paints it. Nothing sits *on* it directly.
+   *   --surface-base    the reading plane, where a page's prose and rules live.
+   *   --surface-panel   a region that is a plane rather than an object — a wall,
+   *                     a ledger, a report body. Lifts off base without
+   *                     becoming a card.
+   *   --surface-raised  an object genuinely above the page: a card that earned
+   *                     it, the topbar, the sidebar, a modal body.
+   *
+   * The separations are deliberate rather than nominal, which is what the
+   * previous 1.28:1 base-to-raised step was not.
+   */
+  --ground: #070a0c;
   --surface-base: #0c1013;
-  --surface-raised: #141a1f;
-  --surface-overlay: #1b232a;
+  --surface-panel: #11171c;
+  --surface-raised: #161d23;
+  --surface-overlay: #1e262e;
   --surface-sunken: #080b0d;
-  --surface-hover: #1f2830;
+  --surface-hover: #222b33;
   --surface-selected: #1b2f36;
+
+  /**
+   * The atmosphere.
+   *
+   * One gradient in the entire product, painted on the app canvas and nowhere
+   * else. It gives the interface a light source — the page is fractionally
+   * brighter where reading starts and settles into the ground below — which is
+   * the difference between a room and a flat fill. No component may define
+   * another one.
+   */
+  --atmosphere: linear-gradient(180deg, #101820 0%, #0c1013 34rem);
 
   /**
    * The engineering register.
@@ -39,6 +71,19 @@
    * the stated purpose in `UI_UX_ARCHITECTURE.md` §3.
    */
   --surface-engineering: #090d11;
+  /**
+   * A panel *on* the engineering ground.
+   *
+   * The shell paints `--surface-engineering` on the whole page of an
+   * engineering route — that is what makes a cropped screenshot unambiguous.
+   * `EngineeringSurface` then paints a block inside that page, and with only
+   * one engineering value the two were identical: a bordered region whose fill
+   * matched its own background, so the surface that is supposed to say "this is
+   * engineering data" was invisible. This is the second step the register
+   * needed, and it is a step in the same cold direction rather than a second
+   * palette.
+   */
+  --surface-engineering-panel: #0e1319;
   --engineering-line: #1b2530;
   --engineering-ink: #8fa3b4;
 
@@ -74,7 +119,10 @@
      --surface-overlay, and this token carries StatCard's `unavailableReason`
      — the sentence explaining why a safety figure reads `—` — at 11–13px,
      where the large-text exemption does not apply. Now 4.58:1 at worst. */
-  --ink-tertiary: #7c8c96;
+  /* Raised again for Stage 5: the deeper surface stack lightened
+     --surface-hover and --surface-overlay, and #7c8c96 fell to 4.14:1 on a
+     hovered row. 4.64:1 at worst now. */
+  --ink-tertiary: #8794a0;
   --ink-inverse: #0c1013;
   --ink-on-accent: #04191d;
 
@@ -259,29 +307,91 @@
   --focus-ring-color: var(--accent);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+
+  /**
+   * ── The spine ───────────────────────────────────────────────────
+   *
+   * A hairline that runs down the left of a page's content, with every section
+   * boundary tied to it by a tick and every section label set in the margin
+   * beside it. It is the product's identity mark and it is structural rather
+   * than decorative: it is what turns a column of stacked bands into one
+   * continuous reading, and it is the reason a page here does not look like a
+   * page of cards. `--spine-gutter` is the outdent the label takes; below
+   * `--shell-breakpoint` the spine collapses and the labels return inline,
+   * because at that width the margin does not exist to give away.
+   */
+  --spine-gutter: 1.5rem;
+
+  /**
+   * Entrance stagger.
+   *
+   * The delay between one region arriving and the next. Small enough that the
+   * page reads as one movement rather than a queue, and it stops after six
+   * regions — a stagger that keeps counting is a page that keeps moving.
+   */
+  --stagger: 45ms;
+
+  /**
+   * The no-signal hatch.
+   *
+   * Painted on a camera tile that is producing no picture. It exists so that
+   * "there is no feed" cannot be mistaken for "the feed is of a dark room",
+   * which is the same distinction the wall's own copy makes about channel 7
+   * being black. Fixed in both themes for the same reason `--video-ground` is:
+   * it is drawn inside the picture area, not on the page.
+   */
+  --hatch-line: rgb(255 255 255 / 0.045);
 }
 
 /* Light theme. Same tokens, re-pointed — never a separate set of components. */
 :root[data-theme="light"] {
-  --surface-base: #f5f7f8;
-  --surface-raised: #ffffff;
-  /* Was #ffffff — identical to --surface-raised, a separation ratio of exactly
-     1.000, so a Drawer, Modal, toast or menu dissolved into the Card beneath
-     it and only a 1.22:1 hairline said otherwise. Raised is already pure white
-     and cannot go lighter, so the elevated surface takes a cool tint instead:
-     1.046:1 against raised, while staying lighter than --surface-base so it
-     still reads as sitting above the page rather than part of it. */
-  --surface-overlay: #f8fafc;
-  --surface-sunken: #e8edef;
-  --surface-hover: #eef2f4;
-  --surface-selected: #e0f0f3;
+  /**
+   * Light is designed here, not derived.
+   *
+   * The Stage 5 critique named the failure precisely: the light theme was the
+   * dark layout with white backgrounds. Its ground was #f5f7f8 and its panels
+   * were #ffffff — a separation of 1.06:1 — so nothing lifted, nothing
+   * recessed, and a page of white cards on a near-white page read as a
+   * wireframe.
+   *
+   * The fix is not more borders. It is to give light the same four-ground stack
+   * dark has, and to spend the range in the direction light actually has room
+   * in: *downward*. The reading plane drops to #eef2f4 so a panel in true white
+   * genuinely rises off it, and so the shadow tokens finally have something to
+   * fall on. The canvas drops further still, so the shell reads as furniture
+   * around the page rather than as more page.
+   *
+   * The neutrals keep their cool bias. That is a decision, not an inheritance:
+   * the accent is an instrument teal, and a warm-grey ground under it would
+   * read as a document product rather than a monitoring one. Light here is
+   * daylight on an instrument panel, not paper.
+   */
+  --ground: #dde4e8;
+  --surface-base: #eef2f4;
+  --surface-panel: #f6f8f9;
+  /* Just short of white, and deliberately so. White is the ceiling of a light
+     theme, and a theme that spends it on cards has nothing left for the things
+     that sit *above* a card: a menu, a modal, a toast, a badge. Raised stops
+     one step below, which costs the card nothing perceptible against a #eef2f4
+     page and leaves --surface-overlay a real step to occupy. */
+  --surface-raised: #fbfcfd;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #e3e9ec;
+  --surface-hover: #e6ecef;
+  --surface-selected: #d9edf1;
+
+  /* Light's atmosphere runs the other way: fractionally cooler and deeper at
+     the top, so content settles into the light rather than floating on a
+     uniform fill. Same rule — one gradient, canvas only. */
+  --atmosphere: linear-gradient(180deg, #e5ebef 0%, #eef2f4 34rem);
 
   /* The engineering register, light. Cooler and one step deeper than the page,
      for the same reason it is one step deeper on dark: the ground is what makes
      a cropped screenshot unambiguous. `--engineering-ink` is `#46565f`, which
      is 7.4:1 on this surface. */
-  --surface-engineering: #e6ebee;
-  --engineering-line: #cbd6db;
+  --surface-engineering: #e4ebef;
+  --surface-engineering-panel: #f0f5f7;
+  --engineering-line: #c7d4da;
   --engineering-ink: #46565f;
 
   /* --video-ground is deliberately NOT re-pointed here. Footage letterboxes
@@ -291,7 +401,10 @@
   --ink-secondary: #46565f;
   /* Darkened from #6b7c86, which failed 4.5:1 on all four light surfaces
      (3.67 on --surface-sunken at worst). Now 4.53:1 at worst. */
-  --ink-tertiary: #5d6c75;
+  /* Re-measured against the redesigned light stack, where --ground is now a
+     genuine ground rather than near-white: #5d6c75 read 4.22:1 on it.
+     4.55:1 at worst now. */
+  --ink-tertiary: #586770;
   --ink-inverse: #ffffff;
   --ink-on-accent: #ffffff;
 
@@ -299,14 +412,15 @@
   --line-default: #d2dbdf;
   --line-strong: #b4c1c7;
 
-  --accent: #14707f;
+  /* Deepened one step so a link still clears 4.5:1 on --ground. */
+  --accent: #126873;
   --accent-hover: #0f5a66;
   --accent-active: #0c4a54;
   --accent-wash: #e0f0f3;
   --accent-line: #8fc3cc;
 
   /* Darkened for contrast on a light ground — not simply reused. */
-  --state-present: #1c7a45;
+  --state-present: #1a7240;
   --state-present-wash: #dff2e6;
   --state-absent: #b83a30;
   --state-absent-wash: #fae3e1;
@@ -315,7 +429,7 @@
   --state-unknown: #566670;
   --state-unknown-wash: #e7ebed;
 
-  --health-online: #1c7a45;
+  --health-online: #1a7240;
   --health-degraded: #8a6100;
   --health-degraded-wash: #f8eed2;
   --health-offline: #b83a30;
@@ -327,7 +441,14 @@
   --severity-low: #2b5f9e;
   --severity-info: #566670;
 
-  --shadow-sm: 0 1px 2px rgb(16 23 27 / 0.06);
-  --shadow-md: 0 4px 12px rgb(16 23 27 / 0.08);
-  --shadow-lg: 0 12px 32px rgb(16 23 27 / 0.12);
+  /* Deepened: the previous values were tuned against an #f5f7f8 ground and
+     were all but invisible. On the new reading plane a white panel has
+     something to cast onto, so elevation is finally carried by light rather
+     than by another border. */
+  --shadow-sm: 0 1px 2px rgb(16 23 27 / 0.07), 0 1px 1px rgb(16 23 27 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(16 23 27 / 0.14), 0 2px 4px rgb(16 23 27 / 0.06);
+  --shadow-lg: 0 20px 44px -12px rgb(16 23 27 / 0.22), 0 4px 10px rgb(16 23 27 / 0.08);
 }
+
+/* The hatch is drawn on --video-ground, which is black in both themes, so it
+   does not re-point here. Declared once, above. */

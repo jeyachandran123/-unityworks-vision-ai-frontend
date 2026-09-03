@@ -196,11 +196,26 @@ export function Select({
       <label htmlFor={selectId} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-secondary)' }}>
         {label}
       </label>
+      {/* `appearance: none` and a drawn chevron.
+
+          Left native, this control rendered with the operating system's own
+          chevron, border radius and focus treatment — on the Reports page, the
+          single most document-like screen in the product, two Windows dropdowns
+          sat inside a compliance form and were the strongest remaining signal
+          that this was a web form rather than an instrument. The behaviour is
+          untouched: it is still a `<select>`, still labelled, still keyboard
+          operable, and the option list is still the platform's own. */}
       <select
         id={selectId}
         style={{
-          padding: '0.45rem 0.6rem',
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          padding: '0.45rem 2rem 0.45rem 0.6rem',
           background: 'var(--surface-sunken)',
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%237c8c96' stroke-width='1.4'/></svg>\")",
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 0.7rem center',
           border: '1px solid var(--line-default)',
           borderRadius: 'var(--radius-sm)',
           color: 'var(--ink-primary)',
@@ -524,27 +539,50 @@ function StateFrame({
   tone: string;
 }) {
   return (
+    /* An absence is a caption, not a region.
+     *
+     * This frame used to centre its content in 96px of vertical padding, which
+     * made every "nothing here yet" on every page about 200px tall. Stage 5
+     * measured the consequence across the product: on Administration two of
+     * them were the largest objects on the screen, on Staff Hygiene one of them
+     * *was* the screen, and on the Command Center the two biggest things on a
+     * dashboard were notices that nothing was happening. A page whose dominant
+     * mass is its empty states is a page that reads as broken even when
+     * everything about it is correct.
+     *
+     * Every string, every role and every tone is unchanged. What changed is
+     * that it now occupies what an explanation occupies: aligned to the text
+     * column, glyph on the same line as the title, and as tall as its own
+     * sentences. */
     <div
       role="status"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-3)',
-        padding: 'var(--space-12) var(--space-6)',
-        textAlign: 'center',
+        display: 'grid',
+        gap: 'var(--space-2)',
+        padding: 'var(--space-5)',
         border: '1px dashed var(--line-default)',
         borderRadius: 'var(--radius-md)',
         background: 'var(--surface-sunken)',
+        alignSelf: 'start',
       }}
     >
-      <span aria-hidden="true" style={{ fontSize: '1.4rem', color: tone }}>
-        {glyph}
-      </span>
-      <div style={{ fontWeight: 'var(--weight-semibold)' }}>{title}</div>
-      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-tertiary)', maxWidth: '46ch' }}>{body}</div>
-      {action}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+        <span aria-hidden="true" style={{ color: tone, flexShrink: 0 }}>
+          {glyph}
+        </span>
+        <span style={{ fontWeight: 'var(--weight-semibold)' }}>{title}</span>
+      </div>
+      <div
+        style={{
+          fontSize: 'var(--text-sm)',
+          color: 'var(--ink-tertiary)',
+          maxWidth: 'var(--measure)',
+          paddingLeft: 'calc(1ch + var(--space-3))',
+        }}
+      >
+        {body}
+      </div>
+      {action ? <div style={{ paddingLeft: 'calc(1ch + var(--space-3))' }}>{action}</div> : null}
     </div>
   );
 }

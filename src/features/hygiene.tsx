@@ -48,11 +48,13 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  PageHeader,
   StateBadge,
   StatCard,
   UnavailableState,
 } from '@shared/ui/primitives';
+import {
+  PageIntro,
+} from '@shared/ui/product';
 
 /** How often the page re-reads. Matches the alert queue's cadence. */
 const HYGIENE_POLL_MS = 10_000;
@@ -190,9 +192,10 @@ export function StaffHygienePage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Compliance"
         title="Staff Hygiene"
-        description="What each camera observed, per subject. A covering that could not be seen is reported as not visible — never as missing, because nobody may be accused of something nobody could see."
+        standfirst="What each camera observed, per subject. A covering that could not be seen is reported as not visible — never as missing, because nobody may be accused of something nobody could see."
         meta={
           page.available ? (
             <>

@@ -222,3 +222,290 @@ a:hover { text-decoration: underline; }
   gap: var(--space-5) var(--space-8);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE SPINE
+
+   The product's identity mark, and the answer to the Stage 5 critique's first
+   finding: nineteen pages composed as a column of stacked bands, each one
+   enclosed, none of them leading.
+
+   A page is instead one continuous reading. A hairline runs down the left of
+   the content, every section boundary ties to it with a tick, and the section
+   label sits out in the margin beside the tick rather than inline above the
+   content. That single device does three things a card cannot: it says the
+   regions belong to one document, it puts the labels where the eye scans for
+   structure instead of in the content's own column, and it gives the page an
+   axis — which is what makes an instrument read as an instrument.
+
+   It is drawn with `border-left` on a wrapper and `::before` on each mark, so
+   it costs one element and no images.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-spine {
+  position: relative;
+  /* Below the breakpoint there is no spine and no margin to give away, so the
+     content takes the same inset as the other three sides. */
+  padding-left: var(--space-6);
+}
+
+@media (min-width: 62rem) {
+  .uwv-spine {
+    padding-left: calc(var(--spine-gutter) + var(--space-4));
+    /* `--line-default`, not `--line-subtle`. Subtle is tuned to separate two
+       adjacent surfaces; the spine is drawn on a single surface with nothing
+       behind it, and at 1.06:1 on the light theme's reading plane it was not
+       there at all. */
+    border-left: 1px solid var(--line-default);
+  }
+  /* The tick that ties a section boundary to the spine. Drawn from the mark
+     back to the line, so the eye reads "this belongs to that axis". */
+  .uwv-spine-mark::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * (var(--spine-gutter) + var(--space-4)) - 1px);
+    top: 0.55em;
+    width: var(--spine-gutter);
+    height: 1px;
+    background: var(--line-default);
+  }
+  .uwv-spine-mark[data-lead='true']::before {
+    background: var(--accent);
+    height: 2px;
+  }
+}
+.uwv-spine-mark { position: relative; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   ENTRANCE CHOREOGRAPHY
+
+   One movement per page, not one animation per component. Regions arrive in
+   document order, 45ms apart, rising 6px over 260ms. It stops after six
+   regions: a stagger that keeps counting is a page that keeps moving, and an
+   operator who watches this screen for eight hours must never be waiting for it
+   to finish.
+
+   The whole thing is neutralised by the reduced-motion block above — these
+   rules sit after it deliberately, so its `!important` durations still win, and
+   `animation-fill-mode: both` means a region whose animation is reduced to
+   0.01ms still ends in its final state rather than at opacity 0.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@keyframes uwv-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.uwv-arrive {
+  animation: uwv-arrive var(--motion-slow) var(--ease-entrance) both;
+}
+.uwv-arrive[data-order='1'] { animation-delay: calc(1 * var(--stagger)); }
+.uwv-arrive[data-order='2'] { animation-delay: calc(2 * var(--stagger)); }
+.uwv-arrive[data-order='3'] { animation-delay: calc(3 * var(--stagger)); }
+.uwv-arrive[data-order='4'] { animation-delay: calc(4 * var(--stagger)); }
+.uwv-arrive[data-order='5'] { animation-delay: calc(5 * var(--stagger)); }
+.uwv-arrive[data-order='6'] { animation-delay: calc(6 * var(--stagger)); }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE CAMERA REGISTER
+
+   A tile is a viewfinder, not a card. Four corner ticks are drawn inside the
+   picture area, and they carry the tile's state: they are lit in the accent
+   when frames are genuinely arriving and unlit otherwise. This is the one
+   place in the product where a visual effect is allowed to look technical,
+   because the object actually is one.
+
+   The hatch is the other half of the same idea. A channel that is producing no
+   picture gets a fine diagonal ruling over the video ground, so that "there is
+   no feed" cannot be read as "the feed is of a dark room" — the exact
+   distinction the wall's own copy makes about channel 7 being black. Black
+   means signal; hatched means none.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-viewfinder { position: relative; }
+.uwv-viewfinder::before,
+.uwv-viewfinder::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  /* Above the chrome scrim. A positioned child paints over its parent's
+     pseudo-elements by default, so without this the top-left tick disappeared
+     under the metadata gradient and only the bottom-right one rendered. */
+  z-index: 2;
+  border-color: var(--line-strong);
+  transition: border-color var(--motion-base) var(--ease-out);
+}
+.uwv-viewfinder::before {
+  top: 6px; left: 6px;
+  border-top: 1px solid; border-left: 1px solid;
+}
+.uwv-viewfinder::after {
+  bottom: 6px; right: 6px;
+  border-bottom: 1px solid; border-right: 1px solid;
+}
+.uwv-viewfinder[data-lit='true']::before,
+.uwv-viewfinder[data-lit='true']::after { border-color: var(--accent); }
+
+.uwv-nosignal {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--hatch-line) 0 1px,
+    transparent 1px 9px
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   COMPOSITION, continued
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* A plane, not an object. Used for a region that is a surface the content sits
+   on — a wall, a ledger, a report body — where a card would say "this is one
+   item among several equal items" and be wrong. */
+.uwv-plane {
+  background: var(--surface-panel);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* The terminal strip: a region that closes a page rather than continuing it.
+   Recessed instead of raised, because the last thing on a page should settle
+   rather than compete. */
+.uwv-terminal {
+  background: var(--surface-sunken);
+  border-top: 1px solid var(--line-subtle);
+}
+
+/* A field of tiles sized so footage stays legible without any one tile
+   claiming the whole row. Tighter than `uwv-tiles-wide`, which put two
+   580px-wide tiles on a 1440px screen and left a hole where the third should
+   have been. */
+.uwv-wall {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+
+/* Figures that stay together. `uwv-figures` uses auto-fit, which stretches
+   three items across 1140px and leaves 390px between them; this packs to the
+   left and lets the row end where the figures end. */
+.uwv-figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-10);
+}
+.uwv-figure-row > * { flex: 0 1 auto; min-width: 0; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE SIGN-IN COMPOSITION
+
+   Two panels: the product's statement on the canvas, the form on a raised
+   surface beside it. Below the shell breakpoint the statement is removed
+   entirely rather than stacked — a person signing in on a phone in a kitchen
+   wants the form, and a manifesto they have to scroll past is worse than no
+   manifesto. `display: none` rather than visual hiding, so it costs nothing in
+   the accessibility tree either.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--ground);
+}
+.uwv-auth-statement { display: none; }
+.uwv-auth-form {
+  display: grid;
+  place-items: center;
+  padding: var(--space-8) var(--space-6);
+  background: var(--surface-base);
+}
+.uwv-auth-compact-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+.uwv-auth-wide-title { display: none; }
+
+@media (min-width: 62rem) {
+  .uwv-auth { grid-template-columns: minmax(0, 1.15fr) minmax(26rem, 0.85fr); }
+  .uwv-auth-statement {
+    /* Fills the column and centres its own content, rather than being a
+       centred box. A centred box let the panel's gradient end mid-screen and
+       painted two hard bands of --ground above and below it. */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--space-16) var(--space-12);
+    background: var(--atmosphere);
+    min-width: 0;
+  }
+  .uwv-auth-form {
+    background: var(--surface-raised);
+    border-left: 1px solid var(--line-default);
+    justify-items: start;
+    padding: var(--space-16) var(--space-12);
+  }
+  .uwv-auth-compact-mark { display: none; }
+  .uwv-auth-wide-title { display: block; }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE ENGINEERING REGISTER
+
+   Stage 3 gave the engineering area its own ground and its own topbar mark, and
+   Stage 5's critique found that this was *all* it had: the same page template
+   on a darker fill. A register is carried by type and density, not by a
+   background.
+
+   So on an engineering surface every heading is set in the data face rather
+   than the text face, and the rhythm tightens. The palette does not change by a
+   single value — that rule is not negotiable, because an engineer reading
+   `not_visible` must see exactly the colour an operator sees. What changes is
+   the voice: product pages speak in the text register, this one speaks in the
+   register of the thing it is describing.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-engineering h3,
+.uwv-engineering h4 {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  font-weight: var(--weight-medium);
+}
+
+/* Numerals in an engineering table are compared column-wise, always. */
+.uwv-engineering table,
+.uwv-engineering [data-figure] {
+  font-variant-numeric: tabular-nums;
+}
+
+.uwv-engineering-shell {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.uwv-engineering-contents { min-width: 0; }
+
+@media (min-width: 72rem) {
+  .uwv-engineering-shell {
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+  .uwv-engineering-contents {
+    position: sticky;
+    /* Clears the sticky topbar, plus a little air. */
+    top: calc(var(--topbar-height) + var(--space-4));
+  }
+}
+
+
+/* The attention panel's aside becomes a column only when there is room for one.
+   Below this width it follows the statement, which is the correct reading order
+   anyway: the queue is what the headline is a summary of. */
+@media (min-width: 62rem) {
+  .uwv-attention { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}

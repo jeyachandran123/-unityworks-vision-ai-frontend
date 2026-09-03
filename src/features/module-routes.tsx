@@ -40,6 +40,7 @@ export function PeopleCountingPage() {
     <ModulePage
       query={query}
       fallbackTitle="People Counting"
+      area="Intelligence"
       loadingLabel="Loading people counting"
       description="Entries and exits per zone, with the coverage each figure was computed from — because a count without one cannot be read."
     >
@@ -81,6 +82,7 @@ export function DemographyPage() {
     <ModulePage
       query={query}
       fallbackTitle="Demography"
+      area="Intelligence"
       loadingLabel="Loading demography"
       description="Aggregate category counts per zone and time bucket. Never per person — the schema has no column that could hold one."
     >
@@ -133,6 +135,7 @@ export function TableOccupancyPage() {
     <ModulePage
       query={query}
       fallbackTitle="Table Occupancy"
+      area="Intelligence"
       loadingLabel="Loading table occupancy"
       description="Each table's state over time, and the turnover derived from it. A table nobody could see is reported as such, never as vacant."
     >
@@ -219,6 +222,7 @@ export function CuttingBoardPage() {
     <ModulePage
       query={query}
       fallbackTitle="Cutting Board Compliance"
+      area="Compliance"
       loadingLabel="Loading board compliance"
       description="Board colour against the ingredient being prepared, judged by the site's own colour scheme — not by one this system picked."
     >
@@ -276,6 +280,7 @@ export function MealDetectionPage() {
     <ModulePage
       query={query}
       fallbackTitle="Meal Detection"
+      area="Intelligence"
       loadingLabel="Loading meal detection"
       description="Dishes recognised at the pass, held separately from what the till says was sold. The difference between the two is the whole point."
     >
@@ -339,6 +344,7 @@ export function PosIntegrationPage() {
     <ModulePage
       query={query}
       fallbackTitle="POS / ERP Integration"
+      area="Platform"
       loadingLabel="Loading integrations"
       description="The seam between this system and a till. Underlies meal-detection reconciliation and any future order or table sync."
     >

@@ -58,11 +58,13 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  PageHeader,
   SeverityBadge,
   Spinner,
   StatusBadge,
 } from '@shared/ui/primitives';
+import {
+  PageIntro,
+} from '@shared/ui/product';
 
 /** How often the queue is re-read. Matches the camera wall's cadence. */
 const ALERT_POLL_MS = 5000;
@@ -526,9 +528,10 @@ export function AlertsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Operations"
         title="Alerts"
-        description="Open compliance violations, most urgent first. An alert is raised only when a covering was positively observed to be missing — never when a camera could not see."
+        standfirst="Open compliance violations, most urgent first. An alert is raised only when a covering was positively observed to be missing — never when a camera could not see."
         meta={
           <StatusBadge tone={active > 0 ? 'offline' : 'online'}>
             {active} active

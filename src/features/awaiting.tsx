@@ -30,14 +30,17 @@ import type { ModuleCapability } from '@shared/api/capabilities';
 import { isApiError } from '@shared/api/errors';
 import {
   Badge,
-  Card,
   ErrorState,
   LoadingState,
-  PageHeader,
   StatCard,
   StatusBadge,
   UnavailableState,
 } from '@shared/ui/primitives';
+import {
+  PageIntro,
+  Region,
+  SectionRule,
+} from '@shared/ui/product';
 
 /**
  * Marks a module by *why* it is unavailable, which is not the same for all of
@@ -125,6 +128,7 @@ export function ModulePage<T extends ModuleCapability>({
   fallbackTitle,
   description,
   loadingLabel,
+  area,
   children,
 }: {
   query: UseQueryResult<T>;
@@ -132,13 +136,22 @@ export function ModulePage<T extends ModuleCapability>({
   fallbackTitle: string;
   description: string;
   loadingLabel: string;
+  /**
+   * The navigation area this module belongs to, for the opening's eyebrow.
+   *
+   * Passed rather than derived. Deriving it would mean this shared shell
+   * reading the routing table, and every one of these modules already knows
+   * which area it sits in — four of them are Intelligence and one is Platform,
+   * and that is a fact about the product, not about the URL.
+   */
+  area: string;
   /** Anything specific to this module, rendered below the checklist. */
   children?: (capability: T) => ReactNode;
 }) {
   if (query.isPending) {
     return (
       <>
-        <PageHeader title={fallbackTitle} description={description} />
+        <PageIntro eyebrow={area} title={fallbackTitle} standfirst={description} />
         <LoadingState label={loadingLabel} />
       </>
     );
@@ -147,7 +160,7 @@ export function ModulePage<T extends ModuleCapability>({
   if (query.isError) {
     return (
       <>
-        <PageHeader title={fallbackTitle} description={description} />
+        <PageIntro eyebrow={area} title={fallbackTitle} standfirst={description} />
         <ErrorState
           body={
             isApiError(query.error)
@@ -165,23 +178,17 @@ export function ModulePage<T extends ModuleCapability>({
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow={area}
         title={capability.title}
-        description={description}
+        standfirst={description}
         meta={<CapabilityBadge state={capability.state} />}
       />
 
       {/* The reason, in the backend's words, before anything else on the page. */}
       <UnavailableState title={`${capability.title} is not connected`} body={capability.reason} />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))',
-          gap: 'var(--space-4)',
-          margin: 'var(--space-6) 0',
-        }}
-      >
+      <div className="uwv-plane uwv-figure-row" style={{ padding: 'var(--space-5)', margin: 'var(--space-6) 0' }}>
         {/* Deliberately `null`. The module has zero rows, and rendering that as
             a `0` would put a number on a page whose whole point is that it has
             none — the same reason the dashboard shows `—` rather than a count
@@ -202,54 +209,26 @@ export function ModulePage<T extends ModuleCapability>({
         />
       </div>
 
-      <Card>
-        <h2 style={{ fontSize: 'var(--text-md)' }}>What this is for</h2>
-        <p
-          style={{
-            fontSize: 'var(--text-sm)',
-            color: 'var(--ink-secondary)',
-            maxWidth: '68ch',
-            marginTop: 'var(--space-2)',
-          }}
-        >
-          {capability.purpose}
-        </p>
-      </Card>
+      <SectionRule order={3} label="What this is for" detail={capability.purpose} />
 
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        <Card>
-          <h2 style={{ fontSize: 'var(--text-md)' }}>What it is waiting for</h2>
-          <p
-            style={{
-              fontSize: 'var(--text-sm)',
-              color: 'var(--ink-secondary)',
-              maxWidth: '68ch',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            Each of these is a real-world input, not a task on a board. Until they
-            exist there is nothing to show, and this page will not invent it.
-          </p>
-          <AwaitingList requirements={capability.awaiting} />
-        </Card>
-      </div>
+      <SectionRule
+        lead
+        order={4}
+        label="What it is waiting for"
+        detail="Each of these is a real-world input, not a task on a board. Until they exist there is nothing to show, and this page will not invent it."
+      />
+      <Region order={4} style={{ marginBottom: 'var(--space-10)' }}>
+        <AwaitingList requirements={capability.awaiting} />
+      </Region>
 
-      {children ? <div style={{ marginTop: 'var(--space-6)' }}>{children(capability)}</div> : null}
+      {children ? <div style={{ marginBottom: 'var(--space-10)' }}>{children(capability)}</div> : null}
 
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        <Card>
-          <h2 style={{ fontSize: 'var(--text-md)' }}>Storage</h2>
-          <p
-            style={{
-              fontSize: 'var(--text-sm)',
-              color: 'var(--ink-secondary)',
-              maxWidth: '68ch',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            The tables exist and are empty. Connecting a source is a binding, not
-            a schema change.
-          </p>
+      <SectionRule
+        order={5}
+        label="Storage"
+        detail="The tables exist and are empty. Connecting a source is a binding, not a schema change."
+      />
+      <Region order={5}>
           <ul
             style={{
               display: 'flex',
@@ -265,8 +244,7 @@ export function ModulePage<T extends ModuleCapability>({
               </li>
             ))}
           </ul>
-        </Card>
-      </div>
+      </Region>
     </>
   );
 }

@@ -35,18 +35,22 @@ import { PermissionGate } from '@app/permissions/guards';
 import {
   Badge,
   Button,
-  Card,
   type Column,
   DataTable,
   EmptyState,
   ErrorState,
   Input,
   LoadingState,
-  PageHeader,
   SectionHeader,
-  StatCard,
   StatusBadge,
 } from '@shared/ui/primitives';
+import {
+  Figure,
+  PageIntro,
+  Plane,
+  Region,
+  SectionRule,
+} from '@shared/ui/product';
 
 function Failed({ error }: { error: unknown }) {
   return (
@@ -179,42 +183,56 @@ export function AdministrationPage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Platform"
         title="Administration"
-        description="Sites, zones and accounts. Renaming a site changes how every incident attributed to it reads afterwards, so each change here is recorded in the audit trail."
+        standfirst="Sites, zones and accounts. Renaming a site changes how every incident attributed to it reads afterwards, so each change here is recorded in the audit trail."
       />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
-          gap: 'var(--space-4)',
-          marginBottom: 'var(--space-6)',
-        }}
-      >
-        <StatCard label="Sites" value={sites.length} detail="Restaurants in this organisation" />
-        <StatCard
-          label="Zones"
-          value={zones.isSuccess ? zones.data.count : null}
-          unavailableReason={zones.isError ? 'Zones could not be read' : 'Loading'}
-          detail="Named areas across every site"
-        />
-        <StatCard
-          label="Accounts"
-          value={users.isSuccess ? users.data.count : null}
-          unavailableReason={
-            users.isError ? 'Your account does not read users' : 'Loading'
-          }
-          detail="People who can sign in"
-        />
-      </div>
+      {/* Three counts, on one plane, at three weights.
+
+          This was the product's clearest example of the pattern Stage 5 set out
+          to remove: three `StatCard`s in an equal auto-fit grid, each in its own
+          bordered box, each the same size, saying that sites, zones and accounts
+          are three equally important things. They are not. An administrator
+          arriving here is looking at an organisation's shape, and the shape
+          starts with how many sites there are — the other two are counted
+          *within* it. The composition now says so, and it costs three boxes
+          fewer. */}
+      <SectionRule
+        lead
+        order={2}
+        label="This organisation"
+        detail="What exists to be administered. Every change made below is recorded in the audit trail."
+      />
+      <Region order={2} style={{ marginBottom: 'var(--space-10)' }}>
+        <Plane className="uwv-figure-row" style={{ alignSelf: 'start' }}>
+          <Figure label="Sites" scale="hero" value={sites.length} detail="Restaurants in this organisation" />
+          <Figure
+            label="Zones"
+            scale="quiet"
+            value={zones.isSuccess ? zones.data.count : null}
+            unavailableReason={zones.isError ? 'Zones could not be read' : 'Loading'}
+            detail="Named areas across every site"
+          />
+          <Figure
+            label="Accounts"
+            scale="quiet"
+            value={users.isSuccess ? users.data.count : null}
+            unavailableReason={users.isError ? 'Your account does not read users' : 'Loading'}
+            detail="People who can sign in"
+          />
+        </Plane>
+      </Region>
 
       {/* ── Sites ── */}
-      <Card>
-        <SectionHeader
-          title="Sites"
-          description="A site maps to a Vision OS location. Its handle is fixed once created, because other records are formed from it."
-        />
+      <SectionRule
+        order={3}
+        label="Sites"
+        detail="A site maps to a Vision OS location. Its handle is fixed once created, because other records are formed from it."
+      />
+      <Region order={3} style={{ marginBottom: 'var(--space-10)' }}>
+        <Plane padded={false} style={{ overflow: 'hidden' }}>
         <DataTable
           columns={siteColumns}
           rows={sites}
@@ -227,6 +245,7 @@ export function AdministrationPage() {
             />
           }
         />
+        </Plane>
 
         <PermissionGate permission={PERMISSIONS.manageOrganization}>
           <div style={{ marginTop: 'var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
@@ -252,15 +271,16 @@ export function AdministrationPage() {
             {createSite.isError ? <Failed error={createSite.error} /> : null}
           </div>
         </PermissionGate>
-      </Card>
+      </Region>
 
       {/* ── Zones ── */}
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        <Card>
-          <SectionHeader
-            title="Zones"
-            description="A named area within a site — a prep line, a wash station. Zones are what let a report say where something happened without naming a camera."
-          />
+      <SectionRule
+        order={4}
+        label="Zones"
+        detail="A named area within a site — a prep line, a wash station. Zones are what let a report say where something happened without naming a camera."
+      />
+      <Region order={4} style={{ marginBottom: 'var(--space-10)' }}>
+        <div>
           {zones.isPending ? (
             <LoadingState label="Loading zones" />
           ) : zones.isError ? (
@@ -358,16 +378,17 @@ export function AdministrationPage() {
               )}
             </div>
           </PermissionGate>
-        </Card>
-      </div>
+        </div>
+      </Region>
 
       {/* ── Accounts ── */}
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        <Card>
-          <SectionHeader
-            title="Accounts"
-            description="Who can sign in, and what each account may reach. Roles are assigned directly for now."
-          />
+      <SectionRule
+        order={5}
+        label="Accounts"
+        detail="Who can sign in, and what each account may reach. Roles are assigned directly for now."
+      />
+      <Region order={5}>
+        <div>
           {users.isPending ? (
             <LoadingState label="Loading accounts" />
           ) : users.isError ? (
@@ -398,8 +419,8 @@ export function AdministrationPage() {
               ) : null}
             </>
           )}
-        </Card>
-      </div>
+        </div>
+      </Region>
     </>
   );
 }

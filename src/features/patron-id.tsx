@@ -35,10 +35,12 @@ import {
   Card,
   ErrorState,
   LoadingState,
-  PageHeader,
   StatusBadge,
   UnavailableState,
 } from '@shared/ui/primitives';
+import {
+  PageIntro,
+} from '@shared/ui/product';
 import { AwaitingList } from './awaiting';
 
 export function PatronIdPage() {
@@ -54,7 +56,7 @@ export function PatronIdPage() {
   if (query.isPending) {
     return (
       <>
-        <PageHeader title="Unique Patron ID" description={description} />
+        <PageIntro eyebrow="Platform" title="Unique Patron ID" standfirst={description} />
         <LoadingState label="Loading patron identification" />
       </>
     );
@@ -63,7 +65,7 @@ export function PatronIdPage() {
   if (query.isError) {
     return (
       <>
-        <PageHeader title="Unique Patron ID" description={description} />
+        <PageIntro eyebrow="Platform" title="Unique Patron ID" standfirst={description} />
         <ErrorState
           body={
             isApiError(query.error)
@@ -81,9 +83,10 @@ export function PatronIdPage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Platform"
         title={capability.title}
-        description={description}
+        standfirst={description}
         meta={<StatusBadge tone="offline">blocked pending legal review</StatusBadge>}
       />
 

@@ -99,16 +99,13 @@ export function PageIntro({
   actions?: ReactNode;
 }) {
   return (
-    <header style={{ marginBottom: 'var(--space-8)' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 'var(--space-4)',
-        }}
-      >
+    <header
+      className="uwv-spine-mark uwv-arrive"
+      data-lead="true"
+      data-order="1"
+      style={{ marginBottom: 'var(--space-10)' }}
+    >
+      <div className="uwv-lead" style={{ alignItems: 'end' }}>
         <div style={{ minWidth: 0 }}>
           <Eyebrow>{eyebrow}</Eyebrow>
           <h1
@@ -116,78 +113,177 @@ export function PageIntro({
               fontSize: 'clamp(1.75rem, 1.1rem + 2.4vw, var(--text-4xl))',
               letterSpacing: 'var(--tracking-display)',
               fontWeight: 'var(--weight-semibold)',
-              marginTop: 'var(--space-2)',
+              marginTop: 'var(--space-3)',
             }}
           >
             {title}
           </h1>
+          {meta ? (
+            <div
+              style={{
+                marginTop: 'var(--space-5)',
+                display: 'flex',
+                gap: 'var(--space-2) var(--space-5)',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              {meta}
+            </div>
+          ) : null}
         </div>
-        {actions ? (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div>
+
+        {/* The standfirst sits beside the title, not beneath it.
+
+            Stage 5 found the same shape on all nineteen pages: a display
+            heading, four lines of prose at full measure, then the content —
+            with the entire right half of the opening empty. Moving the
+            standfirst into that empty half does three things at once. The
+            opening becomes an asymmetric composition rather than a stack, the
+            page's first real content arrives four lines higher, and the prose
+            gets the narrower measure it wanted anyway.
+
+            Below the `uwv-lead` breakpoint it returns underneath, which is the
+            correct reading order: the sentence explains the title. */}
+        {standfirst || actions ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 'var(--space-4)',
+              minWidth: 0,
+            }}
+          >
+            {standfirst ? (
+              <p
+                style={{
+                  maxWidth: 'var(--measure-tight)',
+                  color: 'var(--ink-secondary)',
+                  fontSize: 'var(--text-sm)',
+                  lineHeight: 'var(--leading-relaxed)',
+                  paddingBottom: 'var(--space-1)',
+                }}
+              >
+                {standfirst}
+              </p>
+            ) : null}
+            {actions ? (
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                {actions}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
-
-      {standfirst ? (
-        <p
-          style={{
-            marginTop: 'var(--space-4)',
-            maxWidth: 'var(--measure)',
-            color: 'var(--ink-secondary)',
-            fontSize: 'var(--text-md)',
-            lineHeight: 'var(--leading-relaxed)',
-          }}
-        >
-          {standfirst}
-        </p>
-      ) : null}
-
-      {meta ? (
-        <div
-          style={{
-            marginTop: 'var(--space-5)',
-            display: 'flex',
-            gap: 'var(--space-2) var(--space-5)',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
-          {meta}
-        </div>
-      ) : null}
     </header>
   );
 }
 
 /**
- * A section boundary that is a line and a label, not a box.
+ * One region of a page, and one beat of its entrance.
  *
- * The pattern it replaces is wrapping every region in a `Card`. Borders around
- * everything flatten a page: if each region is equally enclosed, each region is
- * equally important, and nothing leads. A rule with a label groups just as
- * clearly and costs no visual weight.
+ * `order` places the region in the arrival sequence, which runs 45ms apart and
+ * stops at six. It is passed rather than counted because a page's visual order
+ * is a design decision: the region that should arrive first is not always the
+ * one that happens to render first, and a hook that inferred it would be wrong
+ * exactly when it mattered.
  */
+export function Region({
+  order,
+  children,
+  style,
+}: {
+  order: 1 | 2 | 3 | 4 | 5 | 6;
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
+  return (
+    <section className="uwv-arrive" data-order={order} style={style}>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * A plane: a region that is a *ground content sits on*, not an object.
+ *
+ * `Card` was doing both jobs and could only say one thing. A wall of cameras, a
+ * ledger of incidents and the body of a report are not items in a list of equal
+ * items — they are surfaces. Enclosing them in a card said "here is one section
+ * among several", which is exactly the reading that flattened every page.
+ *
+ * So a plane lifts off `--surface-base` by a measured step and carries a subtle
+ * line, and nothing else. It never takes a shadow: a shadow claims the region
+ * is above the page, and a ground is not above anything.
+ */
+export function Plane({
+  children,
+  padded = true,
+  className,
+  style,
+}: {
+  children: ReactNode;
+  padded?: boolean;
+  /**
+   * A composition class to apply *with* the plane.
+   *
+   * A ground and a layout are separate decisions, and a plane that could only
+   * be a block would force every caller to nest a second div inside it to say
+   * how its contents are arranged. Composed rather than nested.
+   */
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      className={className ? `uwv-plane ${className}` : 'uwv-plane'}
+      style={{ padding: padded ? 'var(--space-5)' : 0, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function SectionRule({
   label,
   detail,
   actions,
+  lead = false,
+  order,
 }: {
   label: string;
   detail?: ReactNode;
   actions?: ReactNode;
+  /**
+   * Whether this section is the one the page is actually about.
+   *
+   * A page has one lead and the rest is context. Declaring it costs a boolean
+   * and buys the thing the Stage 5 critique found missing everywhere: a visible
+   * answer to "what matters most right now". The lead's tick is drawn in the
+   * accent at twice the weight and its label takes the accent too, so the axis
+   * itself says where the page's centre of gravity is before a word is read.
+   */
+  lead?: boolean;
+  /** Places this section in the page's arrival sequence. */
+  order?: 1 | 2 | 3 | 4 | 5 | 6;
 }) {
   return (
     <div
+      className={order ? 'uwv-spine-mark uwv-arrive' : 'uwv-spine-mark'}
+      data-lead={lead ? 'true' : undefined}
+      data-order={order}
       style={{
         display: 'flex',
         alignItems: 'baseline',
         gap: 'var(--space-4)',
-        borderTop: '1px solid var(--line-default)',
+        borderTop: `1px solid ${lead ? 'var(--line-default)' : 'var(--line-subtle)'}`,
         paddingTop: 'var(--space-4)',
         marginBottom: 'var(--space-5)',
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <Eyebrow>{label}</Eyebrow>
+        <Eyebrow tone={lead ? 'accent' : 'muted'}>{label}</Eyebrow>
         {detail ? (
           <p
             style={{
@@ -242,12 +338,27 @@ export function Attention({
   statement,
   detail,
   actions,
+  aside,
 }: {
   tone: AttentionTone;
   headline: string;
   statement: ReactNode;
   detail?: ReactNode;
   actions?: ReactNode;
+  /**
+   * What is behind the headline.
+   *
+   * The statement is deliberately held to 30ch — a sentence somebody reads
+   * across a room does not run the width of a monitor. That left the right two
+   * fifths of the panel empty, which Stage 5's critique read, correctly, as a
+   * region that had not decided what it was for. This slot is what belongs
+   * there: the queue the headline is a summary *of*, in rank order, each row a
+   * road into the thing itself.
+   *
+   * It is optional and it is never filled with anything invented. A caller with
+   * no list to show passes nothing and the panel composes as a single column.
+   */
+  aside?: ReactNode;
 }) {
   const spec = ATTENTION[tone];
 
@@ -256,15 +367,24 @@ export function Attention({
       // `region` with a name, so a screen reader user can jump straight to the
       // thing that needs attention rather than tabbing the whole page.
       aria-label="Primary attention"
+      // The split is a class rather than an inline `gridTemplateColumns`,
+      // because it has to stop being a split. Set inline it applied at every
+      // width, and on a 430px phone the queue was squeezed into 90px and
+      // truncated every incident summary it was there to show — the aside is
+      // context, and context that cannot be read is worse than context that
+      // follows the thing it explains.
+      className={aside ? 'uwv-attention' : undefined}
       style={{
         position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-4)',
-        padding: 'var(--space-6) var(--space-6) var(--space-6) var(--space-8)',
-        borderRadius: 'var(--radius-md)',
-        background: `linear-gradient(90deg, ${spec.wash} 0%, var(--surface-raised) 62%)`,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        alignItems: 'start',
+        gap: 'var(--space-6)',
+        padding: 'var(--space-8) var(--space-6) var(--space-8) var(--space-8)',
+        borderRadius: 'var(--radius-lg)',
+        background: `linear-gradient(100deg, ${spec.wash} 0%, var(--surface-raised) 58%)`,
         border: '1px solid var(--line-subtle)',
+        boxShadow: 'var(--shadow-md)',
         overflow: 'hidden',
       }}
     >
@@ -275,6 +395,7 @@ export function Attention({
         style={{ position: 'absolute', insetBlock: 0, insetInlineStart: 0, width: 3, background: spec.color }}
       />
 
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
         <span aria-hidden="true" style={{ color: spec.color, fontSize: 'var(--text-sm)' }}>
           {spec.glyph}
@@ -293,13 +414,17 @@ export function Attention({
         </span>
       </div>
 
+      {/* The one place on a page where type is allowed to reach display
+          scale below the title. It is the answer to "what matters most right
+          now", and it should be readable from further away than anything else
+          on the screen. */}
       <div
         style={{
-          fontSize: 'clamp(1.35rem, 1rem + 1.4vw, var(--text-2xl))',
-          lineHeight: 'var(--leading-tight)',
-          letterSpacing: 'var(--tracking-tight)',
+          fontSize: 'clamp(1.5rem, 1rem + 1.9vw, var(--text-3xl))',
+          lineHeight: 1.16,
+          letterSpacing: 'var(--tracking-display)',
           fontWeight: 'var(--weight-semibold)',
-          maxWidth: '30ch',
+          maxWidth: '26ch',
           textWrap: 'balance',
         }}
       >
@@ -313,6 +438,9 @@ export function Attention({
       ) : null}
 
       {actions ? <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div> : null}
+      </div>
+
+      {aside ? <div style={{ minWidth: 0 }}>{aside}</div> : null}
     </section>
   );
 }
@@ -496,6 +624,7 @@ export function CameraSurface({
   onSelect,
   actions,
   label,
+  signal = 'none',
 }: {
   name: string;
   identifier: string;
@@ -508,6 +637,21 @@ export function CameraSurface({
   selected?: boolean;
   onSelect?: () => void;
   actions?: ReactNode;
+  /**
+   * Whether a picture is actually arriving in this tile.
+   *
+   *   'live'    frames are arriving now. The viewfinder ticks light.
+   *   'dark'    a session exists and the picture is legitimately black — an
+   *             unlit store cupboard is a picture, and must look like one.
+   *   'none'    there is no feed at all. The picture area is ruled with a fine
+   *             diagonal hatch.
+   *
+   * The last two are the distinction the wall's own copy makes about channel 7
+   * being black, and before this they rendered identically: two black
+   * rectangles with a grey word in the middle. Black now means signal, and
+   * hatched means none.
+   */
+  signal?: 'live' | 'dark' | 'none';
   /**
    * The accessible name when the tile is a control.
    *
@@ -522,6 +666,8 @@ export function CameraSurface({
   const body = (
     <>
       <div
+        className={signal === 'none' ? 'uwv-viewfinder uwv-nosignal' : 'uwv-viewfinder'}
+        data-lit={signal === 'live' ? 'true' : 'false'}
         style={{
           position: 'relative',
           aspectRatio: '16 / 9',
@@ -629,7 +775,10 @@ export function CameraSurface({
     // wall of sixteen needs the choice legible from across a room, and a 1px
     // border change is not.
     boxShadow: selected ? '0 0 0 1px var(--accent) inset' : 'none',
-    borderRadius: 'var(--radius-md)',
+    // Tighter than a card's radius. A monitor bezel is nearly square, and the
+    // 12px corner the tile used to carry was the single strongest cue that this
+    // was a panel in a web application rather than a picture from a recorder.
+    borderRadius: 'var(--radius-sm)',
     overflow: 'hidden',
     padding: 0,
     cursor: interactive ? 'pointer' : 'default',
@@ -744,6 +893,15 @@ export function AbsentRegion({
         display: 'grid',
         gap: 'var(--space-3)',
         alignContent: 'start',
+        // Never taller than what it says.
+        //
+        // Stage 5 measured the consequence of leaving this out: dropped into a
+        // stretched grid track, the two "not enabled" panels on the Command
+        // Center grew to 200px each and became the largest objects on the page
+        // — a dashboard whose dominant visual mass was two notices that nothing
+        // was happening. An explanation of an absence is a caption, not a
+        // region, and it should occupy what a caption occupies.
+        alignSelf: 'start',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -798,6 +956,33 @@ export function Meter({
           —
         </span>
         {emptyNote}
+      </div>
+    );
+  }
+
+  /**
+   * A denominator with nothing under it.
+   *
+   * Stage 5's browser pass caught this on the camera wall: three channels, all
+   * of them offline or disabled on screen, and a meter beneath them reading
+   * `Live 0 · Connecting 0 · Reconnecting 0 · Offline 0 · Error 0 · Disabled 0`
+   * over a total of three. The server had not reported a per-state breakdown at
+   * all, and the component drew an empty track — which is exactly the reading
+   * the four-state rule exists to prevent, because an empty track and an
+   * all-clear track are the same picture.
+   *
+   * A total that no segment accounts for is not a proportion. It is a missing
+   * breakdown, and it says so.
+   */
+  const accounted = segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
+  if (accounted <= 0) {
+    return (
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)', maxWidth: 'var(--measure)' }}>
+        <span aria-hidden="true" style={{ marginRight: 'var(--space-2)' }}>
+          —
+        </span>
+        {total} in total, but no breakdown was reported for them. The proportion is
+        unknown rather than zero, so none is drawn.
       </div>
     );
   }
@@ -1155,12 +1340,31 @@ export function SeverityMark({ severity }: { severity: Severity }) {
  * cannot be mistaken for an operations screen with the chrome cropped off —
  * which is the stated reason `UI_UX_ARCHITECTURE.md` §3 asked for it.
  */
-export function EngineeringSurface({ children }: { children: ReactNode }) {
-  return (
+export function EngineeringSurface({
+  children,
+  contents,
+}: {
+  children: ReactNode;
+  /**
+   * An index of the surface's own sections.
+   *
+   * Stage 5 measured this page at 6,776px with no way to move inside it: ten
+   * runs, four comparison sets, a dataset table, a configuration dump and an
+   * artifact listing, all stacked, all reached by scrolling. An engineering
+   * surface is allowed to be long — density is correct here — but a long
+   * document without a contents page is a document nobody reads twice.
+   *
+   * Rendered sticky beside the content at wide widths, and inline above it
+   * below the shell breakpoint. Optional: a short surface passes nothing.
+   */
+  contents?: ReactNode;
+}) {
+  const body = (
     <div
       data-register="engineering"
+      className="uwv-engineering"
       style={{
-        background: 'var(--surface-engineering)',
+        background: 'var(--surface-engineering-panel)',
         border: '1px solid var(--engineering-line)',
         borderRadius: 'var(--radius-md)',
         padding: 'var(--space-5)',
@@ -1210,6 +1414,17 @@ export function EngineeringSurface({ children }: { children: ReactNode }) {
         </span>
       </div>
       {children}
+    </div>
+  );
+
+  if (!contents) return body;
+
+  return (
+    <div className="uwv-engineering-shell">
+      <nav aria-label="On this surface" className="uwv-engineering-contents">
+        {contents}
+      </nav>
+      {body}
     </div>
   );
 }

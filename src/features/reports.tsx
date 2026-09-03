@@ -166,11 +166,20 @@ export function ReportsPage() {
       ) : null}
 
       {catalogue.isSuccess ? (
+        <>
+        <SectionRule
+          lead
+          order={2}
+          label="Choose a report"
+          detail="Twelve types. The ones backed by records in this organisation are listed first; the rest are listed on purpose, because an omitted module reads as nothing to report."
+        />
         <div
+          className="uwv-arrive"
+          data-order="2"
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(15rem, 19rem) minmax(0, 1fr)',
-            gap: 'var(--space-5)',
+            gap: 'var(--space-6)',
             alignItems: 'start',
           }}
         >
@@ -227,6 +236,7 @@ export function ReportsPage() {
             )}
           </div>
         </div>
+        </>
       ) : null}
     </>
   );
@@ -270,6 +280,7 @@ function ReportPicker({
               report={report}
               active={report.id === selected}
               onSelect={onSelect}
+              awaiting
             />
           ))}
         </Group>
@@ -318,10 +329,22 @@ function PickerItem({
   report,
   active,
   onSelect,
+  awaiting = false,
 }: {
   report: ReportTypeSummary;
   active: boolean;
   onSelect: (id: string) => void;
+  /**
+   * Whether this report's module has no data source connected yet.
+   *
+   * Before Stage 5 the two halves of this list were set in the same size, the
+   * same weight and the same colour, and only a group heading told them apart
+   * — so a reader scanning the twelve entries saw twelve equivalent reports,
+   * six of which cannot produce anything. The marker is the same hollow ring
+   * the navigation uses for the same fact, which is what makes it legible
+   * without a legend.
+   */
+  awaiting?: boolean;
 }) {
   return (
     <li>
@@ -344,8 +367,30 @@ function PickerItem({
           gap: '2px',
         }}
       >
-        <span style={{ fontWeight: active ? 'var(--weight-medium)' : 'var(--weight-regular)' }}>
-          {report.title}
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            justifyContent: 'space-between',
+            fontWeight: active ? 'var(--weight-medium)' : 'var(--weight-regular)',
+          }}
+        >
+          <span style={{ minWidth: 0 }}>{report.title}</span>
+          {awaiting ? (
+            <span
+              aria-hidden="true"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-2xs)',
+                color: 'var(--ink-tertiary)',
+                flexShrink: 0,
+              }}
+            >
+              ◌
+            </span>
+          ) : null}
+          {awaiting ? <span className="sr-only">awaiting a data source</span> : null}
         </span>
         {/* Listed even when refused, and saying so. A menu that silently varied
             by account would leave an operator unable to tell "does not exist"
@@ -520,7 +565,27 @@ function ReportBody({
   const report = query.data;
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-5)', minWidth: 0 }}>
+    /* A report is an issued document, so it is given a document's surface.
+
+       Stage 5's critique found this page reading as "a form with an export
+       button": a picker, a control panel and a placeholder, all on the same
+       plane, with the report itself arriving as three more cards among them.
+       A compliance report is the artefact somebody defends an inspection with.
+       It now sits on a raised surface with a document's margins and a rule
+       under its masthead, so that the moment a report exists it looks like a
+       thing that was produced rather than a region that was filled. */
+    <article
+      style={{
+        display: 'grid',
+        gap: 'var(--space-6)',
+        minWidth: 0,
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--line-subtle)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        padding: 'var(--space-8) var(--space-8) var(--space-6)',
+      }}
+    >
       {/* Coverage first. A reader who meets the numbers before the caveat has
           already formed a conclusion. */}
       <CoveragePanel report={report} />
@@ -554,7 +619,7 @@ function ReportBody({
         exportedAs={exportedAs}
         complete={report.coverage.complete}
       />
-    </div>
+    </article>
   );
 }
 
@@ -584,8 +649,8 @@ function CoveragePanel({ report }: { report: Report }) {
       <div>
         <h2
           style={{
-            fontSize: 'var(--text-xl)',
-            letterSpacing: 'var(--tracking-tight)',
+            fontSize: 'var(--text-2xl)',
+            letterSpacing: 'var(--tracking-display)',
           }}
         >
           {report.title}

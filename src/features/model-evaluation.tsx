@@ -122,12 +122,27 @@ export function ModelEvaluationPage() {
         }
       />
 
-      <EngineeringSurface>
+      <EngineeringSurface
+        contents={
+          <Contents
+            entries={[
+              { id: 'overall', label: 'Overall' },
+              ...data.families.map((family) => ({ id: family.key, label: family.title })),
+              { id: 'comparisons', label: 'Comparisons' },
+              { id: 'datasets', label: 'Datasets' },
+              { id: 'configuration', label: 'Configuration' },
+              { id: 'artifacts', label: 'Artifacts' },
+            ]}
+          />
+        }
+      >
       <div style={{ display: 'grid', gap: 'var(--space-10)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
-        <NoHeadline reason={data.headline_reason} totals={data.totals} latest={data.latest_evaluation_at} />
+        <section id="overall">
+          <NoHeadline reason={data.headline_reason} totals={data.totals} latest={data.latest_evaluation_at} />
+        </section>
 
         {data.families.map((family) => (
-          <section key={family.key}>
+          <section key={family.key} id={family.key}>
             <SectionRule label={family.title} detail={family.description} />
 
             {!family.available ? (
@@ -149,17 +164,25 @@ export function ModelEvaluationPage() {
           </section>
         ))}
 
-        <ComparisonSection sets={data.comparison_sets} runs={runsById} />
+        <section id="comparisons">
+          <ComparisonSection sets={data.comparison_sets} runs={runsById} />
+        </section>
 
-        <DatasetSection coverages={data.datasets} />
+        <section id="datasets">
+          <DatasetSection coverages={data.datasets} />
+        </section>
 
-        <ConfigurationSection configuration={data.configuration} />
+        <section id="configuration">
+          <ConfigurationSection configuration={data.configuration} />
+        </section>
 
-        <ArtifactSection
-          listing={artifacts.data ?? null}
-          loading={artifacts.isPending}
-          failed={artifacts.isError}
-        />
+        <section id="artifacts">
+          <ArtifactSection
+            listing={artifacts.data ?? null}
+            loading={artifacts.isPending}
+            failed={artifacts.isError}
+          />
+        </section>
       </div>
       </EngineeringSurface>
     </>
@@ -184,6 +207,48 @@ function EvaluationIntro({ meta }: { meta?: React.ReactNode }) {
       standfirst='What the perception stack scores against human-annotated data. Every figure states its dataset, its split, the model it measured and what it means — because none of them is "model accuracy".'
       meta={meta}
     />
+  );
+}
+
+/**
+ * The contents of an engineering surface.
+ *
+ * Every entry addresses a section that actually exists on this page: the
+ * families come from the summary the backend returned, and the fixed five are
+ * the sections rendered unconditionally below. Nothing here is a placeholder
+ * for a section that might appear — a contents page that lies is worse than
+ * none.
+ *
+ * Plain anchors rather than scroll handlers: they work with the keyboard, they
+ * work with the back button, they survive JavaScript failing, and they move
+ * focus to the section they name, which a `scrollTo` does not.
+ */
+function Contents({ entries }: { entries: ReadonlyArray<{ id: string; label: string }> }) {
+  return (
+    <ul style={{ display: 'grid', gap: '1px' }}>
+      {entries.map((entry) => (
+        <li key={entry.id}>
+          <a
+            href={`#${entry.id}`}
+            className="uwv-quiet"
+            style={{
+              display: 'block',
+              padding: 'var(--space-2) var(--space-3)',
+              borderRadius: 'var(--radius-xs)',
+              borderLeft: '2px solid var(--engineering-line)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--text-2xs)',
+              letterSpacing: 'var(--tracking-wide)',
+              textTransform: 'uppercase',
+              color: 'var(--engineering-ink)',
+              textDecoration: 'none',
+            }}
+          >
+            {entry.label}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 

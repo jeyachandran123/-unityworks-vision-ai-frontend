@@ -66,7 +66,10 @@ import {
   Figure,
   FindingReadout,
   GoTo,
+  Meter,
   PageIntro,
+  Plane,
+  Region,
   SectionRule,
 } from '@shared/ui/product';
 import { attributeLabel, failedConditions } from '@shared/semantics/finding';
@@ -221,46 +224,95 @@ export function CamerasPage() {
         }
       />
 
-      <div className="uwv-figures" style={{ marginBottom: 'var(--space-8)' }}>
-        <Figure label="Registered" scale="hero" value={list.total} detail="Camera rows this tenant holds" />
-        <Figure
-          label="Enabled"
-          scale="lead"
-          value={list.enabled}
-          tone={list.enabled > 0 ? 'accent' : 'default'}
-          detail="Sessions the runtime starts"
-        />
-        <Figure
-          label="Not processed"
-          scale="lead"
-          value={dark}
-          detail="Registered and deliberately switched off"
-        />
-      </div>
+      {/* This page and the incident ledger were structurally identical before
+          Stage 5, and they ask opposite questions. An operator opens the ledger
+          to read a record, so there the record leads. An administrator opens
+          this page to find out how much of the estate is *actually processing*
+          — the count is the question, and the rows are how you act on the
+          answer. So the order here is genuinely reversed rather than
+          decoratively varied, and the meter carries the same proportion the
+          figures state, over the only denominator that means anything: the
+          number of cameras that exist. */}
+      <SectionRule
+        lead
+        order={2}
+        label="What a restart would restore"
+        detail="A disabled camera opens no connection and reaches no model. This is the difference between the estate on paper and the estate in service."
+      />
+      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
+        <div className="uwv-lead">
+          <Plane
+            className="uwv-figure-row"
+            style={{ alignSelf: 'start' }}
+          >
+            <Figure label="Registered" scale="hero" value={list.total} detail="Camera rows this tenant holds" />
+            <Figure
+              label="Enabled"
+              scale="lead"
+              value={list.enabled}
+              tone={list.enabled > 0 ? 'accent' : 'default'}
+              detail="Sessions the runtime starts"
+            />
+            <Figure
+              label="Not processed"
+              scale="lead"
+              value={dark}
+              detail="Registered and deliberately switched off"
+            />
+          </Plane>
+          {/* No meter here, deliberately.
+
+              A two-segment bar over the same three numbers stated beside it
+              would be a chart drawn because the column was empty, and the brief
+              for this stage is explicit that a visualisation has to answer a
+              question the figures do not. This one does not: "how much of the
+              estate is switched off" is already legible as `1 of 3`. What the
+              column is for is the consequence, which no figure states. */}
+          <p
+            style={{
+              alignSelf: 'start',
+              fontSize: 'var(--text-sm)',
+              color: 'var(--ink-secondary)',
+              lineHeight: 'var(--leading-relaxed)',
+              maxWidth: 'var(--measure)',
+            }}
+          >
+            A disabled camera opens no connection, decodes nothing and reaches no
+            model. An empty finding from one means <strong>nothing was observed</strong>,
+            not that nothing happened — which is why the two counts are kept apart
+            here rather than summarised into one.
+          </p>
+        </div>
+      </Region>
 
       <SectionRule
-        label="Configured cameras"
+        order={3}
+        label="The register"
         detail="Each row carries a credential reference, never a credential. The URI shown is redacted at the server. A camera key opens that camera's own page."
       />
 
-      <DataTable
-        columns={columns}
-        rows={list.cameras}
-        rowKey={(camera) => camera.camera_key}
-        caption="Cameras registered in this organisation, with their channel, stream and enabled state"
-        empty={
-          <EmptyState
-            title="No cameras registered"
-            body="Add a camera to begin. A new camera is created disabled — enabling it is a separate, audited decision."
+      <Region order={3}>
+        <Plane padded={false} style={{ overflow: 'hidden' }}>
+          <DataTable
+            columns={columns}
+            rows={list.cameras}
+            rowKey={(camera) => camera.camera_key}
+            caption="Cameras registered in this organisation, with their channel, stream and enabled state"
+            empty={
+              <EmptyState
+                title="No cameras registered"
+                body="Add a camera to begin. A new camera is created disabled — enabling it is a separate, audited decision."
+              />
+            }
           />
-        }
-      />
+        </Plane>
 
-      {toggle.isError ? (
-        <div style={{ marginTop: 'var(--space-4)' }}>
-          <Failed error={toggle.error} />
-        </div>
-      ) : null}
+        {toggle.isError ? (
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <Failed error={toggle.error} />
+          </div>
+        ) : null}
+      </Region>
 
       <RegisterCamera
         open={registering}
@@ -479,7 +531,7 @@ export function IncidentsPage() {
       <PageIntro
         eyebrow="Operations"
         title="Incidents"
-        standfirst="The ledger. Each incident freezes the finding that raised it, so it stays explicable after the rules change — and it closes only when a later observation clears it or an authorised person says why."
+        standfirst="The ledger. Each incident freezes the finding that raised it, so it stays explicable after the rules change."
         actions={
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             {STATUS_FILTERS.map((option) => (
@@ -496,52 +548,89 @@ export function IncidentsPage() {
         }
       />
 
-      {rows.length > 0 ? (
-        <div className="uwv-figures" style={{ marginBottom: 'var(--space-8)' }}>
-          <Figure
-            label="In this view"
-            scale="lead"
-            value={rows.length}
-            detail={filter === 'all' ? 'Every status' : `Status: ${filter}`}
-          />
-          <Figure
-            label="Critical"
-            scale="lead"
-            value={bySeverity('critical')}
-            tone={bySeverity('critical') > 0 ? 'critical' : 'default'}
-            detail="Highest severity in this view"
-          />
-          <Figure label="High" scale="lead" value={bySeverity('high')} detail="Next below critical" />
-          <Figure
-            label="With evidence"
-            scale="lead"
-            value={rows.filter((i) => i.evidence_refs.length > 0).length}
-            detail="Imagery was retained and can be produced"
-          />
-        </div>
-      ) : null}
+      {/* The ledger leads, and it leads on a plane.
 
+          Stage 5's critique put this page and the Cameras page side by side and
+          found them structurally identical: eyebrow, display title, standfirst,
+          a row of four equally-weighted figures, a rule, a table. Two pages
+          about entirely different things, composed the same way, because the
+          composition had not been decided — it had been inherited.
+
+          An incident ledger is a record being examined. So the record is the
+          first thing, it sits on its own ground, and the arithmetic about it
+          comes afterwards, where arithmetic belongs. */}
       <SectionRule
+        lead
+        order={2}
         label="The ledger"
         detail="Newest first, as the store returns them. A row opens at its own address; Inspect reads it here."
       />
-
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(incident) => incident.id}
-        caption="Incidents in this organisation, with severity, what happened, camera, time observed, status and evidence count"
-        empty={
-          <EmptyState
-            title={filter === 'all' ? 'No incidents recorded' : `No ${filter} incidents`}
-            body={
-              // The distinction the product exists to preserve. An empty queue
-              // is only good news if something was actually watching.
-              'Nothing is being suppressed. If no camera is enabled, an empty queue means nothing was observed rather than nothing happened — check the Cameras page.'
+      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
+        <Plane padded={false} style={{ overflow: 'hidden' }}>
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(incident) => incident.id}
+            caption="Incidents in this organisation, with severity, what happened, camera, time observed, status and evidence count"
+            empty={
+              <EmptyState
+                title={filter === 'all' ? 'No incidents recorded' : `No ${filter} incidents`}
+                body={
+                  // The distinction the product exists to preserve. An empty queue
+                  // is only good news if something was actually watching.
+                  'Nothing is being suppressed. If no camera is enabled, an empty queue means nothing was observed rather than nothing happened — check the Cameras page.'
+                }
+              />
             }
           />
-        }
-      />
+        </Plane>
+      </Region>
+
+      {rows.length > 0 ? (
+        <>
+          <SectionRule
+            order={3}
+            label="What is in this view"
+            detail="The severity spread of the rows above, over their own count — never over a total this filter is not showing."
+          />
+          <Region order={3}>
+            <div className="uwv-lead">
+              <Meter
+                caption={`Severity of the ${rows.length} incident(s) in this view`}
+                total={rows.length}
+                emptyNote="This filter selects no incident, so there is no spread to draw."
+                segments={SEVERITY_ORDER.map((level) => ({
+                  key: level,
+                  label: level,
+                  value: bySeverity(level),
+                  color: `var(--severity-${level})`,
+                }))}
+              />
+              <Plane
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-6)',
+                  alignContent: 'start',
+                  alignSelf: 'start',
+                }}
+              >
+                <Figure
+                  label="In this view"
+                  scale="hero"
+                  value={rows.length}
+                  detail={filter === 'all' ? 'Every status' : `Status: ${filter}`}
+                />
+                <Figure
+                  label="With evidence"
+                  scale="quiet"
+                  value={rows.filter((i) => i.evidence_refs.length > 0).length}
+                  detail="Imagery was retained and can be produced"
+                />
+              </Plane>
+            </div>
+          </Region>
+        </>
+      ) : null}
 
       <Drawer
         open={open !== null}
@@ -553,6 +642,15 @@ export function IncidentsPage() {
     </>
   );
 }
+
+/**
+ * Severity, most serious first.
+ *
+ * The same order `SeverityBadge` and the Command Center's rank use. Declared
+ * once here so the meter's segments cannot drift out of step with the badges in
+ * the rows immediately above it.
+ */
+const SEVERITY_ORDER: ReadonlyArray<Severity> = ['critical', 'high', 'medium', 'low', 'info'];
 
 /* ── one incident, at its own address ─────────────────────────────────────── */
 

@@ -66,7 +66,10 @@ import {
   LiveDot,
   Meter,
   PageIntro,
+  Plane,
+  Region,
   SectionRule,
+  SeverityMark,
   type AttentionTone,
 } from '@shared/ui/product';
 import { isApiError } from '@shared/api/errors';
@@ -149,7 +152,7 @@ export function DashboardPage() {
       <PageIntro
         eyebrow="Operations"
         title="Command Center"
-        standfirst="What needs attention, what is being watched, and what the perception stack is actually seeing. Every figure here carries the coverage behind it, because a count without one cannot be read."
+        standfirst="What needs attention, what is being watched, and what the perception stack is actually seeing. Every figure carries the coverage behind it."
         meta={
           <>
             <Badge mono>{data.tenant_id}</Badge>
@@ -160,15 +163,33 @@ export function DashboardPage() {
         }
       />
 
-      <AttentionRegion
-        canSee={canSeeIncidents}
-        failed={openIncidents.isError}
-        incidents={incidents}
+      {/* Movement 1 — the lead. The only region on this page that carries
+          display type, and the only one whose section marker is drawn in the
+          accent. A dashboard where four regions are equally weighted has not
+          decided what matters; this page has. */}
+      <SectionRule
+        lead
+        order={2}
+        label="Attention"
+        detail="What is open now, ranked by severity, with the most severe named."
+        actions={
+          canSeeIncidents ? (
+            <Link to="/incidents" style={{ textDecoration: 'none' }}>
+              <GoTo>The ledger</GoTo>
+            </Link>
+          ) : null
+        }
       />
-
-      <div style={{ marginTop: 'var(--space-8) ' }} />
+      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
+        <AttentionRegion
+          canSee={canSeeIncidents}
+          failed={openIncidents.isError}
+          incidents={incidents}
+        />
+      </Region>
 
       <SectionRule
+        order={3}
         label="Current environment"
         detail="Cameras the runtime holds a session for. A camera that is not producing frames says so — never a frozen last frame."
         actions={
@@ -179,11 +200,12 @@ export function DashboardPage() {
           ) : null
         }
       />
-      <Environment status={data} canSeeLive={canSeeLive} />
-
-      <div style={{ marginTop: 'var(--space-10)' }} />
+      <Region order={3} style={{ marginBottom: 'var(--space-12)' }}>
+        <Environment status={data} canSeeLive={canSeeLive} />
+      </Region>
 
       <SectionRule
+        order={4}
         label="What the system is seeing"
         detail="Every PPE attribute observed in the last hour, resolved to the four states the platform actually reports."
         actions={
@@ -194,16 +216,35 @@ export function DashboardPage() {
           ) : null
         }
       />
-      <Perception
-        canSee={canSeeObservations}
-        failed={observed.isError}
-        page={observed.isSuccess ? observed.data : null}
+      <Region order={4} style={{ marginBottom: 'var(--space-12)' }}>
+        <Perception
+          canSee={canSeeObservations}
+          failed={observed.isError}
+          page={observed.isSuccess ? observed.data : null}
+        />
+      </Region>
+
+      {/* The closing movement. Recessed rather than raised: the estate is the
+          page's footing, not its subject, and the last region on a page should
+          settle rather than compete with the first. */}
+      <SectionRule
+        order={5}
+        label="The estate"
+        detail="What a restart would restore, and what this build declines to report."
+        actions={
+          <Link to="/cameras" style={{ textDecoration: 'none' }}>
+            <GoTo>Camera register</GoTo>
+          </Link>
+        }
       />
-
-      <div style={{ marginTop: 'var(--space-10)' }} />
-
-      <SectionRule label="The estate" detail="What a restart would restore, and what this build declines to report." />
-      <Estate status={data} />
+      <Region order={5}>
+        <div
+          className="uwv-terminal"
+          style={{ padding: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}
+        >
+          <Estate status={data} />
+        </div>
+      </Region>
     </>
   );
 }
@@ -333,7 +374,92 @@ function AttentionRegion({
           </Link>
         </>
       }
+      aside={<Queue incidents={ordered} />}
     />
+  );
+}
+
+/**
+ * The queue behind the headline.
+ *
+ * Every row is a road. Before Stage 5 the Command Center's one exit was
+ * "inspect the most severe" — an operator who wanted the second-most severe
+ * had to leave for the ledger and find it again. These are the same incidents
+ * the headline is counting, in the same rank order, each one addressing its own
+ * page directly.
+ *
+ * Capped at four, because this is a summary of a queue and not the queue. When
+ * there are more, the last line says how many are not shown rather than
+ * quietly truncating — a list that hides its own remainder is a list that
+ * misreports its length.
+ */
+function Queue({ incidents }: { incidents: Incident[] }) {
+  const shown = incidents.slice(0, 4);
+  const remainder = incidents.length - shown.length;
+
+  return (
+    <div>
+      <Eyebrow>In rank order</Eyebrow>
+      <ul style={{ marginTop: 'var(--space-3)' }}>
+        {shown.map((incident) => (
+          <li key={incident.id}>
+            <Link
+              to={`/incidents/${encodeURIComponent(incident.id)}`}
+              className="uwv-row"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto minmax(0, 1fr)',
+                alignItems: 'baseline',
+                gap: 'var(--space-3)',
+                padding: 'var(--space-2) var(--space-3)',
+                marginInline: 'calc(-1 * var(--space-3))',
+                borderRadius: 'var(--radius-xs)',
+                borderTop: '1px solid var(--line-subtle)',
+                textDecoration: 'none',
+                color: 'inherit',
+              }}
+            >
+              <SeverityMark severity={(incident.severity as never) ?? 'info'} />
+              <span style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 'var(--text-sm)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {incident.summary || incident.rule_id}
+                </span>
+                <span
+                  style={{
+                    display: 'block',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-2xs)',
+                    color: 'var(--ink-tertiary)',
+                    marginTop: 1,
+                  }}
+                >
+                  {incident.camera_key} · {incident.status}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {remainder > 0 ? (
+        <p
+          style={{
+            marginTop: 'var(--space-3)',
+            fontSize: 'var(--text-xs)',
+            color: 'var(--ink-tertiary)',
+          }}
+        >
+          {remainder} more open, in the ledger.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -406,8 +532,14 @@ function Environment({ status, canSeeLive }: { status: OperatorStatus; canSeeLiv
       </div>
       )}
 
-      {/* Supporting: the counts, ranked and smaller. */}
-      <div style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start' }}>
+      {/* Supporting: the counts, ranked and smaller, and on a ground.
+
+          Before Stage 5 this rail was figures floating on the page beside a
+          bordered region, which read as leftover rather than as an inspector.
+          A plane is the correct surface for it: it is a ground the numbers sit
+          on, not a card competing with the region beside it — which is exactly
+          why it takes no shadow. */}
+      <Plane style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start', alignSelf: 'start' }}>
         <Figure
           label="Producing frames"
           scale="hero"
@@ -422,7 +554,7 @@ function Environment({ status, canSeeLive }: { status: OperatorStatus; canSeeLiv
           value={cameras.sessions}
           detail={runtime.enabled ? 'Runtime enabled' : runtime.reason || 'Runtime not enabled'}
         />
-      </div>
+      </Plane>
     </div>
   );
 }
@@ -484,6 +616,7 @@ function Perception({
 
   if (!page.available) {
     return (
+      <div style={{ maxWidth: '46rem' }}>
       <AbsentRegion
         title="The perception platform is not reporting"
         body={
@@ -494,6 +627,7 @@ function Perception({
           </>
         }
       />
+      </div>
     );
   }
 
@@ -521,7 +655,7 @@ function Perception({
         </p>
       </div>
 
-      <div style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start' }}>
+      <Plane style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start', alignSelf: 'start' }}>
         <Figure
           label="Subjects observed"
           scale="lead"
@@ -538,7 +672,7 @@ function Perception({
               : 'Part of the window was not observable'
           }
         />
-      </div>
+      </Plane>
     </div>
   );
 }
@@ -548,7 +682,7 @@ function Perception({
 function Estate({ status }: { status: OperatorStatus }) {
   return (
     <div className="uwv-rail">
-      <div className="uwv-figures">
+      <div className="uwv-figure-row">
         <Figure
           label="Registered"
           scale="quiet"
