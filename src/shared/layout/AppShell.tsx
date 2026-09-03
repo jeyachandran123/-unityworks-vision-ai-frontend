@@ -42,6 +42,7 @@ import {
 } from '@app/router/navigation';
 import { useConnectionStatus } from '@shared/realtime/useConnection';
 import { useTheme } from '@shared/theme/theme';
+import { ControlIcons, Icon, StatusIcons } from '@shared/ui/icons';
 import { Button, IconButton, StatusBadge, type HealthTone } from '@shared/ui/primitives';
 import { Readiness, useMediaQuery } from '@shared/ui/product';
 
@@ -141,7 +142,10 @@ export function AppShell() {
               aria-expanded={!collapsed}
               onClick={() => setCollapsed((value) => !value)}
             >
-              {collapsed ? '»' : '«'}
+              {/* Guillemets said "next"/"previous" in typography, not "this
+                  panel opens and closes". A panel icon names the thing that
+                  actually moves. */}
+              <Icon icon={collapsed ? ControlIcons.expandNav : ControlIcons.collapseNav} />
             </IconButton>
           </div>
         </nav>
@@ -171,7 +175,7 @@ export function AppShell() {
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen(true)}
             >
-              ☰
+              <Icon icon={ControlIcons.menu} />
             </IconButton>
           ) : null}
 
@@ -498,8 +502,21 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
               background: isActive ? 'var(--accent)' : 'transparent',
             }}
           />
-          <span aria-hidden="true" style={{ width: '1rem', textAlign: 'center', flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>
-            {item.glyph}
+          {/* A fixed 1rem column, so labels align down the rail whatever the
+              icon's own width. `opacity` rather than a second colour: the
+              active entry's icon is the same ink as its label, and an inactive
+              one recedes with it. */}
+          <span
+            aria-hidden="true"
+            style={{
+              width: '1rem',
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+              opacity: isActive ? 1 : 0.7,
+            }}
+          >
+            <Icon icon={item.icon} size="nav" />
           </span>
           {collapsed ? (
             <span className="sr-only">{item.label}</span>
@@ -510,16 +527,13 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
               </span>
               {readiness ? (
                 <span
-                  aria-hidden="true"
                   title={readiness === 'awaiting' ? 'Awaiting a data source' : 'Blocked pending legal review'}
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-2xs)',
-                    color: 'var(--ink-tertiary)',
-                    flexShrink: 0,
-                  }}
+                  style={{ color: 'var(--ink-tertiary)', flexShrink: 0, display: 'flex' }}
                 >
-                  {readiness === 'awaiting' ? '◌' : '⊘'}
+                  <Icon
+                    icon={readiness === 'awaiting' ? StatusIcons.awaiting : StatusIcons.blocked}
+                    size="inline"
+                  />
                 </span>
               ) : null}
               {/* The text half of the marker, for anyone who cannot see the
@@ -614,7 +628,7 @@ function NavDrawer({
               Vision AI
             </span>
             <IconButton label="Close navigation" onClick={onClose}>
-              ✕
+              <Icon icon={ControlIcons.close} />
             </IconButton>
           </div>
           <SectionList sections={sections} collapsed={false} />
@@ -711,7 +725,7 @@ function RegisterMark() {
         flexShrink: 0,
       }}
     >
-      <span aria-hidden="true" style={{ width: 5, height: 5, background: 'var(--engineering-ink)', transform: 'rotate(45deg)' }} />
+      <Icon icon={StatusIcons.engineering} size="inline" />
       Engineering surface
     </span>
   );
@@ -732,7 +746,7 @@ function ThemeToggle() {
 
   return (
     <IconButton label={label} onClick={toggle}>
-      <span aria-hidden="true">◐</span>
+      <Icon icon={ControlIcons.theme} />
     </IconButton>
   );
 }

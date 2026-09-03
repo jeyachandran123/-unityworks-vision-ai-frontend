@@ -77,6 +77,7 @@ import { framesApi } from '@shared/api/persistence';
 import { wallApi, STREAM_STATE_LABEL, streamTone } from '@shared/api/wall';
 import { isApiError } from '@shared/api/errors';
 import { authorizedFetch } from '@shared/api/client';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 
 /* ── shared helpers ───────────────────────────────────────────────────────── */
 
@@ -1680,8 +1681,8 @@ function UnavailableSlot({ title, body }: { title: string; body: string }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        <span aria-hidden="true" style={{ color: 'var(--health-degraded)' }}>
-          ⏻
+        <span style={{ color: 'var(--health-degraded)', display: 'flex', flexShrink: 0 }}>
+          <Icon icon={StatusIcons.unavailable} size="control" />
         </span>
         <span style={{ fontWeight: 'var(--weight-medium)', fontSize: 'var(--text-sm)' }}>{title}</span>
       </div>

@@ -31,6 +31,14 @@ import {
   type SelectHTMLAttributes,
 } from 'react';
 import { describeState, type ObservationState, STATES } from '@shared/semantics/observation';
+import {
+  ControlIcons,
+  Icon,
+  SeverityIcons,
+  StateIcons,
+  StatusIcons,
+  type LucideIcon,
+} from './icons';
 
 /* ────────────────────────────────────────────────────────────────────────────
    Button
@@ -301,7 +309,12 @@ export function StateBadge({
       }}
       title={descriptor.description}
     >
-      <span aria-hidden="true">{descriptor.glyph}</span>
+      {/* The icon replaces the character the descriptor carries, but the
+          descriptor keeps its `glyph` field: `shared/semantics/observation.ts`
+          owns which states exist and what each one means, and a rendering
+          choice does not belong in that module. `StateIcons` is this layer's
+          mapping onto the same four keys. */}
+      <Icon icon={StateIcons[descriptor.state]} size="inline" />
       {showLabel ? descriptor.label : null}
       {/* The word is always available to assistive technology even when the
           visual label is suppressed for density. */}
@@ -312,13 +325,16 @@ export function StateBadge({
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
-const SEVERITY_GLYPH: Record<Severity, string> = {
-  critical: '▲',
-  high: '▲',
-  medium: '◆',
-  low: '●',
-  info: '·',
-};
+/**
+ * Severity, as a descending run of shapes.
+ *
+ * The characters this replaces drew the same triangle for `critical` and
+ * `high`, so the top two ranks were distinguishable only by colour — which is
+ * the one signal this product never allows to work alone. An octagon, a
+ * triangle, a filled circle, a ringed dot and an `i` fall in weight as the
+ * rank falls, and stay legible in grayscale.
+ */
+const SEVERITY_ICON: Record<Severity, LucideIcon> = SeverityIcons;
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return (
@@ -334,7 +350,7 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
         color: `var(--severity-${severity})`,
       }}
     >
-      <span aria-hidden="true">{SEVERITY_GLYPH[severity]}</span>
+      <Icon icon={SEVERITY_ICON[severity]} size="inline" />
       {severity}
     </span>
   );
@@ -526,13 +542,13 @@ export function StatCard({
    ──────────────────────────────────────────────────────────────────────────── */
 
 function StateFrame({
-  glyph,
+  icon,
   title,
   body,
   action,
   tone,
 }: {
-  glyph: string;
+  icon: LucideIcon;
   title: string;
   body: ReactNode;
   action?: ReactNode;
@@ -566,9 +582,12 @@ function StateFrame({
         alignSelf: 'start',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
-        <span aria-hidden="true" style={{ color: tone, flexShrink: 0 }}>
-          {glyph}
+      {/* `center`, not `baseline`. An SVG has no baseline of its own, so a
+          baseline-aligned row drops it to sit on the text's descender line and
+          the icon reads a couple of pixels low against its title. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+        <span style={{ color: tone, flexShrink: 0, display: 'flex' }}>
+          <Icon icon={icon} size="control" />
         </span>
         <span style={{ fontWeight: 'var(--weight-semibold)' }}>{title}</span>
       </div>
@@ -577,12 +596,12 @@ function StateFrame({
           fontSize: 'var(--text-sm)',
           color: 'var(--ink-tertiary)',
           maxWidth: 'var(--measure)',
-          paddingLeft: 'calc(1ch + var(--space-3))',
+          paddingLeft: 'calc(15px + var(--space-3))',
         }}
       >
         {body}
       </div>
-      {action ? <div style={{ paddingLeft: 'calc(1ch + var(--space-3))' }}>{action}</div> : null}
+      {action ? <div style={{ paddingLeft: 'calc(15px + var(--space-3))' }}>{action}</div> : null}
     </div>
   );
 }
@@ -609,7 +628,7 @@ export function EmptyState({
   body: ReactNode;
   action?: ReactNode;
 }) {
-  return <StateFrame glyph="◯" title={title} body={body} action={action} tone="var(--ink-tertiary)" />;
+  return <StateFrame icon={StatusIcons.empty} title={title} body={body} action={action} tone="var(--ink-tertiary)" />;
 }
 
 export function ErrorState({
@@ -625,7 +644,7 @@ export function ErrorState({
 }) {
   return (
     <StateFrame
-      glyph="✕"
+      icon={StatusIcons.error}
       title={title}
       tone="var(--state-absent)"
       body={
@@ -658,7 +677,7 @@ export function UnknownState({
   title?: string;
   body: ReactNode;
 }) {
-  return <StateFrame glyph="?" title={title} body={body} tone="var(--state-unknown)" />;
+  return <StateFrame icon={StatusIcons.unknown} title={title} body={body} tone="var(--state-unknown)" />;
 }
 
 export function UnavailableState({
@@ -670,7 +689,7 @@ export function UnavailableState({
   body: ReactNode;
   action?: ReactNode;
 }) {
-  return <StateFrame glyph="⏻" title={title} body={body} action={action} tone="var(--health-degraded)" />;
+  return <StateFrame icon={StatusIcons.unavailable} title={title} body={body} action={action} tone="var(--health-degraded)" />;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -888,7 +907,7 @@ export function Modal({
             {title}
           </h2>
           <IconButton label="Close" onClick={onClose}>
-            ✕
+            <Icon icon={ControlIcons.close} />
           </IconButton>
         </header>
         <div style={{ padding: 'var(--space-5)' }}>{children}</div>
@@ -938,7 +957,7 @@ export function Drawer({
             {title}
           </h2>
           <IconButton label="Close" onClick={onClose}>
-            ✕
+            <Icon icon={ControlIcons.close} />
           </IconButton>
         </header>
         <div style={{ padding: 'var(--space-5)' }}>{children}</div>

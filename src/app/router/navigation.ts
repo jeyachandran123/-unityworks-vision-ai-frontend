@@ -32,6 +32,7 @@
  */
 
 import { PERMISSIONS, type Permission } from '@app/permissions/permissions';
+import { NavIcons, type LucideIcon } from '@shared/ui/icons';
 
 /**
  * How ready a destination is, declared statically.
@@ -63,7 +64,19 @@ export interface NavItem {
    * `/live/runtime`. The two now express the same thing.
    */
   require?: 'any' | 'all';
-  glyph: string;
+  /**
+   * The destination's icon.
+   *
+   * A component, not a character. This field used to hold one of twenty
+   * geometric Unicode glyphs — `⌾`, `▣`, `◬`, `≡` and so on — which rendered in
+   * whatever the operating system happened to supply, differed between a
+   * Windows workstation and a Linux kiosk running the same build, and in
+   * several cases had no relationship at all to the destination they marked.
+   *
+   * Every value comes from `NavIcons` in `shared/ui/icons.tsx`, which is where
+   * the reasoning for each choice is recorded.
+   */
+  icon: LucideIcon;
   /** A one-line explanation, used as the link's title and in the command list. */
   hint: string;
   readiness?: Readiness;
@@ -98,7 +111,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Command Center',
         path: '/dashboard',
         permissions: [],
-        glyph: '⌾',
+        icon: NavIcons.dashboard,
         hint: 'What needs attention, and what the system is seeing',
       },
       {
@@ -106,7 +119,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Live Wall',
         path: '/live',
         permissions: [PERMISSIONS.viewLive],
-        glyph: '▣',
+        icon: NavIcons.live,
         hint: 'Every camera on the recorder, live',
       },
       {
@@ -114,7 +127,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Alerts',
         path: '/alerts',
         permissions: [PERMISSIONS.viewObservations],
-        glyph: '◬',
+        icon: NavIcons.alerts,
         hint: 'Open violations, most urgent first',
       },
       {
@@ -122,7 +135,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Incidents',
         path: '/incidents',
         permissions: [PERMISSIONS.viewIncidents],
-        glyph: '≡',
+        icon: NavIcons.incidents,
         hint: 'The ledger — open, acknowledged, resolved',
       },
     ],
@@ -138,7 +151,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Staff Hygiene',
         path: '/hygiene',
         permissions: [PERMISSIONS.viewObservations],
-        glyph: '⬡',
+        icon: NavIcons.hygiene,
         hint: 'PPE observations by subject and zone',
       },
       {
@@ -148,7 +161,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // it does not move on the day a source is connected.
         path: '/cutting-boards',
         permissions: [PERMISSIONS.viewCuttingBoard],
-        glyph: '▥',
+        icon: NavIcons.cuttingBoards,
         hint: 'Board colour against the ingredient being prepared',
         readiness: 'awaiting',
       },
@@ -158,7 +171,7 @@ export const PRODUCT_NAV: NavSection[] = [
         path: '/evidence',
         // A separate act from reading observations. Deliberately.
         permissions: [PERMISSIONS.viewEvidence],
-        glyph: '◫',
+        icon: NavIcons.evidence,
         hint: 'Imagery that supports a finding',
       },
       {
@@ -169,7 +182,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // audit trail, so gating it on observations would be both too narrow
         // and, for an account with observations alone, misleading.
         permissions: [PERMISSIONS.viewReports],
-        glyph: '▦',
+        icon: NavIcons.reports,
         hint: 'Periods, coverage, trends and export',
       },
       {
@@ -179,7 +192,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // Its own permission. Knowing who looked at imagery of a named employee
         // is its own kind of access, not a by-product of administering things.
         permissions: [PERMISSIONS.viewAudit],
-        glyph: '❑',
+        icon: NavIcons.audit,
         hint: 'Who did what, and who looked at whom',
       },
     ],
@@ -195,7 +208,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'People Counting',
         path: '/people-counting',
         permissions: [PERMISSIONS.viewPeopleCount],
-        glyph: '◷',
+        icon: NavIcons.peopleCounting,
         hint: 'Entries, exits and peak hours, with the coverage behind them',
         readiness: 'awaiting',
       },
@@ -206,7 +219,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // Its own permission, deliberately. A role that may read footfall has
         // no automatic claim on inferred age or gender.
         permissions: [PERMISSIONS.viewDemography],
-        glyph: '◑',
+        icon: NavIcons.demography,
         hint: 'Aggregate category breakdown — never per person',
         readiness: 'awaiting',
       },
@@ -215,7 +228,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Table Occupancy',
         path: '/tables',
         permissions: [PERMISSIONS.viewTableOccupancy],
-        glyph: '⊞',
+        icon: NavIcons.tables,
         hint: 'Which tables are occupied, free or waiting to be cleared',
         readiness: 'awaiting',
       },
@@ -224,7 +237,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Meal Detection',
         path: '/meals',
         permissions: [PERMISSIONS.viewMealDetection],
-        glyph: '◔',
+        icon: NavIcons.meals,
         hint: 'Dishes recognised, against what the till says was sold',
         readiness: 'awaiting',
       },
@@ -241,7 +254,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Cameras',
         path: '/cameras',
         permissions: [PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth],
-        glyph: '⌗',
+        icon: NavIcons.cameras,
         hint: 'The estate — configuration, health and blind spots',
       },
       {
@@ -249,7 +262,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Integrations',
         path: '/integrations/pos',
         permissions: [PERMISSIONS.viewPosIntegration],
-        glyph: '⇄',
+        icon: NavIcons.integrations,
         hint: 'The seam between this system and the till',
         readiness: 'awaiting',
       },
@@ -258,7 +271,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Administration',
         path: '/admin',
         permissions: [PERMISSIONS.manageUsers, PERMISSIONS.manageOrganization],
-        glyph: '⚙',
+        icon: NavIcons.administration,
         hint: 'Restaurants, zones, users and roles',
       },
       {
@@ -268,7 +281,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // Its own permission, held by org_admin and super_admin only. The page
         // reports that the module is blocked; it offers nothing to operate.
         permissions: [PERMISSIONS.viewPatronId],
-        glyph: '⛨',
+        icon: NavIcons.patronId,
         hint: 'Returning-visitor identification — blocked pending legal review',
         readiness: 'blocked',
       },
@@ -295,7 +308,7 @@ export const PRODUCT_NAV: NavSection[] = [
         label: 'Vision OS',
         path: '/devtools/vision',
         permissions: [PERMISSIONS.accessDevtools],
-        glyph: '◈',
+        icon: NavIcons.visionOs,
         hint: 'Engineering view of the perception platform',
       },
       {
@@ -307,7 +320,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // organisation admin scans for footfall.
         path: '/model-evaluation',
         permissions: [PERMISSIONS.viewModelEvaluation],
-        glyph: '◎',
+        icon: NavIcons.modelEvaluation,
         hint: 'How the perception stack scores against annotated data',
       },
       {
@@ -320,7 +333,7 @@ export const PRODUCT_NAV: NavSection[] = [
         path: '/live/runtime',
         permissions: [PERMISSIONS.viewLive, PERMISSIONS.accessDevtools],
         require: 'all',
-        glyph: '◇',
+        icon: NavIcons.runtime,
         hint: 'Camera sessions, runtime state and why a stream is not running',
       },
     ],

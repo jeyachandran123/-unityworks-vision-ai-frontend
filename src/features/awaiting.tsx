@@ -41,6 +41,7 @@ import {
   Region,
   SectionRule,
 } from '@shared/ui/product';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 
 /**
  * Marks a module by *why* it is unavailable, which is not the same for all of
@@ -56,7 +57,7 @@ export function CapabilityBadge({ state }: { state: ModuleCapability['state'] })
     <StatusBadge tone="offline">blocked pending legal review</StatusBadge>
   ) : (
     <Badge>
-      <span aria-hidden="true">◌</span> not connected
+      <Icon icon={StatusIcons.awaiting} size="inline" /> not connected
     </Badge>
   );
 }

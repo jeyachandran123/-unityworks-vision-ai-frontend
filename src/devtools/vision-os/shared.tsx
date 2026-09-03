@@ -17,6 +17,7 @@ import {
   PageHeader,
   UnavailableState,
 } from '@shared/ui/primitives';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 
 /**
  * A DevTools page header.
@@ -80,7 +81,7 @@ export function FixtureBadge() {
       }}
       title="Deterministic fixture data. Real platform, real API, constructed observations."
     >
-      <span aria-hidden="true">◍</span> fixture
+      <Icon icon={StatusIcons.fixture} size="inline" /> fixture
     </span>
   );
 }

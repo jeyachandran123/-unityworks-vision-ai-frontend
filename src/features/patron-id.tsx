@@ -42,6 +42,7 @@ import {
   PageIntro,
 } from '@shared/ui/product';
 import { AwaitingList } from './awaiting';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 
 export function PatronIdPage() {
   const query = useQuery({
@@ -184,8 +185,8 @@ export function PatronIdPage() {
                   maxWidth: '68ch',
                 }}
               >
-                <span aria-hidden="true" style={{ color: 'var(--state-present)' }}>
-                  ✓
+                <span style={{ color: 'var(--state-present)', display: 'flex', flexShrink: 0 }}>
+                  <Icon icon={StatusIcons.guarantee} size="inline" />
                 </span>
                 {guarantee}
               </li>

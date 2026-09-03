@@ -14,7 +14,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { AlertsPage } from '@features/alerts';
@@ -208,9 +208,19 @@ describe('the decision crop gallery', () => {
     // Scoped to the gallery: `Person #2` legitimately appears twice, once on
     // the box over the frame and once under its crop.
     const subject = await screen.findByTestId('crop-subject');
-    expect(subject).toHaveTextContent('★ Person #2');
-    expect(screen.getByTestId('crop-context')).toHaveTextContent('Person #1');
-    expect(screen.getByTestId('crop-context')).not.toHaveTextContent('★');
+    const context = screen.getByTestId('crop-context');
+
+    expect(subject).toHaveTextContent('Person #2');
+    expect(context).toHaveTextContent('Person #1');
+
+    // The marker itself. This used to be the character U+2605 prepended to the
+    // label, and the assertion read `toHaveTextContent('★ Person #2')` — which
+    // pinned the *shape* of the marker rather than the fact that the subject is
+    // marked. The icon phase replaced the character with an icon plus a stated
+    // accessible name, so the same requirement is now checked where it actually
+    // lives: the subject crop says what it is, and the bystander does not.
+    expect(within(subject).getByText('Alert subject')).toBeInTheDocument();
+    expect(within(context).queryByText('Alert subject')).toBeNull();
   });
 
   it('puts the alert subject first, ahead of the bystanders', async () => {

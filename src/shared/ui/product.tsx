@@ -37,6 +37,14 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, type HealthTone, type Severity } from './primitives';
+import {
+  AttentionIcons,
+  ControlIcons,
+  Icon,
+  SeverityIcons,
+  StatusIcons,
+  type LucideIcon,
+} from './icons';
 
 /* ────────────────────────────────────────────────────────────────────────────
    Typographic furniture
@@ -308,14 +316,14 @@ export function SectionRule({
 
 export type AttentionTone = 'critical' | 'attention' | 'clear' | 'unknown';
 
-const ATTENTION: Record<AttentionTone, { color: string; wash: string; glyph: string; word: string }> = {
-  critical: { color: 'var(--severity-critical)', wash: 'var(--state-absent-wash)', glyph: '▲', word: 'Critical' },
-  attention: { color: 'var(--severity-medium)', wash: 'var(--health-degraded-wash)', glyph: '◆', word: 'Attention' },
-  clear: { color: 'var(--state-present)', wash: 'var(--state-present-wash)', glyph: '✓', word: 'Clear' },
+const ATTENTION: Record<AttentionTone, { color: string; wash: string; icon: LucideIcon; word: string }> = {
+  critical: { color: 'var(--severity-critical)', wash: 'var(--state-absent-wash)', icon: AttentionIcons.critical, word: 'Critical' },
+  attention: { color: 'var(--severity-medium)', wash: 'var(--health-degraded-wash)', icon: AttentionIcons.attention, word: 'Attention' },
+  clear: { color: 'var(--state-present)', wash: 'var(--state-present-wash)', icon: AttentionIcons.clear, word: 'Clear' },
   // Not a fourth severity — the state where the product cannot say. It borrows
   // the UNKNOWN token deliberately, so "we do not know" looks the same on the
   // command center as it does on an attribute badge.
-  unknown: { color: 'var(--state-unknown)', wash: 'var(--state-unknown-wash)', glyph: '?', word: 'Not known' },
+  unknown: { color: 'var(--state-unknown)', wash: 'var(--state-unknown-wash)', icon: AttentionIcons.unknown, word: 'Not known' },
 };
 
 /**
@@ -378,6 +386,14 @@ export function Attention({
         position: 'relative',
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1fr)',
+        // No `gridTemplateColumns` here.
+        //
+        // Stage 5 moved the two-column split into `.uwv-attention` so it could
+        // stop being a split below the breakpoint, but left this inline
+        // single-column declaration behind — and an inline style beats a
+        // stylesheet unconditionally, so the class never won and the aside sat
+        // under the statement at every width. A grid with no template is one
+        // column already, which is exactly what the narrow case wants.
         alignItems: 'start',
         gap: 'var(--space-6)',
         padding: 'var(--space-8) var(--space-6) var(--space-8) var(--space-8)',
@@ -397,8 +413,8 @@ export function Attention({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        <span aria-hidden="true" style={{ color: spec.color, fontSize: 'var(--text-sm)' }}>
-          {spec.glyph}
+        <span style={{ color: spec.color, display: 'flex', flexShrink: 0 }}>
+          <Icon icon={spec.icon} size="control" />
         </span>
         <span
           style={{
@@ -852,7 +868,7 @@ export function Readiness({
         whiteSpace: 'nowrap',
       }}
     >
-      <span aria-hidden="true">{awaiting ? '◌' : '⊘'}</span>
+      <Icon icon={awaiting ? StatusIcons.awaiting : StatusIcons.blocked} size="inline" />
       {children ?? (awaiting ? 'Awaiting data' : 'Blocked')}
     </span>
   );
@@ -905,8 +921,8 @@ export function AbsentRegion({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        <span aria-hidden="true" style={{ color: 'var(--health-degraded)' }}>
-          ⏻
+        <span style={{ color: 'var(--health-degraded)', display: 'flex', flexShrink: 0 }}>
+          <Icon icon={StatusIcons.unavailable} size="control" />
         </span>
         <span style={{ fontWeight: 'var(--weight-semibold)', fontSize: 'var(--text-sm)' }}>{title}</span>
       </div>
@@ -1092,8 +1108,15 @@ export function CoverageSeal({
       />
       <div style={{ padding: 'var(--space-5) var(--space-5) var(--space-5) var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <span aria-hidden="true" style={{ color }}>
-            {complete ? '✓' : '◑'}
+          {/* A shield either way. Coverage is the report's warrant — the
+              claim that the period it states is the period it read — so the
+              complete and incomplete cases are the same object with a
+              different verdict on it, not a tick and a half-filled circle. */}
+          <span style={{ color, display: 'flex', flexShrink: 0 }}>
+            <Icon
+              icon={complete ? StatusIcons.coverageComplete : StatusIcons.coverageIncomplete}
+              size="control"
+            />
           </span>
           <span
             style={{
@@ -1164,8 +1187,8 @@ export function CoverageSeal({
                   maxWidth: 'var(--measure)',
                 }}
               >
-                <span aria-hidden="true" style={{ color: 'var(--health-degraded)', flexShrink: 0 }}>
-                  ◦
+                <span style={{ color: 'var(--health-degraded)', flexShrink: 0, display: 'flex' }}>
+                  <Icon icon={StatusIcons.gap} size="inline" />
                 </span>
                 <span>{gap.detail}</span>
               </li>
@@ -1285,13 +1308,8 @@ export function FindingReadout({
   );
 }
 
-const SEVERITY_GLYPH: Record<Severity, string> = {
-  critical: '▲',
-  high: '▲',
-  medium: '◆',
-  low: '●',
-  info: '·',
-};
+/** The same descending run of shapes `SeverityBadge` uses, at readout size. */
+const SEVERITY_ICON: Record<Severity, LucideIcon> = SeverityIcons;
 
 /**
  * Severity, at a size that ranks.
@@ -1318,7 +1336,7 @@ export function SeverityMark({ severity }: { severity: Severity }) {
         whiteSpace: 'nowrap',
       }}
     >
-      <span aria-hidden="true">{SEVERITY_GLYPH[severity]}</span>
+      <Icon icon={SEVERITY_ICON[severity]} size="inline" />
       {severity}
     </span>
   );
@@ -1391,16 +1409,9 @@ export function EngineeringSurface({
           borderBottom: '1px solid var(--engineering-line)',
         }}
       >
-        <span
-          aria-hidden="true"
-          style={{
-            width: 6,
-            height: 6,
-            background: 'var(--engineering-ink)',
-            transform: 'rotate(45deg)',
-            flexShrink: 0,
-          }}
-        />
+        <span style={{ color: 'var(--engineering-ink)', display: 'flex', flexShrink: 0 }}>
+          <Icon icon={StatusIcons.engineering} size="inline" />
+        </span>
         <span
           style={{
             fontFamily: 'var(--font-mono)',
@@ -1465,7 +1476,12 @@ export function Disclosure({
           color: 'var(--ink-tertiary)',
         }}
       >
-        <span aria-hidden="true">›</span>
+        {/* Rotates to point down when the disclosure is open — the
+            `details[open]` rule in `global.css` does the turning, so the
+            direction always agrees with the state without a React re-render. */}
+        <span className="uwv-disclosure-caret" style={{ display: 'flex', flexShrink: 0 }}>
+          <Icon icon={ControlIcons.disclosure} size="inline" />
+        </span>
         {summary}
         {count !== undefined ? (
           <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{count}</span>
@@ -1539,7 +1555,7 @@ export function GoTo({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <span aria-hidden="true">→</span>
+      <Icon icon={ControlIcons.goTo} size="inline" />
     </span>
   );
 }

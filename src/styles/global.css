@@ -509,3 +509,23 @@ a:hover { text-decoration: underline; }
 @media (min-width: 62rem) {
   .uwv-attention { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE DISCLOSURE CARET
+
+   The one icon in the product whose orientation carries state. `Disclosure`
+   renders a `<details>`, and its caret has to agree with `open` — a chevron
+   pointing right on an expanded section is a control contradicting itself.
+
+   Done in CSS rather than in React because `details` toggles without telling
+   the component: the previous implementation used a `›` character and simply
+   never turned, so the marker said nothing either way. Scoped to this one class
+   and neutralised with everything else by the reduced-motion block above.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-disclosure-caret {
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+details[open] > summary .uwv-disclosure-caret {
+  transform: rotate(90deg);
+}

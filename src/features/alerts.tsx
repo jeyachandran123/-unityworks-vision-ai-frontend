@@ -62,6 +62,7 @@ import {
   Spinner,
   StatusBadge,
 } from '@shared/ui/primitives';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 import {
   PageIntro,
 } from '@shared/ui/product';
@@ -229,15 +230,32 @@ function CropExhibit({ object: subject }: { object: EvidenceObject }) {
       </div>
       <figcaption
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 'var(--space-1)',
           padding: '4px 6px',
           fontSize: 'var(--text-2xs)',
           fontWeight: subject.is_subject ? 700 : 500,
-          textAlign: 'center',
           background: subject.is_subject ? SUBJECT_INK : 'rgb(0 0 0 / 0.75)',
           color: '#fff',
         }}
       >
-        {subject.is_subject ? `★ ${subject.label}` : subject.label}
+        {/* The subject marker.
+
+            This was the character U+2605 prepended to the label, which meant a
+            screen reader read "black star Person #2" and a sighted reader got a
+            symbol with no stated meaning anywhere on the page. The icon carries
+            the same visual distinction, and the `sr-only` text finally says
+            what it is: the marker is announced as "Alert subject" rather than
+            as punctuation. */}
+        {subject.is_subject ? (
+          <>
+            <Icon icon={StatusIcons.subject} size="inline" />
+            <span className="sr-only">Alert subject</span>
+          </>
+        ) : null}
+        {subject.label}
       </figcaption>
     </figure>
   );

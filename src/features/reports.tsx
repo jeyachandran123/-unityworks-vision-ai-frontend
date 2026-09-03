@@ -59,6 +59,7 @@ import {
   UnavailableState,
   type Column,
 } from '@shared/ui/primitives';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 
 /** Period presets. `days` is how far back from now the window starts. */
 const PERIODS: ReadonlyArray<{ id: string; label: string; days: number }> = [
@@ -378,16 +379,8 @@ function PickerItem({
         >
           <span style={{ minWidth: 0 }}>{report.title}</span>
           {awaiting ? (
-            <span
-              aria-hidden="true"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--text-2xs)',
-                color: 'var(--ink-tertiary)',
-                flexShrink: 0,
-              }}
-            >
-              ◌
+            <span style={{ color: 'var(--ink-tertiary)', flexShrink: 0, display: 'flex' }}>
+              <Icon icon={StatusIcons.awaiting} size="inline" />
             </span>
           ) : null}
           {awaiting ? <span className="sr-only">awaiting a data source</span> : null}

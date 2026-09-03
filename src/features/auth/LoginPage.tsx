@@ -37,6 +37,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, type LoginFailure } from '@app/auth/AuthProvider';
 import { STATES, type ObservationState } from '@shared/semantics/observation';
 import { Button, Input, LoadingState } from '@shared/ui/primitives';
+import { Icon, StateIcons } from '@shared/ui/icons';
 
 /** The order the platform itself lists them in: decided first, then not. */
 const LEGEND: ObservationState[] = ['present', 'absent', 'not_visible', 'unknown'];
@@ -155,8 +156,10 @@ export function LoginPage() {
                   fontSize: 'var(--text-xs)',
                 }}
               >
-                <span aria-hidden="true" style={{ color: descriptor.colorVar }}>
-                  {descriptor.glyph}
+                <span
+                  style={{ color: descriptor.colorVar, display: 'flex', flexShrink: 0, alignSelf: 'center' }}
+                >
+                  <Icon icon={StateIcons[key]} size="inline" />
                 </span>
                 <span
                   style={{

@@ -56,6 +56,7 @@ import {
   StatusBadge,
   UnavailableState,
 } from '@shared/ui/primitives';
+import { ControlIcons, Icon } from '@shared/ui/icons';
 
 export function ModelEvaluationPage() {
   const summary = useQuery({
@@ -504,8 +505,11 @@ function MetricRow({ metric }: { metric: MetricEntry }) {
         }}
       >
         <span style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'baseline', minWidth: 0 }}>
-          <span aria-hidden="true" style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-2xs)' }}>
-            ▸
+          <span
+            className="uwv-disclosure-caret"
+            style={{ color: 'var(--ink-tertiary)', display: 'flex', flexShrink: 0, alignSelf: 'center' }}
+          >
+            <Icon icon={ControlIcons.disclosure} size="inline" />
           </span>
           <span style={{ fontSize: 'var(--text-sm)' }}>{metric.label}</span>
           <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--ink-tertiary)', fontFamily: 'var(--font-mono)' }}>
