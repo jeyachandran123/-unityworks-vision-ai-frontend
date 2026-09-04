@@ -60,12 +60,23 @@ import {
 export function Eyebrow({
   children,
   tone = 'muted',
+  anchor = false,
 }: {
   children: ReactNode;
   tone?: 'muted' | 'accent';
+  /**
+   * Whether this label is the one its section hangs off the spine by.
+   *
+   * The tick is drawn from the label rather than from the section wrapper, so
+   * the label is what has to carry it. Opt-in because most eyebrows on a page
+   * are not section boundaries — "In rank order" above the incident queue names
+   * a list inside a region and must not grow a tick out into the margin.
+   */
+  anchor?: boolean;
 }) {
   return (
     <div
+      className={anchor ? 'uwv-spine-tick' : undefined}
       style={{
         fontFamily: 'var(--font-mono)',
         fontSize: 'var(--text-2xs)',
@@ -113,9 +124,21 @@ export function PageIntro({
       data-order="1"
       style={{ marginBottom: 'var(--space-10)' }}
     >
-      <div className="uwv-lead" style={{ alignItems: 'end' }}>
+      {/* 'start', not 'end'.
+          
+          A grid row's 'end' bottom-aligns both columns to whichever is
+          tallest. That is invisible when the standfirst is two or three lines
+          — which is what every page this was designed against had — and it is
+          a defect the moment one runs longer: Cameras' standfirst is five
+          lines plus a button, so the title column was pushed down to match its
+          bottom, opening a gap above the eyebrow that had nothing to do with
+          spacing and everything to do with which column happened to be
+          taller. 'start' means the title is always where a title belongs —
+          flush with the top of the opening — regardless of how long the prose
+          beside it runs. */}
+      <div className="uwv-lead" style={{ alignItems: 'start' }}>
         <div style={{ minWidth: 0 }}>
-          <Eyebrow>{eyebrow}</Eyebrow>
+          <Eyebrow anchor>{eyebrow}</Eyebrow>
           <h1
             style={{
               fontSize: 'clamp(1.75rem, 1.1rem + 2.4vw, var(--text-4xl))',
@@ -286,12 +309,22 @@ export function SectionRule({
         alignItems: 'baseline',
         gap: 'var(--space-4)',
         borderTop: `1px solid ${lead ? 'var(--line-default)' : 'var(--line-subtle)'}`,
-        paddingTop: 'var(--space-4)',
+        // No `paddingTop` here. It belongs to the label column below, and the
+        // difference is not cosmetic.
+        //
+        // Baseline alignment settles a flex row on whichever item reaches
+        // furthest above the shared baseline. With the gap on the row, the
+        // label started level with the actions and the taller action pushed it
+        // down — 16px below the rule in a section with no actions, 21px in one
+        // with them, on the same page, decided by a permission. Giving the gap
+        // to the label puts its baseline below the actions' unconditionally, so
+        // the label is always the anchor, never the item that moves, and the
+        // actions settle onto its line instead. Same typography, one position.
         marginBottom: 'var(--space-5)',
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <Eyebrow tone={lead ? 'accent' : 'muted'}>{label}</Eyebrow>
+      <div style={{ flex: 1, minWidth: 0, paddingTop: 'var(--space-4)' }}>
+        <Eyebrow anchor tone={lead ? 'accent' : 'muted'}>{label}</Eyebrow>
         {detail ? (
           <p
             style={{
@@ -396,7 +429,11 @@ export function Attention({
         // column already, which is exactly what the narrow case wants.
         alignItems: 'start',
         gap: 'var(--space-6)',
-        padding: 'var(--space-8) var(--space-6) var(--space-8) var(--space-8)',
+        // `--region-inset` on the reading edge, not a value of its own. This
+        // panel used to inset its content 32px while the estate's ground used 24
+        // and a camera tile used 12, so the page had four text columns against
+        // one label column. One token, one step, everywhere.
+        padding: 'var(--space-8) var(--space-6) var(--space-8) var(--region-inset)',
         borderRadius: 'var(--radius-lg)',
         background: `linear-gradient(100deg, ${spec.wash} 0%, var(--surface-raised) 58%)`,
         border: '1px solid var(--line-subtle)',
@@ -578,7 +615,27 @@ export function Figure({
  * failure in miniature. Every other state is still, because every other state
  * is a fact rather than an ongoing event.
  */
-export function LiveDot({ tone, label }: { tone: HealthTone; label: string }) {
+export function LiveDot({
+  tone,
+  label,
+  steady = false,
+}: {
+  tone: HealthTone;
+  label: string;
+  /**
+   * Whether to hold the dot still.
+   *
+   * The pulse means "a frame arrived recently", and beside a picture that is
+   * exactly the right thing for it to say. In a roster of sixteen state words
+   * there is no picture for it to qualify, and it inverts the reading: twelve
+   * healthy rows animate while the four that need a person sit still, so the
+   * motion pulls the eye to precisely the rows nobody has to look at.
+   *
+   * Off by default, so the wall — where the dot sits over live video and the
+   * claim is about that video — is unchanged.
+   */
+  steady?: boolean;
+}) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
       <span
@@ -589,7 +646,7 @@ export function LiveDot({ tone, label }: { tone: HealthTone; label: string }) {
           borderRadius: '50%',
           background: `var(--health-${tone})`,
           boxShadow: tone === 'idle' ? 'inset 0 0 0 1px var(--health-idle)' : 'none',
-          animation: tone === 'online' ? 'uwv-pulse 2.4s ease-in-out infinite' : 'none',
+          animation: tone === 'online' && !steady ? 'uwv-pulse 2.4s ease-in-out infinite' : 'none',
           flexShrink: 0,
         }}
       />
@@ -817,6 +874,178 @@ export function CameraSurface({
     >
       {body}
     </button>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Camera roster
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * One camera, as a line of type rather than a picture of nothing.
+ *
+ * `CameraSurface` is the right primitive for a surface that shows footage. On a
+ * surface that reports *about* cameras it is the wrong one, and the Command
+ * Center proved it: the status endpoint carries no imagery — a frame needs a
+ * per-camera ticket and a long-lived MJPEG response, which only the wall asks
+ * for — so every tile rendered a 16:9 rectangle of nothing with a sentence in
+ * the middle explaining that the picture was somewhere else. Six of those cost
+ * 754px of a 2430px page to say twelve words about six of sixteen cameras.
+ *
+ * This is the same information as a directory entry: which camera, what state,
+ * and what that state means. Sixteen of them cost less than three tiles did.
+ *
+ * **The meaning is not decoration.** `degraded` and `offline` are both "not
+ * producing frames" and they need different people: one is a stream that is
+ * reconnecting or has gone silent, the other is a session nobody started. A
+ * roster that printed only the state word would make an operator learn the
+ * backend's vocabulary to use their own product.
+ */
+export function CameraLine({
+  name,
+  tone,
+  state,
+  meaning,
+  kind,
+  identifier,
+}: {
+  /**
+   * The camera's identifier, or a link carrying it.
+   *
+   * A `ReactNode` rather than a string so the caller owns the routing — this
+   * layer holds no opinion about the router — and so the link's accessible name
+   * is the camera key alone. Making the whole row a link instead would give a
+   * screen reader one link named "cam-04 degraded reconnecting or silent",
+   * which is three facts wearing one label.
+   */
+  name: ReactNode;
+  tone: HealthTone;
+  /** The backend's own word for the state. Never a synonym, never a rounding. */
+  state: string;
+  meaning: string;
+  kind?: string;
+  /** The camera key, for tests and for a fault report that needs the raw string. */
+  identifier?: string;
+}) {
+  return (
+    /* `display: contents` puts these three cells straight into the roster's
+       tracks, which is what makes the columns line up between rows. It also
+       removes the element's box, and with it — in several browsers — the list
+       semantics the markup is asserting, so the roles are stated explicitly
+       rather than left to the display type. */
+    <li className="uwv-camera-line" role="listitem" data-camera-id={identifier}>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 'var(--text-sm)',
+          color: 'var(--ink-primary)',
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {name}
+      </span>
+      <LiveDot tone={tone} label={state} steady />
+      <span
+        style={{
+          fontSize: 'var(--text-xs)',
+          color: 'var(--ink-tertiary)',
+          minWidth: 0,
+        }}
+      >
+        {meaning}
+        {/* Marked by exception, and the exception is the one that matters: a
+            replay source is a fixture and must never be mistaken for a camera.
+            The caller passes nothing for the ordinary case and the region states
+            that convention in its own copy, so the blank is a stated default
+            rather than a reader's assumption — and the one session that is not
+            live stands out far more among fifteen blanks than it would among
+            fifteen repetitions of the word "live". */}
+        {kind ? (
+          <span style={{ fontFamily: 'var(--font-mono)', marginLeft: 'var(--space-2)' }}>· {kind}</span>
+        ) : null}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * A count per state, over a denominator that is every member of the set.
+ *
+ * Not a `Meter`. A stacked bar needs one hue per segment, and the palette
+ * carries exactly four for health — a fifth would either collide with one of
+ * them or dilute all four, which is the argument `Readiness` already makes
+ * about not inventing a colour for a state that has none.
+ *
+ * So the **word** distinguishes the states and the hue groups them, which is the
+ * right way round: `connecting` and `degraded` share a colour because they are
+ * both "not there yet", and they are told apart by being named.
+ *
+ * A state with no members renders `0` rather than disappearing. Every camera in
+ * the set is in exactly one of these states, so the zero is a real reading of a
+ * real denominator — not the absent-data zero the product forbids — and a state
+ * that vanished when it emptied would leave an operator unable to tell "none
+ * faulted" from "faults not reported".
+ */
+export function StateTally({
+  states,
+}: {
+  states: ReadonlyArray<{ key: string; label: string; tone: HealthTone; count: number }>;
+}) {
+  return (
+    <ul
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 'var(--space-2) var(--space-5)',
+        alignItems: 'baseline',
+      }}
+    >
+
+      {states.map((state) => (
+        <li
+          key={state.key}
+          data-state={state.key}
+          style={{ display: 'inline-flex', alignItems: 'baseline', gap: 'var(--space-2)' }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: `var(--health-${state.tone})`,
+              flexShrink: 0,
+              alignSelf: 'center',
+              // An empty state keeps its dot but loses its weight. The reading
+              // stays available; it stops competing with the states that have
+              // something in them.
+              opacity: state.count > 0 ? 1 : 0.35,
+            }}
+          />
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--text-md)',
+              fontVariantNumeric: 'tabular-nums',
+              color: state.count > 0 ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
+            }}
+          >
+            {state.count}
+          </span>
+          <span
+            style={{
+              fontSize: 'var(--text-xs)',
+              color: state.count > 0 ? 'var(--ink-secondary)' : 'var(--ink-tertiary)',
+            }}
+          >
+            {state.label}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

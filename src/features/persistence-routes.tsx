@@ -52,7 +52,6 @@ import {
   KeyValue,
   LoadingState,
   Modal,
-  PageHeader,
   SectionHeader,
   SeverityBadge,
   StateBadge,
@@ -984,9 +983,10 @@ export function EvidencePage() {
 
   return (
     <>
-      <PageHeader
+      <PageIntro
+        eyebrow="Compliance"
         title="Evidence"
-        description="Imagery that supports a finding. Viewing one is an access event against an identifiable person's likeness — a separate privilege from reading the observation, and always recorded."
+        standfirst="Imagery that supports a finding. Viewing one is an access event against an identifiable person's likeness — a separate privilege from reading the observation, and always recorded."
       />
 
       <Card>
@@ -999,7 +999,7 @@ export function EvidencePage() {
             event.preventDefault();
             setRef(query.trim());
           }}
-          style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end' }}
+          style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}
         >
           <div style={{ flex: 1 }}>
             <Input
@@ -1009,9 +1009,21 @@ export function EvidencePage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
-          <Button type="submit" variant="primary" disabled={query.trim().length === 0}>
-            Look up
-          </Button>
+          {/* Matches Input's own label-plus-gap offset with an invisible label,
+              so the button sits level with the input box rather than with
+              whichever sibling is tallest — flex-end previously aligned it to
+              the bottom of Input's hint line instead of the input itself. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <span
+              aria-hidden="true"
+              style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', visibility: 'hidden' }}
+            >
+              Look up
+            </span>
+            <Button type="submit" variant="primary" disabled={query.trim().length === 0}>
+              Look up
+            </Button>
+          </div>
         </form>
       </Card>
 

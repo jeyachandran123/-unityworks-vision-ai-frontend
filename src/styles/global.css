@@ -258,23 +258,42 @@ a:hover { text-decoration: underline; }
        there at all. */
     border-left: 1px solid var(--line-default);
   }
-  /* The tick that ties a section boundary to the spine. Drawn from the mark
-     back to the line, so the eye reads "this belongs to that axis". */
-  .uwv-spine-mark::before {
+  /* The tick that ties a section boundary to the spine. Drawn from the label
+     back to the line, so the eye reads "this belongs to that axis".
+
+     It hangs off THE LABEL, not off the section wrapper, and that is the whole
+     correction. Drawn from the wrapper it assumed the label was the first thing
+     inside it — true of `PageIntro`, false of `SectionRule`, which puts a rule
+     and a gap above its label and aligns its row on the baseline of whichever
+     action sits beside it. Measured in the browser, every section tick floated
+     22.5px above the word it was naming, at both widths, while the page title's
+     landed within 0.6px. Two rules, one right and one wrong, for no reason
+     either of them could state.
+
+     Anchored to the label the offset is a property of the label's own type, so
+     it is correct in any wrapper, at any padding, under any baseline — and a
+     section added later cannot get it wrong.
+
+     0.75em is optical, not mathematical: half-leading plus half the cap height
+     for this face at `--leading-normal`, which puts the rule through the middle
+     of the capitals rather than through the middle of the line box. On an
+     all-caps label set at 11px those differ by enough to see. */
+  .uwv-spine-tick::before {
     content: '';
     position: absolute;
     left: calc(-1 * (var(--spine-gutter) + var(--space-4)) - 1px);
-    top: 0.55em;
+    top: 0.75em;
     width: var(--spine-gutter);
     height: 1px;
     background: var(--line-default);
   }
-  .uwv-spine-mark[data-lead='true']::before {
+  .uwv-spine-mark[data-lead='true'] .uwv-spine-tick::before {
     background: var(--accent);
     height: 2px;
   }
 }
 .uwv-spine-mark { position: relative; }
+.uwv-spine-tick { position: relative; }
 
 /* ────────────────────────────────────────────────────────────────────────────
    ENTRANCE CHOREOGRAPHY
@@ -376,6 +395,90 @@ a:hover { text-decoration: underline; }
   background: var(--surface-sunken);
   border-top: 1px solid var(--line-subtle);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE ROSTER
+
+   A directory of cameras, for the surface that reports on the estate rather
+   than watches it.
+
+   The Command Center used to render this as six `CameraSurface` tiles, which is
+   the wall's primitive: a 16:9 picture area with chrome hung over it. The
+   status endpoint serves no picture — imagery needs a per-camera ticket and a
+   long-lived MJPEG response, and only the wall asks for one — so each tile held
+   a 16:9 rectangle of nothing and a sentence apologising for it. Measured: 754px
+   of the Command Center's 2430px on a 1440px desktop, and 1875px of its 4153px
+   at 430px, to say twelve words about six of sixteen cameras.
+
+   A roster says the same thing about all sixteen in a quarter of the height,
+   because a line of type is the right shape for a fact about a camera and a
+   viewfinder is the right shape for a picture of one.
+
+   Two columns where there is room. Not cards: no ground, no border, no radius —
+   ruled lines, which is what a directory looks like. The rule sits on the top of
+   each row so the run reads as one column of entries rather than a stack of
+   objects. */
+/* Identifier, state, meaning — three tracks shared by every row.
+
+   The tracks live on the roster and each row borrows them with `subgrid`, which
+   is the whole point. Given each row its own grid the columns size to that row's
+   own content: "ONLINE" is 52px and "CONNECTING" is 78px, so the meaning started
+   at a different x on almost every line. A directory whose columns move from row
+   to row is the same failure as a section whose tick floats above its label, one
+   scale down.
+
+   The row stays a real box rather than `display: contents`, and that is not a
+   detail. Spent straight into the parent's tracks, the cells baseline-align
+   individually — measured, the state cell's border-top sat 2.25px below its two
+   neighbours', so the hairline under every row was drawn in three offset
+   segments. A rule belongs to the row, so the row has to be something.
+
+   Above the spine breakpoint the tracks repeat and each row takes one half, so
+   two cameras share a line and sixteen read in eight. `column-gap` is zero and
+   the air lives as padding inside the cells, so the two halves' rules meet and
+   the line runs unbroken across the roster. */
+.uwv-roster {
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto minmax(0, 1fr);
+}
+@media (min-width: 62rem) {
+  .uwv-roster {
+    grid-template-columns:
+      minmax(0, auto) auto minmax(0, 1fr)
+      minmax(0, auto) auto minmax(0, 1fr);
+  }
+  .uwv-camera-line:nth-of-type(odd) { grid-column: 1 / 4; }
+  .uwv-camera-line:nth-of-type(even) { grid-column: 4 / 7; }
+  /* An odd number of cameras leaves the last one alone on its line. Spanning
+     both halves lets its rule close the roster across the full width instead of
+     stopping halfway, which reads as a list that ran out rather than one that
+     ended. Its three cells still fill the first three tracks, so nothing moves. */
+  .uwv-camera-line:last-of-type:nth-of-type(odd) { grid-column: 1 / -1; }
+  /* The seam between the two halves. Wider than the gap between a row's own
+     columns, so the eye reads two lists rather than one six-column table. It is
+     padding on the cell, not on the row, so it insets the text without moving
+     the rule or the subgrid's tracks. */
+  .uwv-camera-line:nth-of-type(even) > :first-child { padding-left: var(--space-8); }
+}
+
+.uwv-camera-line {
+  grid-column: 1 / -1;
+  display: grid;
+  /* The fallback where `subgrid` is not supported: per-row tracks, which is
+     what this was before. The columns drift between rows and the roster still
+     reads — a degradation, not a break. */
+  grid-template-columns: minmax(0, auto) auto minmax(0, 1fr);
+  align-items: baseline;
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--line-subtle);
+}
+@supports (grid-template-columns: subgrid) {
+  .uwv-camera-line { grid-template-columns: subgrid; }
+}
+.uwv-camera-line > * { padding-right: var(--space-4); }
+/* The trailing cell gives its padding back to the text. Nothing sits to its
+   right except the seam, which supplies its own air. */
+.uwv-camera-line > :last-child { padding-right: 0; }
 
 /* A field of tiles sized so footage stays legible without any one tile
    claiming the whole row. Tighter than `uwv-tiles-wide`, which put two

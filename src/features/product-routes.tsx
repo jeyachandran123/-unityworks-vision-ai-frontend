@@ -40,11 +40,11 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { healthApi, type OperatorStatus } from '@shared/api/services';
+import { healthApi, type CameraHealth, type OperatorStatus } from '@shared/api/services';
 import { incidentsApi, type Incident } from '@shared/api/persistence';
 import { observationsApi, type ObservationPage } from '@shared/api/observations';
 import { useAuth } from '@app/auth/AuthProvider';
-import { has, PERMISSIONS } from '@app/permissions/permissions';
+import { has, hasAny, PERMISSIONS } from '@app/permissions/permissions';
 import { resolveState, STATES } from '@shared/semantics/observation';
 import {
   Badge,
@@ -59,7 +59,7 @@ import {
 import {
   AbsentRegion,
   Attention,
-  CameraSurface,
+  CameraLine,
   Eyebrow,
   Figure,
   GoTo,
@@ -70,6 +70,7 @@ import {
   Region,
   SectionRule,
   SeverityMark,
+  StateTally,
   type AttentionTone,
 } from '@shared/ui/product';
 import { isApiError } from '@shared/api/errors';
@@ -81,6 +82,10 @@ export function DashboardPage() {
   const canSeeIncidents = has(user, PERMISSIONS.viewIncidents);
   const canSeeObservations = has(user, PERMISSIONS.viewObservations);
   const canSeeLive = has(user, PERMISSIONS.viewLive);
+  // The register route admits either permission, so the link this page offers
+  // must ask the same question the guard does. Offering a road that redirects
+  // straight back here is worse than not offering it.
+  const canSeeRegister = hasAny(user, [PERMISSIONS.viewCameras, PERMISSIONS.viewCameraHealth]);
 
   const status = useQuery({
     queryKey: ['status'],
@@ -191,7 +196,7 @@ export function DashboardPage() {
       <SectionRule
         order={3}
         label="Current environment"
-        detail="Cameras the runtime holds a session for. A camera that is not producing frames says so — never a frozen last frame."
+        detail="Every camera session the runtime holds, and what each one is actually doing. A camera that is not producing frames says which kind of not-producing it is — never a frozen last frame, and never one word for four different faults. A session replaying a fixture rather than watching a camera is marked; the rest are live."
         actions={
           canSeeLive ? (
             <Link to="/live" style={{ textDecoration: 'none' }}>
@@ -201,7 +206,7 @@ export function DashboardPage() {
         }
       />
       <Region order={3} style={{ marginBottom: 'var(--space-12)' }}>
-        <Environment status={data} canSeeLive={canSeeLive} />
+        <Environment status={data} canSeeRegister={canSeeRegister} />
       </Region>
 
       <SectionRule
@@ -232,15 +237,17 @@ export function DashboardPage() {
         label="The estate"
         detail="What a restart would restore, and what this build declines to report."
         actions={
-          <Link to="/cameras" style={{ textDecoration: 'none' }}>
-            <GoTo>Camera register</GoTo>
-          </Link>
+          canSeeRegister ? (
+            <Link to="/cameras" style={{ textDecoration: 'none' }}>
+              <GoTo>Camera register</GoTo>
+            </Link>
+          ) : null
         }
       />
       <Region order={5}>
         <div
           className="uwv-terminal"
-          style={{ padding: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}
+          style={{ padding: 'var(--region-inset)', borderRadius: 'var(--radius-lg)' }}
         >
           <Estate status={data} />
         </div>
@@ -465,99 +472,285 @@ function Queue({ incidents }: { incidents: Incident[] }) {
 
 /* ── 2 · environment ──────────────────────────────────────────────────────── */
 
-function Environment({ status, canSeeLive }: { status: OperatorStatus; canSeeLive: boolean }) {
+/**
+ * What the runtime is doing right now, per camera.
+ *
+ * ### What this region actually reports
+ *
+ * `cameras.health` on `/api/v1/status` is one entry per **live-runtime session
+ * visible in this operator's camera scope**, each carrying the health the source
+ * derives from its own state machine. It is not a list of cameras in the
+ * database — that is `cameras_registered`, and it belongs to The Estate below.
+ * The two are different facts, and the gap between them is itself worth naming,
+ * which is what `missing` does at the foot of this region.
+ *
+ * ### Why there are no pictures here, and why there used to be room for them
+ *
+ * `/status` serves no imagery and cannot: a frame requires a per-camera ticket
+ * from `/wall/tickets` and a long-lived MJPEG response held open by an `<img>`,
+ * which is what the Live Wall does and the only thing that does it. The previous
+ * implementation rendered each camera as a `CameraSurface` — the wall's
+ * primitive, a 16:9 picture area with chrome over it — and, having no picture to
+ * put in it, filled the picture area with the sentence *"Producing frames.
+ * Imagery is served on the wall, not here."*
+ *
+ * That sentence was true. The rectangle around it was the mistake: an inherited
+ * shape rather than a product decision. Measured in a browser it cost 754px of a
+ * 2430px page at 1440px, and 1875px of a 4153px page at 430px — 45% of the whole
+ * Command Center — to say twelve words about **six** cameras out of sixteen,
+ * because the tile field was also silently sliced to six with nothing saying so.
+ *
+ * Two further faults went with it: every tile passed no `signal`, so it defaulted
+ * to `none` — the no-signal hatch — underneath copy that said frames were
+ * arriving; and each tile carried a `Watch` link to `/live`, the same destination
+ * the region's own action already offered, seven links to one page.
+ *
+ * ### What replaced it
+ *
+ * A roster. The same information as a directory entry — which camera, what
+ * state, and what that state means — for **every** session rather than six of
+ * them, ordered worst first so what needs a person is read first. The wall keeps
+ * one entry point, at the region's head where it was always going to be looked
+ * for; a camera's own identifier links to its register entry, which is the only
+ * place that explains a camera rather than showing it.
+ */
+function Environment({
+  status,
+  canSeeRegister,
+}: {
+  status: OperatorStatus;
+  canSeeRegister: boolean;
+}) {
   const { cameras, live_runtime: runtime } = status;
-  const online = cameras.health.filter((c) => c.health === 'online').length;
-  const nothingRunning = cameras.health.length === 0;
+  const sessions = cameras.health;
+  const online = sessions.filter((c) => c.health === 'online').length;
 
-  return (
-    <div className="uwv-lead">
-      {/* Dominant: the cameras themselves, as pictures-in-waiting rather than
-          rows in a table. Deliberately no imagery — the status endpoint serves
-          no frame, and a black rectangle would be a claim this page cannot
-          support. The wall is one click away and it does serve frames.
+  /**
+   * Enabled in the store, but the runtime reports no session for it.
+   *
+   * A real gap and a real question, and this page deliberately does not answer
+   * it: `/status` does not report *why* a session is missing, and the reasons
+   * are genuinely different — analysis switched off for that camera, a host that
+   * has never been reachable, a runtime that has not started. Naming a cause
+   * here would be inventing one. It states the count and where to go.
+   *
+   * Only rendered when positive. The two figures are counted over the same
+   * camera scope, but a session for a row disabled a moment ago would make this
+   * negative, and a negative gap is not a fact about anything.
+   */
+  const missing = status.cameras_enabled - cameras.sessions;
 
-          When nothing is running the *figures beside this column still render*,
-          reading `—` with their reason. Replacing the whole region with a
-          single panel would remove the em dash that says the count is unknown,
-          and "unknown" is the fact the operator needs. */}
-      {nothingRunning ? (
+  if (sessions.length === 0) {
+    return (
+      <div className="uwv-rail">
         <AbsentRegion
           title={runtime.enabled ? 'No camera session is running' : 'Live monitoring is not enabled'}
           body={
             <>
-              {runtime.reason ||
-                `${cameras.configured} camera(s) are configured and none has an active session.`}{' '}
+              {/* The runtime's reason is a backend string and does not promise to
+                  end in a full stop — `FEATURE_LIVE_CCTV is off; no camera session
+                  will start` does not — so it ran straight into the sentence after
+                  it. Terminated here rather than edited: the message is the
+                  backend's and this only closes it. */}
+              {sentence(
+                runtime.reason ||
+                  `${cameras.configured} camera(s) are configured and none has an active session.`,
+              )}{' '}
               Nothing is being observed — which is not the same as observing
               nothing, and this page will never imply otherwise.
             </>
           }
         />
-      ) : (
-      <div className="uwv-tiles">
-        {cameras.health.slice(0, 6).map((camera) => (
-          <CameraSurface
-            key={camera.camera_id}
-            name={camera.camera_id}
-            identifier={camera.camera_id}
-            context={camera.kind}
-            tone={cameraTone(camera.health)}
-            stateLabel={camera.health}
-            media={
-              <span
-                style={{
-                  color: 'var(--video-ink)',
-                  fontSize: 'var(--text-xs)',
-                  textAlign: 'center',
-                  padding: 'var(--space-4)',
-                  maxWidth: '26ch',
-                }}
-              >
-                {camera.health === 'online'
-                  ? 'Producing frames. Imagery is served on the wall, not here.'
-                  : 'Not producing frames.'}
-              </span>
-            }
-            meta={
-              canSeeLive ? (
-                <Link to="/live" style={{ textDecoration: 'none' }}>
-                  <GoTo>Watch</GoTo>
-                </Link>
-              ) : (
-                <span>Live viewing needs its own permission</span>
-              )
-            }
-          />
-        ))}
+        <EnvironmentFigures cameras={cameras} runtime={runtime} online={online} />
       </div>
-      )}
+    );
+  }
 
-      {/* Supporting: the counts, ranked and smaller, and on a ground.
+  const ordered = [...sessions].sort(
+    (a, b) =>
+      (HEALTH_RANK[a.health] ?? 9) - (HEALTH_RANK[b.health] ?? 9) ||
+      a.camera_id.localeCompare(b.camera_id),
+  );
+  const shown = ordered.slice(0, ROSTER_LIMIT);
+  const remainder = ordered.length - shown.length;
 
-          Before Stage 5 this rail was figures floating on the page beside a
-          bordered region, which read as leftover rather than as an inspector.
-          A plane is the correct surface for it: it is a ground the numbers sit
-          on, not a card competing with the region beside it — which is exactly
-          why it takes no shadow. */}
-      <Plane style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start', alignSelf: 'start' }}>
-        <Figure
-          label="Producing frames"
-          scale="hero"
-          value={cameras.configured === 0 ? null : online}
-          unavailableReason="No camera is configured yet"
-          detail={`of ${cameras.configured} configured · ${cameras.streaming} streaming`}
-          tone={online > 0 ? 'accent' : 'default'}
+  return (
+    /* The rail, not the lead.
+     *
+     * `uwv-lead` gives its supporting column two fifths of the region, which was
+     * right when the dominant side was a field of 16:9 tiles. Beside a roster it
+     * left a 400px hole under two figures, and it squeezed the roster below the
+     * width where a second column of rows can form — the measured result was 16
+     * rows in one column and a region no shorter than the tiles it replaced.
+     *
+     * The rail is the composition this actually is: a wide primary column and a
+     * fixed narrower one of context. It is also what the perception region below
+     * uses, so the page's two data regions now compose the same way. */
+    <div className="uwv-rail">
+      <div style={{ display: 'grid', gap: 'var(--space-5)', alignContent: 'start' }}>
+        <StateTally
+          states={HEALTH_ORDER.map((key) => ({
+            key,
+            label: HEALTH[key].tally,
+            tone: cameraTone(key),
+            count: sessions.filter((c) => c.health === key).length,
+          }))}
         />
-        <Figure
-          label="Sessions"
-          scale="quiet"
-          value={cameras.sessions}
-          detail={runtime.enabled ? 'Runtime enabled' : runtime.reason || 'Runtime not enabled'}
-        />
-      </Plane>
+
+        <ul className="uwv-roster" role="list">
+          {shown.map((camera) => (
+              <CameraLine
+                key={camera.camera_id}
+                name={
+                  canSeeRegister ? (
+                    <Link
+                      to={`/cameras/${encodeURIComponent(camera.camera_id)}`}
+                      className="uwv-quiet"
+                      style={{ color: 'inherit' }}
+                    >
+                      {camera.camera_id}
+                    </Link>
+                  ) : (
+                    camera.camera_id
+                  )
+                }
+                identifier={camera.camera_id}
+                tone={cameraTone(camera.health)}
+                state={camera.health}
+                meaning={meaningOf(camera.health)}
+                kind={camera.kind === 'live' ? undefined : camera.kind}
+              />
+          ))}
+        </ul>
+
+        {remainder > 0 ? (
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
+            {remainder} more session{remainder === 1 ? '' : 's'} not listed. The order is worst
+            first, so nothing needing attention is among them.
+          </p>
+        ) : null}
+
+        {missing > 0 ? (
+          <p
+            style={{
+              fontSize: 'var(--text-xs)',
+              color: 'var(--ink-tertiary)',
+              maxWidth: 'var(--measure)',
+            }}
+          >
+            {missing} enabled camera{missing === 1 ? '' : 's'} report{missing === 1 ? 's' : ''} no
+            runtime session at all, so {missing === 1 ? 'it is' : 'they are'} not in this list. This
+            page does not carry the reason; the{' '}
+            {canSeeRegister ? <Link to="/cameras">camera register</Link> : 'camera register'} does.
+          </p>
+        ) : null}
+      </div>
+
+      <EnvironmentFigures cameras={cameras} runtime={runtime} online={online} />
     </div>
   );
 }
+
+/**
+ * The counts beside the roster, on a ground rather than floating.
+ *
+ * Extracted so the empty case renders them too. When no session is running the
+ * roster is replaced by a single panel, and these figures still have to render:
+ * "Producing frames" reads `—` with its reason, and the em dash that says the
+ * count is unknown is precisely the fact an operator needs. Replacing the whole
+ * region would remove it.
+ */
+function EnvironmentFigures({
+  cameras,
+  runtime,
+  online,
+}: {
+  cameras: OperatorStatus['cameras'];
+  runtime: OperatorStatus['live_runtime'];
+  online: number;
+}) {
+  return (
+    <Plane style={{ display: 'grid', gap: 'var(--space-6)', alignContent: 'start', alignSelf: 'start' }}>
+      <Figure
+        label="Producing frames"
+        scale="hero"
+        value={cameras.configured === 0 ? null : online}
+        unavailableReason="No camera is configured yet"
+        detail={`of ${cameras.configured} configured · ${cameras.streaming} streaming`}
+        tone={online > 0 ? 'accent' : 'default'}
+      />
+      <Figure
+        label="Sessions"
+        scale="quiet"
+        value={cameras.sessions}
+        detail={runtime.enabled ? 'Runtime enabled' : runtime.reason || 'Runtime not enabled'}
+      />
+    </Plane>
+  );
+}
+
+/**
+ * The five states `CameraHealth` can report, and what each one means to a person.
+ *
+ * The words are the backend enum's own docstrings rather than a paraphrase:
+ * `DEGRADED` is documented as "reconnecting, or connected and producing
+ * nothing", and the meaning below is that union rather than either half of it,
+ * because the wire does not say which. `OFFLINE` is "deliberately stopped, or
+ * not started" and `ERROR` is "failed and not retrying — needs a human".
+ *
+ * Four of these five are "not producing frames" and they are kept apart on
+ * purpose. Collapsing them into one word would be the failure this product is
+ * built to avoid, in miniature: a camera nobody started and a camera that fell
+ * over are the same picture only to software.
+ */
+const HEALTH: Record<CameraHealth, { meaning: string; tally: string }> = {
+  error: { meaning: 'Failed — needs a person', tally: 'faulted' },
+  degraded: { meaning: 'Reconnecting, or silent', tally: 'reconnecting or silent' },
+  connecting: { meaning: 'Opening; no frame yet', tally: 'connecting' },
+  offline: { meaning: 'Stopped, or never started', tally: 'stopped' },
+  online: { meaning: 'Producing frames now', tally: 'producing frames' },
+};
+
+/**
+ * What a state means to a person, for a state this build may not know.
+ *
+ * `CameraHealth` is the wire's union today and the map above is total over it,
+ * so this could be a plain lookup. It is written to admit an unknown string
+ * because the backend owns that vocabulary and can extend it, and a build that
+ * met a word it had never seen would otherwise render `undefined` — or worse,
+ * fall through to a confident sentence about the wrong state. It says it does
+ * not know, which is the only honest reading of a state nobody has taught it.
+ */
+function meaningOf(health: string): string {
+  const spec = (HEALTH as Record<string, { meaning: string } | undefined>)[health];
+  return spec?.meaning ?? 'State not recognised by this build';
+}
+
+/** A backend string, closed so it does not run into the sentence after it. */
+function sentence(text: string): string {
+  return /[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
+}
+
+/** Worst first. What needs a person is read before what is working. */
+const HEALTH_ORDER: readonly CameraHealth[] = [
+  'error',
+  'degraded',
+  'connecting',
+  'offline',
+  'online',
+];
+const HEALTH_RANK: Record<string, number> = Object.fromEntries(
+  HEALTH_ORDER.map((key, index) => [key, index]),
+);
+
+/**
+ * Enough rows that a full DVR lists in one reading, and a bound so that a large
+ * estate cannot turn this region back into the thing it replaced. The order is
+ * worst first, so a truncated tail is always the healthy end of it — and the
+ * remainder is stated rather than dropped, because a list that hides its own
+ * length misreports it.
+ */
+const ROSTER_LIMIT = 24;
 
 /* ── 3 · perception ───────────────────────────────────────────────────────── */
 

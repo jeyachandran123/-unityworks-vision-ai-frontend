@@ -250,7 +250,13 @@ export function AdministrationPage() {
         <PermissionGate permission={PERMISSIONS.manageOrganization}>
           <div style={{ marginTop: 'var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
             <SectionHeader title="Add a site" />
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
+            {/* alignItems: 'flex-start', not 'flex-end'. Input's hint line sits
+                below the field, so bottom-aligning a row containing an Input
+                and a Button lines the button up with the hint text rather than
+                the input box — the button hung visibly lower than the field it
+                submits. The invisible label matches Input's own label height so
+                the button's control still lands level with the input. */}
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
               <div style={{ flex: 1, maxWidth: '24rem' }}>
                 <Input
                   label="Site name"
@@ -259,14 +265,22 @@ export function AdministrationPage() {
                   onChange={(event) => setSiteName(event.target.value)}
                 />
               </div>
-              <Button
-                variant="primary"
-                loading={createSite.isPending}
-                disabled={siteName.trim().length === 0}
-                onClick={() => createSite.mutate(siteName.trim())}
-              >
-                Add site
-              </Button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <span
+                  aria-hidden="true"
+                  style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', visibility: 'hidden' }}
+                >
+                  Add site
+                </span>
+                <Button
+                  variant="primary"
+                  loading={createSite.isPending}
+                  disabled={siteName.trim().length === 0}
+                  onClick={() => createSite.mutate(siteName.trim())}
+                >
+                  Add site
+                </Button>
+              </div>
             </div>
             {createSite.isError ? <Failed error={createSite.error} /> : null}
           </div>
@@ -309,11 +323,17 @@ export function AdministrationPage() {
                 </p>
               ) : (
                 <>
+                  {/* alignItems: 'flex-start', not 'flex-end'. 'Zone name'
+                      carries a hint line the 'Site' select does not, so
+                      bottom-aligning the row pushed the shorter 'Site' label
+                      and its select down to match the hint's bottom — the two
+                      labels no longer sat on the same line, and the select box
+                      hung below the zone-name field it was meant to pair with. */}
                   <div
                     style={{
                       display: 'flex',
                       gap: 'var(--space-3)',
-                      alignItems: 'flex-end',
+                      alignItems: 'flex-start',
                       flexWrap: 'wrap',
                     }}
                   >
@@ -359,19 +379,27 @@ export function AdministrationPage() {
                         onChange={(event) => setZoneName(event.target.value)}
                       />
                     </div>
-                    <Button
-                      variant="primary"
-                      loading={createZone.isPending}
-                      disabled={zoneName.trim().length === 0}
-                      onClick={() =>
-                        createZone.mutate({
-                          restaurant_id: zoneSite || sites[0]!.id,
-                          name: zoneName.trim(),
-                        })
-                      }
-                    >
-                      Add zone
-                    </Button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                      <span
+                        aria-hidden="true"
+                        style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', visibility: 'hidden' }}
+                      >
+                        Add zone
+                      </span>
+                      <Button
+                        variant="primary"
+                        loading={createZone.isPending}
+                        disabled={zoneName.trim().length === 0}
+                        onClick={() =>
+                          createZone.mutate({
+                            restaurant_id: zoneSite || sites[0]!.id,
+                            name: zoneName.trim(),
+                          })
+                        }
+                      >
+                        Add zone
+                      </Button>
+                    </div>
                   </div>
                   {createZone.isError ? <Failed error={createZone.error} /> : null}
                 </>

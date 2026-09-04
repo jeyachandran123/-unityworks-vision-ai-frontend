@@ -323,6 +323,22 @@
   --spine-gutter: 1.5rem;
 
   /**
+   * The one step between a region's ground and the axis its label sits on.
+   *
+   * Before this token every padded region chose its own: the attention panel
+   * 32px, the estate's terminal ground 24px, a camera tile's chrome 12px.
+   * Measured in the browser against a label column at x=289, their first text
+   * landed at 322, 313 and 302 — three insets that were never decided, only
+   * accumulated, and which read together as a page whose sections had each been
+   * positioned on their own.
+   *
+   * There are now exactly two positions in the system: content on the axis, and
+   * content one step in from it because it sits on a ground of its own. Two
+   * reads as a decision. Four read as an accident.
+   */
+  --region-inset: 1.5rem;
+
+  /**
    * Entrance stagger.
    *
    * The delay between one region arriving and the next. Small enough that the
