@@ -10,7 +10,6 @@
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { Figure, Meter } from '@shared/ui/product';
 import { adminIdentity, identity, installFetch, managerIdentity, renderApp } from './support';
@@ -175,7 +174,7 @@ describe('the audit trail can be narrowed to one resource', () => {
 
 /* ── camera registration: recovery of a promise already in the copy ───────── */
 
-describe('registering a camera', () => {
+describe('adding a camera', () => {
   it('is offered to an account that may configure cameras', async () => {
     installFetch({
       session: adminIdentity(),
@@ -183,9 +182,7 @@ describe('registering a camera', () => {
     });
     renderApp(<AppRouter />, '/cameras');
 
-    // The page's empty state has told operators to "add a camera to begin"
-    // since Phase 2 while offering no way to do it.
-    expect(await screen.findByRole('button', { name: /register a camera/i })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /add a camera/i })).toBeInTheDocument();
   });
 
   it('is not offered to an account that may only read the estate', async () => {
@@ -196,33 +193,67 @@ describe('registering a camera', () => {
     renderApp(<AppRouter />, '/cameras');
 
     await screen.findByRole('heading', { name: 'Cameras' });
-    expect(screen.queryByRole('button', { name: /register a camera/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /add a camera/i })).not.toBeInTheDocument();
   });
 
-  it('creates the camera disabled, and has no field that could carry a password', async () => {
-    const calls: string[] = [];
+  it('asks for placement by choosing a site, never by typing an id', async () => {
+    // The form this replaced took `restaurant_id` as free text. Nobody knows a
+    // site's id, and a typo produced either a 404 or a camera attached
+    // somewhere unintended.
     installFetch({
       session: adminIdentity(),
-      calls,
-      routes: { '/cameras': { cameras: [], enabled: 0, total: 0 } },
+      restaurants: {
+        restaurants: [
+          {
+            id: 'rest-1',
+            name: 'Harbour Kitchen',
+            slug: 'harbour-kitchen',
+            timezone: 'Asia/Singapore',
+            is_active: true,
+            created_at: '2026-08-01T00:00:00Z',
+            zone_count: 1,
+            camera_count: 0,
+          },
+        ],
+        count: 1,
+        total: 1,
+        limit: 200,
+        offset: 0,
+      },
     });
-    renderApp(<AppRouter />, '/cameras');
+    renderApp(<AppRouter />, '/admin/cameras/new');
 
-    await userEvent.click(await screen.findByRole('button', { name: /register a camera/i }));
-    const dialog = await screen.findByRole('dialog');
+    await screen.findByRole('heading', { name: 'Add a camera' });
+    const site = await screen.findByLabelText(/^site$/i);
+    expect(site.tagName).toBe('SELECT');
+    expect(within(site as HTMLSelectElement).getByRole('option', { name: 'Harbour Kitchen' }))
+      .toBeInTheDocument();
 
+    // And no id field anywhere for somebody to paste one into.
+    expect(screen.queryByLabelText(/restaurant id/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/zone id/i)).not.toBeInTheDocument();
+  });
+
+  it('has no field anywhere that could carry a password', async () => {
     // A credential *reference*, never a credential. The dialling URL is
-    // assembled on the server from a secret it resolves itself.
-    expect(within(dialog).getByLabelText(/credential reference/i)).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/^password$/i)).not.toBeInTheDocument();
-    expect(dialog.querySelector('input[type="password"]')).toBeNull();
-    expect(within(dialog).getByText(/will open no connection/i)).toBeInTheDocument();
+    // assembled on the server from a secret it resolves itself, and there is
+    // no code path through this client that would carry one.
+    installFetch({ session: adminIdentity() });
+    renderApp(<AppRouter />, '/admin/cameras/new');
 
-    await userEvent.type(within(dialog).getByLabelText(/camera key/i), 'cam-09');
-    await userEvent.type(within(dialog).getByLabelText(/restaurant/i), 'rest-01');
-    await userEvent.click(within(dialog).getByRole('button', { name: /register, disabled/i }));
+    await screen.findByRole('heading', { name: 'Add a camera' });
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
 
-    expect(calls.some((c) => c.startsWith('POST') && c.includes('/cameras'))).toBe(true);
+  it('says the camera is created switched off', async () => {
+    installFetch({ session: adminIdentity() });
+    renderApp(<AppRouter />, '/admin/cameras/new');
+
+    // Said in the opening, before any field is filled in — adding a camera
+    // and starting to process video of people are two decisions, and the
+    // second one is not made here.
+    await screen.findByRole('heading', { name: 'Add a camera' });
+    expect(screen.getByText(/created switched off/i)).toBeInTheDocument();
   });
 });
 

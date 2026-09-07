@@ -13,9 +13,26 @@
  */
 
 export const PERMISSIONS = {
+  /** Organisation settings and lifecycle only. It is deliberately no longer
+      the blanket write permission for sites and zones — those have their own
+      keys below, which is what makes "may edit the estate" and "may
+      reconfigure the organisation" separable. */
   manageOrganization: 'manage_organization',
   manageUsers: 'manage_users',
+  /** The user roster, and nothing else. It historically also gated reading
+      sites and zones, so holding it meant "may read every site" as a side
+      effect of "may see who works here". */
   viewUsers: 'view_users',
+
+  /* ── the physical estate ───────────────────────────────────────────
+     Read and manage are separate per domain, which is what lets two people on
+     the same role differ: one may edit the estate, the other may only look at
+     it. */
+
+  viewSites: 'view_sites',
+  manageSites: 'manage_sites',
+  viewZones: 'view_zones',
+  manageZones: 'manage_zones',
   viewLive: 'view_live',
   viewObservations: 'view_observations',
   /** Never implied by `viewObservations`. A separate act, deliberately. */
@@ -26,6 +43,10 @@ export const PERMISSIONS = {
   viewCameras: 'view_cameras',
   /** Adding a camera, and — the consequential one — enabling it. */
   manageCameras: 'manage_cameras',
+  /** Retiring one. Not a heavier edit: it closes an observation partition,
+      which is the record a finding may later need to be defended with, and
+      renaming the camera back does not undo it. */
+  retireCameras: 'retire_cameras',
 
   viewIncidents: 'view_incidents',
   /** "Somebody has seen this." Does not close it. */

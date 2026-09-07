@@ -20,6 +20,12 @@ import { api, authorizedFetch } from './client';
 
 export interface Camera {
   camera_key: string;
+  /**
+   * Globally unique: `organization_id:camera_key`. A camera key alone is
+   * unique only within its organisation, so anything process-wide — a stream
+   * registry, an observation partition — is keyed on this instead.
+   */
+  runtime_id: string;
   name: string;
   purpose: string;
   restaurant_id: string;
@@ -29,11 +35,19 @@ export interface Camera {
   host: string;
   rtsp_port: number;
   username: string;
-  /** A pointer such as `env:CCTV_PASSWORD`. Never a password. */
-  credential_ref: string;
+  /**
+   * Whether this camera can authenticate. The reference itself is no longer
+   * returned by the server at all: `literal:` made that field a channel that
+   * could carry the secret, and a field whose safety depends on every writer
+   * having picked the right scheme is not a safe field to send.
+   */
   credential_configured: boolean;
+  /** `env` or `file` — how the secret is stored, never where or what. */
+  credential_scheme: string;
   analysis_fps: number;
   enabled: boolean;
+  /** Whether the video is processed by AI, as distinct from whether it streams. */
+  analysis_enabled: boolean;
   /** Redacted: `rtsp://***:***@host:554/...`. Never the dialling URL. */
   uri: string;
   created_at: string | null;
@@ -51,13 +65,32 @@ export interface CameraDraft {
   name: string;
   channel: number;
   restaurant_id: string;
-  host?: string;
+  /**
+   * Required by the server. A camera with no address is skipped by the
+   * runtime, so one created without a host would be listed and permanently
+   * inert with nothing ever saying why.
+   */
+  host: string;
+  zone_id?: string | null;
   rtsp_port?: number;
   stream_type?: 'main' | 'sub';
   username?: string;
+  /** `env:NAME` or `file:/path`. `literal:` is refused by the server. */
   credential_ref?: string;
   analysis_fps?: number;
+  analysis_enabled?: boolean;
   purpose?: string;
+}
+
+export interface ConnectionTest {
+  reachable: boolean;
+  outcome: string;
+  detail: string;
+  elapsed_ms: number;
+  /** What the test does and does not prove. Shown verbatim; see below. */
+  proves: string;
+  host: string;
+  rtsp_port: number;
 }
 
 export const camerasApi = {
@@ -68,6 +101,25 @@ export const camerasApi = {
     api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, changes),
   setEnabled: (key: string, enabled: boolean) =>
     api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, { enabled }),
+  setAnalysis: (key: string, analysisEnabled: boolean) =>
+    api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, {
+      analysis_enabled: analysisEnabled,
+    }),
+  /** Retire. Destroys the observation partition — `retire_cameras`, not
+      `manage_cameras`, and never without an explicit confirmation. */
+  retire: (key: string) =>
+    api.del<{ camera_key: string; observations_removed: number }>(
+      `/cameras/${encodeURIComponent(key)}`,
+    ),
+  /**
+   * Is anything listening at this address?
+   *
+   * Pass `camera_key` for a saved camera (the address comes from the database
+   * and the caller cannot choose it), or `host`/`rtsp_port` for the onboarding
+   * wizard, which needs to check before the row exists.
+   */
+  testConnection: (probe: { camera_key?: string; host?: string; rtsp_port?: number }) =>
+    api.post<ConnectionTest>('/cameras/test-connection', probe),
 };
 
 /* ── incidents ────────────────────────────────────────────────────────────── */

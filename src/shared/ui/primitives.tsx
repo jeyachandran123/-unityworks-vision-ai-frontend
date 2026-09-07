@@ -193,12 +193,14 @@ export function Input({ label, hint, error, id, ...rest }: FieldProps) {
 
 export function Select({
   label,
+  hint,
   id,
   children,
   ...rest
-}: SelectHTMLAttributes<HTMLSelectElement> & { label: string }) {
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; hint?: ReactNode }) {
   const generated = useId();
   const selectId = id ?? generated;
+  const hintId = `${selectId}-hint`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <label htmlFor={selectId} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-secondary)' }}>
@@ -215,6 +217,10 @@ export function Select({
           operable, and the option list is still the platform's own. */}
       <select
         id={selectId}
+        // Wired with `aria-describedby` rather than merely printed underneath,
+        // so the explanation is read out with the control instead of being
+        // discovered afterwards by somebody who has already chosen wrong.
+        aria-describedby={hint ? hintId : undefined}
         style={{
           appearance: 'none',
           WebkitAppearance: 'none',
@@ -233,6 +239,14 @@ export function Select({
       >
         {children}
       </select>
+      {hint ? (
+        <p
+          id={hintId}
+          style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}
+        >
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

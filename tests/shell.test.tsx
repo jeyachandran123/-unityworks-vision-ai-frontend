@@ -15,7 +15,13 @@ import {
   UnavailableState,
   UnknownState,
 } from '@shared/ui/primitives';
-import { identity, installFetch, managerIdentity, renderApp } from './support';
+import {
+  identity,
+  installFetch,
+  managerIdentity,
+  renderApp,
+  supervisorIdentity,
+} from './support';
 
 describe('role-aware navigation', () => {
   it('a manager sees the product sections', async () => {
@@ -30,13 +36,29 @@ describe('role-aware navigation', () => {
     }
   });
 
-  it('a manager without admin permissions sees no Administration link', async () => {
-    installFetch({ session: managerIdentity() });
+  it('a supervisor with no administration read sees no Administration link', async () => {
+    // A kitchen supervisor holds no `view_sites`, no `view_zones` and no
+    // `view_users`, so there is nothing for them on the administration surface
+    // at all — and the link is absent rather than present and refusing.
+    installFetch({ session: supervisorIdentity() });
     renderApp(<AppRouter />, '/dashboard');
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('link', { name: /administration/i })).not.toBeInTheDocument();
+  });
+
+  it('a manager who may read the estate reaches Administration', async () => {
+    // The corrected vocabulary in one assertion. A restaurant manager holds
+    // `view_sites` and `view_zones` and no `manage_*` at all, so the area is
+    // reachable and read-only — which is the case the old gate could not
+    // express, because it demanded a write permission to see anything.
+    installFetch({ session: managerIdentity() });
+    renderApp(<AppRouter />, '/dashboard');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).getByRole('link', { name: /administration/i })).toBeInTheDocument();
   });
 
   it('navigation is generated from permissions, not from role names', async () => {

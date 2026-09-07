@@ -122,16 +122,22 @@ describe('the camera page', () => {
     expect(within(notProcessed).getByText('1')).toBeInTheDocument();
   });
 
-  it('shows the credential reference and never a credential', async () => {
+  it('shows how the credential is stored and never which one, nor its value', async () => {
+    // The reference itself is no longer shown, and no longer sent: `literal:`
+    // made `credential_ref` a field that could carry the secret, and
+    // `env:CCTV_PASSWORD` names a variable anyone reaching the process can go
+    // and read. The scheme is the diagnosable part — "this camera reads an
+    // environment variable" — and it is all that is offered.
     installFetch({
       session: adminIdentity(),
       routes: { '/cameras': { cameras: [camera()], enabled: 0, total: 1 } },
     });
     renderApp(<AppRouter />, '/cameras');
 
-    await screen.findByText('env:CCTV_PASSWORD');
+    await screen.findByRole('heading', { name: 'Cameras' });
     const body = document.body.textContent ?? '';
     expect(body).not.toMatch(/hunter2|password=|:\w+@10\.0\.0\.5/);
+    expect(body).not.toContain('CCTV_PASSWORD');
   });
 
   it('offers the enable control only to an account that may configure cameras', async () => {

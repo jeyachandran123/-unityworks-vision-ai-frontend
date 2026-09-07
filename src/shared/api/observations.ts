@@ -146,7 +146,20 @@ export interface Restaurant {
 
 export interface RestaurantList {
   restaurants: Restaurant[];
+  /** How many are on this page. */
   count: number;
+  /** How many match the query in total. Paginated from the start: the version
+      that fetches every site works right up until the day it does not. */
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SiteQuery {
+  q?: string;
+  is_active?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 export interface Zone {
@@ -185,8 +198,20 @@ export interface UserList {
   write_unavailable_reason: string;
 }
 
+/** The generic form. `query` above is the observation-specific one. */
+function search(params: Record<string, string | number | boolean | undefined>): string {
+  const encoded = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') encoded.set(key, String(value));
+  }
+  const rendered = encoded.toString();
+  return rendered ? `?${rendered}` : '';
+}
+
 export const organizationApi = {
-  restaurants: () => api.get<RestaurantList>('/restaurants'),
+  restaurants: (params: SiteQuery = {}) =>
+    api.get<RestaurantList>(`/restaurants${search({ ...params })}`),
+  restaurant: (id: string) => api.get<Restaurant>(`/restaurants/${encodeURIComponent(id)}`),
   createRestaurant: (draft: { name: string; timezone?: string }) =>
     api.post<Restaurant>('/restaurants', draft),
   updateRestaurant: (

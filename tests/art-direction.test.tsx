@@ -29,7 +29,10 @@ describe('one opening, on every page', () => {
    * Each of these routes came from one of those files.
    */
   const migrated = [
-    ['/admin', 'Administration', 'Platform'],
+    // 'Organisation', not 'Platform'. The area a tenant administrator is in
+    // *is* their organisation; 'Platform' now names the surface above every
+    // organisation, which answers to a different principal entirely.
+    ['/admin', 'Administration', 'Organisation'],
     ['/hygiene', 'Staff Hygiene', 'Compliance'],
     ['/people-counting', 'People Counting', 'Intelligence'],
     ['/patron-id', 'Unique Patron ID', 'Platform'],

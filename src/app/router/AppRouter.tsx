@@ -30,7 +30,18 @@ import { ReportsPage } from '@features/reports';
 // that keeping them beside the pages still awaiting one would hide which is
 // which.
 import { StaffHygienePage } from '@features/hygiene';
-import { AdministrationPage } from '@features/administration';
+import { UserDetailPage } from '@features/user-detail';
+// Administration is no longer one page. Sites, Cameras, People, Roles & Access
+// and the organisation hub are separate surfaces, because a site and a person
+// are objects worth looking at and the stacked page had nowhere to look at
+// them. The platform console sits above all of them and answers to a different
+// principal entirely — see `@shared/api/platform`.
+import { AdminOverviewPage, RolesAndAccessPage } from '@features/admin/overview';
+import { SiteDetailPage, SitesPage } from '@features/admin/sites';
+import { AdminCameraDetailPage, AdminCamerasPage } from '@features/admin/cameras';
+import { CameraOnboardingPage } from '@features/admin/camera-onboarding';
+import { PeoplePage } from '@features/admin/people';
+import { OrganizationDetailPage, OrganizationsPage } from '@features/admin/organizations';
 // The seven modules with a schema, a permission and no data source. Each page
 // states the specific real-world input it is waiting for; none renders a
 // number. Patron ID is separate because it is blocked by a decision rather
@@ -196,15 +207,73 @@ export function AppRouter() {
             <Route path="/audit" element={<AuditPage />} />
           </Route>
 
+          {/* The hub. Any administration read gets in, and the page itself
+              lists only the areas this account can actually reach — rather
+              than showing four links and letting three of them 403. */}
           <Route
             element={
               <RequirePermission
-                permissions={[PERMISSIONS.manageUsers, PERMISSIONS.manageOrganization]}
+                permissions={[
+                  PERMISSIONS.viewSites,
+                  PERMISSIONS.viewZones,
+                  PERMISSIONS.viewCameras,
+                  PERMISSIONS.viewUsers,
+                  PERMISSIONS.manageOrganization,
+                ]}
               />
             }
           >
-            <Route path="/admin" element={<AdministrationPage />} />
+            <Route path="/admin" element={<AdminOverviewPage />} />
           </Route>
+
+          {/* Sites and zones read on their own permissions now, not on
+              `view_users`. That separation is the entire point of the
+              vocabulary correction: reading the estate and reading the staff
+              list are different questions. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewSites]} />}>
+            <Route path="/admin/sites" element={<SitesPage />} />
+            <Route path="/admin/sites/:siteId/*" element={<SiteDetailPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewCameras]} />}>
+            <Route path="/admin/cameras" element={<AdminCamerasPage />} />
+            <Route path="/admin/cameras/:cameraKey/*" element={<AdminCameraDetailPage />} />
+          </Route>
+
+          {/* Adding one needs the write permission, and is declared above the
+              detail route so `/admin/cameras/new` is never read as a camera
+              whose key is "new". */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.manageCameras]} />}>
+            <Route path="/admin/cameras/new" element={<CameraOnboardingPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewUsers]} />}>
+            <Route path="/admin/people" element={<PeoplePage />} />
+            <Route path="/admin/access" element={<RolesAndAccessPage />} />
+          </Route>
+
+          {/* Narrower than the roster: changing a person always needs
+              MANAGE_USERS specifically. A `view_users` holder reads the list
+              and is redirected off a profile, matching `RequirePermission`'s
+              redirect-not-403 posture. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.manageUsers]} />}>
+            <Route path="/admin/people/:userId" element={<UserDetailPage />} />
+            {/* The path this page lived at before People existed. Kept so
+                links in older audit rows and bookmarks still resolve. */}
+            <Route path="/admin/users/:userId" element={<UserDetailPage />} />
+          </Route>
+
+          {/* The platform console. Deliberately not behind `RequirePermission`:
+              there is no permission that grants it, and inventing one would be
+              exactly the redefinition of `super_admin` into a cross-customer
+              superuser that the tenant boundary exists to prevent. The page
+              asks the server whether this account is an operator, and the
+              server refuses every route here regardless. */}
+          <Route path="/platform/organizations" element={<OrganizationsPage />} />
+          <Route
+            path="/platform/organizations/:organizationId"
+            element={<OrganizationDetailPage />}
+          />
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.accessDevtools]} />}>
             <Route

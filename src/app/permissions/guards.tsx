@@ -83,3 +83,22 @@ export function PermissionGate({
   const { user } = useAuth();
   return hasAny(user, [permission]) ? <>{children}</> : <>{fallback}</>;
 }
+
+/**
+ * "What may this account do?" — as a hook rather than only as a wrapper.
+ *
+ * `PermissionGate` covers showing or not showing a control, which is most
+ * cases. It cannot answer the ones where the permission changes the *words*
+ * rather than the presence of something: an empty list says "add the first
+ * one" to somebody who can, and "nobody has added one yet" to somebody who
+ * cannot, and both of those are a single sentence rather than two branches
+ * worth wrapping.
+ */
+export function usePermissions() {
+  const { user } = useAuth();
+  return {
+    has: (permission: Permission) => hasAny(user, [permission]),
+    hasAny: (permissions: Permission[]) => hasAny(user, permissions),
+    hasAll: (permissions: Permission[]) => hasAll(user, permissions),
+  };
+}

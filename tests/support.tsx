@@ -79,6 +79,12 @@ export const managerIdentity = (): Identity =>
       'view_reports',
       'view_table_occupancy',
       'view_users',
+      // Reads the estate, and cannot change it. This is what the read/manage
+      // split is for: a manager who *should* be able to edit sites gets
+      // `manage_sites` as a per-user grant, and the two managers then differ
+      // while holding the same role.
+      'view_sites',
+      'view_zones',
       'export_reports',
     ],
   });
@@ -136,8 +142,13 @@ export const adminIdentity = (): Identity =>
       'acknowledge_incidents',
       'delete_evidence',
       'manage_cameras',
+      'retire_cameras',
       'manage_cutting_board',
       'manage_organization',
+      'manage_sites',
+      'manage_zones',
+      'view_sites',
+      'view_zones',
       'manage_pos_integration',
       'manage_table_occupancy',
       'manage_users',
@@ -836,6 +847,60 @@ export function moduleCapability(module: string, overrides: Record<string, unkno
   };
 }
 
+/**
+ * Every `Permission` enum value (`app/authorization/model.py`), so the
+ * Stage 7 Access table's eight groups all have something to render by
+ * default. A test that cares about one specific row overrides it through
+ * `adminUserPermissions`.
+ */
+export const ALL_PERMISSIONS = [
+  'manage_organization',
+  'manage_users',
+  'view_users',
+  'view_live',
+  'view_observations',
+  'view_evidence',
+  'view_camera_health',
+  'manage_cameras',
+  'view_cameras',
+  'view_incidents',
+  'acknowledge_incidents',
+  'resolve_incidents',
+  'delete_evidence',
+  'view_audit',
+  'view_reports',
+  'export_reports',
+  'view_model_evaluation',
+  'view_people_count',
+  'view_demography',
+  'view_table_occupancy',
+  'manage_table_occupancy',
+  'view_cutting_board',
+  'manage_cutting_board',
+  'view_meal_detection',
+  'view_patron_id',
+  'manage_patron_id',
+  'view_pos_integration',
+  'manage_pos_integration',
+  'access_devtools',
+  'register_demand',
+] as const;
+
+/** A default permission row: INHERIT, role does not grant, not effective. */
+function defaultPermissionRows(): Array<{
+  permission: string;
+  state: 'inherit' | 'grant' | 'revoke';
+  role_grants: boolean;
+  effective: boolean;
+}> {
+  return ALL_PERMISSIONS.map((permission) => ({
+    permission,
+    state: 'inherit' as const,
+    role_grants: false,
+    effective: false,
+  }));
+}
+
 export interface StubOptions {
   /** Overrides the camera block on /status. */
   cameras?: unknown;
@@ -849,8 +914,24 @@ export interface StubOptions {
   observations?: unknown;
   /** Overrides /restaurants. */
   restaurants?: unknown;
-  /** Overrides /users. */
+  /** Overrides /users (the old, read-only `GET /users` route). */
   users?: unknown;
+  /**
+   * Seeds the Stage 5/7 `/admin/users` surface — a real, mutable in-memory
+   * store, keyed by id. Mutations (create, activate, role assign/remove,
+   * permission override) actually change this store, so a refetch after a
+   * mutation shows the new state, the same as the real backend.
+   */
+  adminUsers?: ReadonlyArray<Record<string, unknown>>;
+  /**
+   * Seeds `GET /admin/users/{id}/permissions` per user id. Defaults to
+   * `defaultPermissionRows()` — every permission, INHERIT, not effective —
+   * for any seeded user with no explicit fixture.
+   */
+  adminUserPermissions?: Record<
+    string,
+    Array<{ permission: string; state: 'inherit' | 'grant' | 'revoke'; role_grants: boolean; effective: boolean }>
+  >;
   /**
    * Overrides a module capability route, keyed by module id — e.g.
    * `{ patron_id: { ...} }`. The default is the real not-connected shape, so a
@@ -900,6 +981,36 @@ function envelope(code: string, status: number): Response {
 export function stubFetch(options: StubOptions = {}) {
   const { session = identity(), routes = {}, calls = [] } = options;
   let networkFailures = options.refreshNetworkFailures ?? 0;
+
+  // Mutable per-call state for the Stage 5/7 admin surface. Seeded once from
+  // `options.adminUsers`/`options.adminUserPermissions`; every mutation below
+  // writes into it, so a GET after a mutation reflects the change — the same
+  // observable behaviour the real backend gives.
+  const adminUsersState: Record<string, Record<string, unknown>> = {};
+  for (const user of options.adminUsers ?? []) {
+    // Clone `roles` too — fixtures are shared `const`s across test cases, and
+    // a mutation here (`.push`/`.filter`) must never leak into the next test
+    // through a fixture's own array.
+    const roles = user['roles'];
+    adminUsersState[String(user['id'])] = {
+      // Every user the real server returns carries a camera scope, because a
+      // missing one is the bug that shipped: an account with no grant row
+      // signs in, holds every permission its role carries, and reaches no
+      // camera. A fixture without it would let a page pass a test and fail in
+      // front of a person.
+      camera_scope: { breadth: 'none', camera_keys: [], site_ids: [] },
+      ...user,
+      roles: Array.isArray(roles) ? [...roles] : roles,
+    };
+  }
+  const adminPermissionsState: Record<
+    string,
+    Array<{ permission: string; state: 'inherit' | 'grant' | 'revoke'; role_grants: boolean; effective: boolean }>
+  > = {};
+  for (const [id, rows] of Object.entries(options.adminUserPermissions ?? {})) {
+    adminPermissionsState[id] = rows.map((row) => ({ ...row }));
+  }
+  let nextAdminUserSeq = 1;
 
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -1054,8 +1165,133 @@ export function stubFetch(options: StubOptions = {}) {
       );
     }
 
+    // The Stage 5/7 admin surface. Checked ahead of the old `/users` route
+    // below, because `/admin/users`.includes('/users') is true and would
+    // otherwise be swallowed by the generic matcher.
+    if (url.includes('/admin/users')) {
+      const afterBase = url.split('/admin/users')[1] ?? '';
+      const segments = afterBase.split('?')[0]!.split('/').filter(Boolean);
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+
+      if (segments.length === 0) {
+        if (method === 'GET') {
+          return jsonResponse({
+            users: Object.values(adminUsersState),
+            count: Object.values(adminUsersState).length,
+            // The list is paginated. A stub that omitted these would let a
+            // page read `undefined` and still look fine.
+            total: Object.values(adminUsersState).length,
+            limit: 100,
+            offset: 0,
+          });
+        }
+        if (method === 'POST') {
+          const id = `admin-user-${nextAdminUserSeq}`;
+          nextAdminUserSeq += 1;
+          const email = String(body['email'] ?? '');
+          const created: Record<string, unknown> = {
+            id,
+            email,
+            display_name: body['display_name'] || email.split('@')[0],
+            is_active: true,
+            roles: Array.isArray(body['roles']) ? body['roles'] : [],
+            // Echoed back, as the real route does. A created account whose
+            // camera scope came back missing would be indistinguishable from
+            // the provisioning bug this field exists to close.
+            camera_scope:
+              (body['camera_scope'] as Record<string, unknown> | undefined) ?? {
+                breadth: 'none',
+                camera_keys: [],
+                site_ids: [],
+              },
+            created_at: '2026-09-01T00:00:00Z',
+            last_login_at: null,
+          };
+          if (!body['password']) created['generated_password'] = 'generated-password-1';
+          adminUsersState[id] = created;
+          adminPermissionsState[id] = defaultPermissionRows();
+          return jsonResponse(created);
+        }
+      } else {
+        const id = segments[0]!;
+        const rest = segments.slice(1);
+        const record = adminUsersState[id];
+        if (!record) return envelope('NOT_FOUND', 404);
+
+        if (rest.length === 0 && method === 'GET') return jsonResponse(record);
+        if (rest.length === 0 && method === 'PATCH') {
+          if (body['display_name']) record['display_name'] = body['display_name'];
+          return jsonResponse(record);
+        }
+        if (rest[0] === 'activate' && method === 'POST') {
+          record['is_active'] = true;
+          return jsonResponse(record);
+        }
+        if (rest[0] === 'deactivate' && method === 'POST') {
+          record['is_active'] = false;
+          return jsonResponse(record);
+        }
+        if (rest[0] === 'roles' && rest.length === 1 && method === 'POST') {
+          const roles = (record['roles'] as string[]) ?? [];
+          const role = String(body['role']);
+          if (!roles.includes(role)) roles.push(role);
+          record['roles'] = roles;
+          return jsonResponse(record);
+        }
+        if (rest[0] === 'roles' && rest.length === 2 && method === 'DELETE') {
+          const roles = (record['roles'] as string[]) ?? [];
+          record['roles'] = roles.filter((r) => r !== rest[1]);
+          return jsonResponse(record);
+        }
+        if (rest[0] === 'permissions') {
+          const rows = adminPermissionsState[id] ?? (adminPermissionsState[id] = defaultPermissionRows());
+          if (rest.length === 1 && method === 'GET') {
+            return jsonResponse({ user_id: id, permissions: rows });
+          }
+          if (rest.length === 2) {
+            const permission = rest[1]!;
+            const row = rows.find((r) => r.permission === permission);
+            if (method === 'PUT') {
+              const state = body['state'] === 'revoke' ? 'revoke' : 'grant';
+              if (row) {
+                row.state = state;
+                row.effective = state === 'grant';
+              }
+              return jsonResponse({ permission, state, effective: row?.effective ?? state === 'grant' });
+            }
+            if (method === 'DELETE') {
+              if (row) {
+                row.state = 'inherit';
+                row.effective = row.role_grants;
+              }
+              return jsonResponse({ permission, state: 'inherit', effective: row?.effective ?? false });
+            }
+          }
+        }
+      }
+
+      return envelope('NOT_FOUND', 404);
+    }
+
     if (url.includes('/restaurants')) {
-      return jsonResponse(options.restaurants ?? { restaurants: [], count: 0 });
+      const list = (options.restaurants ?? {
+        restaurants: [],
+        count: 0,
+        total: 0,
+        limit: 25,
+        offset: 0,
+      }) as { restaurants?: Array<Record<string, unknown>> };
+      // `/restaurants/{id}` is a real route now: a site has its own page, and
+      // returning the list shape for it would let a detail view render
+      // `undefined` and still look like it worked.
+      const detail = /\/restaurants\/([^/?]+)/.exec(url)?.[1];
+      if (detail && method === 'GET') {
+        const found = (list.restaurants ?? []).find((r) => String(r['id']) === detail);
+        return found
+          ? jsonResponse(found)
+          : jsonResponse({ code: 'NOT_FOUND', message: 'no such site' }, 404);
+      }
+      return jsonResponse(list);
     }
 
     if (url.includes('/zones')) {

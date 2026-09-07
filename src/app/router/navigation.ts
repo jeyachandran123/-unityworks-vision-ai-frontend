@@ -270,9 +270,18 @@ export const PRODUCT_NAV: NavSection[] = [
         id: 'admin',
         label: 'Administration',
         path: '/admin',
-        permissions: [PERMISSIONS.manageUsers, PERMISSIONS.manageOrganization],
+        // Any administration *read* gets in, not only the write permissions.
+        // Gating this on `manage_*` hid the whole area from a manager who can
+        // legitimately read the estate — which is exactly the account the
+        // read/manage split exists to serve.
+        permissions: [
+          PERMISSIONS.viewSites,
+          PERMISSIONS.viewZones,
+          PERMISSIONS.viewUsers,
+          PERMISSIONS.manageOrganization,
+        ],
         icon: NavIcons.administration,
-        hint: 'Restaurants, zones, users and roles',
+        hint: 'Sites, zones, cameras, people and access',
       },
       {
         id: 'patron-id',

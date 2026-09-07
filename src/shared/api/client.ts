@@ -50,7 +50,7 @@ export function onSessionEnd(handler: SessionEndedHandler): void {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   /** Skips both the Authorization header and the refresh-retry path. */
   anonymous?: boolean;
@@ -176,6 +176,8 @@ export const api = {
     apiRequest<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     apiRequest<T>(path, { ...options, method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
+    apiRequest<T>(path, { ...options, method: 'PUT', body }),
   // `del`, not `delete` — a reserved word cannot be a shorthand property, and
   // spelling it `delete:` here would force every call site to quote it.
   del: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>

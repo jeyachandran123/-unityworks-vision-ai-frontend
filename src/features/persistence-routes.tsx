@@ -51,7 +51,6 @@ import {
   JsonViewer,
   KeyValue,
   LoadingState,
-  Modal,
   SectionHeader,
   SeverityBadge,
   StateBadge,
@@ -114,9 +113,11 @@ const CAMERA_COLUMNS: ReadonlyArray<Column<Camera>> = [
     header: 'Credential',
     render: (c) =>
       c.credential_configured ? (
-        // The reference, never the secret. Showing which variable a camera
-        // reads is what makes a misconfiguration diagnosable.
-        <Badge>{c.credential_ref || 'configured'}</Badge>
+        // The *scheme*, not the reference. `env:CCTV_PASSWORD` names a
+        // variable that anyone reaching the process can then go and read, and
+        // the server stopped returning it for that reason. "It reads an
+        // environment variable" is the diagnosable part; which one is not.
+        <Badge>{c.credential_scheme || 'configured'}</Badge>
       ) : (
         <span style={{ color: 'var(--ink-tertiary)' }}>none</span>
       ),
@@ -157,7 +158,6 @@ const CAMERA_COLUMNS: ReadonlyArray<Column<Camera>> = [
  */
 export function CamerasPage() {
   const client = useQueryClient();
-  const [registering, setRegistering] = useState(false);
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
 
   const toggle = useMutation({
@@ -217,9 +217,14 @@ export function CamerasPage() {
         standfirst="The estate, as the runtime will restore it after a restart. A disabled camera opens no connection, decodes nothing and reaches no model — so an empty finding from one means nothing was observed, not that nothing happened."
         actions={
           <PermissionGate permission={PERMISSIONS.manageCameras}>
-            <Button variant="primary" onClick={() => setRegistering(true)}>
-              Register a camera
-            </Button>
+            {/* Onboarding lives at `/admin/cameras/new`, which walks through
+                placement, connection, processing and a connection test. The
+                modal that used to open here asked for `restaurant_id` as free
+                text and had no field for the host — so a camera added through
+                it was created, listed, and never connected. */}
+            <Link to="/admin/cameras/new">
+              <Button variant="primary">Add a camera</Button>
+            </Link>
           </PermissionGate>
         }
       />
@@ -314,101 +319,7 @@ export function CamerasPage() {
         ) : null}
       </Region>
 
-      <RegisterCamera
-        open={registering}
-        onClose={() => setRegistering(false)}
-        onCreated={() => {
-          client.invalidateQueries({ queryKey: ['cameras'] });
-          setRegistering(false);
-        }}
-      />
     </>
-  );
-}
-
-/**
- * Registering a camera.
- *
- * The credential is a **reference** — `env:CCTV_PASSWORD` — and never a
- * password. There is no password field on this form and there is no code path
- * through the client that would carry one: the dialling URL is assembled on the
- * server from a secret it resolves itself, which is why the list can show a
- * redacted URI at all.
- */
-function RegisterCamera({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [draft, setDraft] = useState({
-    camera_key: '',
-    name: '',
-    channel: '1',
-    restaurant_id: '',
-    credential_ref: '',
-    purpose: '',
-  });
-
-  const create = useMutation({
-    mutationFn: () =>
-      camerasApi.create({
-        camera_key: draft.camera_key.trim(),
-        name: draft.name.trim(),
-        channel: Number(draft.channel),
-        restaurant_id: draft.restaurant_id.trim(),
-        credential_ref: draft.credential_ref.trim() || undefined,
-        purpose: draft.purpose.trim() || undefined,
-      }),
-    onSuccess: onCreated,
-  });
-
-  const ready =
-    draft.camera_key.trim().length > 0 &&
-    draft.restaurant_id.trim().length > 0 &&
-    Number.isFinite(Number(draft.channel));
-
-  const set = (key: keyof typeof draft) => (event: { target: { value: string } }) =>
-    setDraft((current) => ({ ...current, [key]: event.target.value }));
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Register a camera"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" loading={create.isPending} disabled={!ready} onClick={() => create.mutate()}>
-            Register, disabled
-          </Button>
-        </>
-      }
-    >
-      <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
-          The camera is created <strong>disabled</strong>. It will open no connection and decode
-          nothing until somebody enables it, which is a separate audited act.
-        </p>
-        <Input label="Camera key" hint="Stable identifier, e.g. cam-07" value={draft.camera_key} onChange={set('camera_key')} />
-        <Input label="Name" hint="What an operator calls it" value={draft.name} onChange={set('name')} />
-        <Input label="Channel" hint="The DVR channel this camera is wired to" value={draft.channel} onChange={set('channel')} />
-        <Input label="Restaurant" hint="The site this camera belongs to" value={draft.restaurant_id} onChange={set('restaurant_id')} />
-        <Input
-          label="Credential reference"
-          hint="A pointer such as env:CCTV_PASSWORD. Never a password — this form has no field for one."
-          value={draft.credential_ref}
-          onChange={set('credential_ref')}
-        />
-        <Input label="Purpose" hint="Why this camera is watched. Shown wherever its findings appear." value={draft.purpose} onChange={set('purpose')} />
-        {create.isError ? <Failed error={create.error} /> : null}
-      </div>
-    </Modal>
   );
 }
 
@@ -1623,9 +1534,17 @@ export function CameraDetailPage() {
                   { key: 'Restaurant', value: camera.restaurant_id },
                   { key: 'Zone', value: camera.zone_id ?? 'none recorded' },
                   { key: 'Analysis', value: `${camera.analysis_fps} fps` },
-                  // A pointer, never a credential. The dialling URL never leaves
-                  // the server; what is shown is redacted there.
-                  { key: 'Credential', value: camera.credential_ref || 'none' },
+                  // How the password is stored, never where or what. The
+                  // dialling URL never leaves the server; what is shown is
+                  // redacted there.
+                  {
+                    key: 'Credential',
+                    value: camera.credential_configured
+                      ? camera.credential_scheme === 'file'
+                        ? 'a file on the server'
+                        : 'an environment variable'
+                      : 'none',
+                  },
                   { key: 'URI', value: camera.uri },
                   { key: 'Registered', value: when(camera.created_at) },
                 ]}
