@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json requires node >=20.19.0.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The generator's default is a sibling-directory read that cannot exist
+      # here — only this repository is checked out. Fetch the schema from the
+      # backend at the commit this repo pins, so the contract version under test
+      # is an explicit, reviewable fact rather than whatever was on disk.
+      - name: Fetch pinned backend schema
+        run: |
+          SHA="$(tr -d '[:space:]' < .github/backend-schema.sha)"
+          if [ -z "$SHA" ]; then
+            echo "::error::.github/backend-schema.sha is empty" >&2
+            exit 1
+          fi
+          echo "Pinned backend schema commit: $SHA"
+          curl --fail --silent --show-error --location \
+            -o "$RUNNER_TEMP/openapi.json" \
+            "https://raw.githubusercontent.com/jeyachandran123/unityworks-vision-ai-backend/$SHA/docs/api/openapi.json"
+          echo "UWV_SCHEMA_PATH=$RUNNER_TEMP/openapi.json" >> "$GITHUB_ENV"
+
+      # types:check → typecheck → lint → test → build. This is the whole gate.
+      - name: Verify
+        run: npm run verify
