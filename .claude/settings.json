@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"../unityworks-team/hooks/run-hook.cmd\" secret-guard",
+            "shell": "bash"
+          },
+          {
+            "type": "command",
+            "command": "\"../unityworks-team/hooks/run-hook.cmd\" generated-file",
+            "shell": "bash"
+          }
+        ]
+      }
+    ]
+  }
+}
