@@ -28,7 +28,13 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
-const SCHEMA = join(root, '..', 'unityworks-vision-ai-backend', 'docs', 'api', 'openapi.json');
+// The default is a sibling-directory read, which is correct on a developer's
+// machine and impossible in CI, where only this repository is checked out.
+// UWV_SCHEMA_PATH lets CI point at a schema it fetched from the backend repo at
+// a pinned commit — making the contract version an explicit, reviewable fact.
+const SCHEMA =
+  process.env.UWV_SCHEMA_PATH ??
+  join(root, '..', 'unityworks-vision-ai-backend', 'docs', 'api', 'openapi.json');
 const OUT = join(root, 'src', 'shared', 'types', 'openapi.ts');
 
 const check = process.argv.includes('--check');
