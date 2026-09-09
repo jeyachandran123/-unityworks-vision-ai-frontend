@@ -23,11 +23,40 @@ export interface CameraScope {
 export interface Identity {
   subject: string;
   display_name: string;
+  /** The **active** organisation. Comes from the token, never from this app. */
   tenant_id: string;
+  /**
+   * `''` for an ordinary session; `'platform_operator'` for one reached by an
+   * audited entry from the platform console.
+   *
+   * It grants nothing — the backend re-reads the operator grant on every
+   * request — but the shell has to be able to *say* which kind of session this
+   * is. Somebody looking at a customer's kitchen must be able to tell whose
+   * authority they are doing it under without having to work it out.
+   */
+  acting_as: '' | 'platform_operator';
   roles: string[];
   permissions: string[];
   camera_scope: CameraScope;
   site_ids: string[];
+}
+
+/**
+ * One organisation, as the chooser needs it.
+ *
+ * Enough to recognise a customer and go in, and no more. This is deliberately
+ * not `platform.Organization`: that type serves the operator's *lifecycle*
+ * console and carries `running_cameras`, `status_reason` and `user_count`,
+ * none of which a member choosing between their own two organisations has any
+ * business reading.
+ */
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'active' | 'suspended' | 'archived';
+  site_count: number;
+  camera_count: number;
 }
 
 export interface Session {
@@ -35,6 +64,33 @@ export interface Session {
   token_type: string;
   expires_at: string;
   user?: Identity;
+  /** Login only: every organisation this account may enter. */
+  organizations?: OrganizationSummary[];
+  /**
+   * Login only, and the whole of the routing decision — **answered by the
+   * server**.
+   *
+   * Not derivable from `organizations.length` on this side: a platform
+   * operator is owed the chooser even when their own account belongs to one
+   * organisation, because the organisations they administer are not the ones
+   * they are a member of.
+   */
+  must_select?: boolean;
+  is_platform_operator?: boolean;
+}
+
+export interface AccessibleOrganizations {
+  organizations: OrganizationSummary[];
+  /** The organisation this session is currently in. */
+  active: string;
+  acting_as: '' | 'platform_operator';
+  /**
+   * Reported here rather than probed with `GET /platform/me`, whose answer for
+   * an ordinary account is a 403 — a console error on every page load is a poor
+   * way to ask a yes/no question, and the session restore needs this answer at
+   * the same moment it needs the list.
+   */
+  is_platform_operator: boolean;
 }
 
 export const authApi = {
@@ -48,6 +104,23 @@ export const authApi = {
   logout: () => api.post<{ ok: boolean }>('/auth/logout', undefined, { anonymous: true }),
 
   me: () => api.get<Identity>('/auth/me'),
+
+  /** The organisations this account may enter. Membership only. */
+  organizations: () => api.get<AccessibleOrganizations>('/auth/organizations'),
+
+  /**
+   * Move this session into another of the caller's organisations.
+   *
+   * Returns a **new access token** whose tenant is the selected organisation,
+   * and rotates the refresh cookie to match. The organisation is never sent on
+   * subsequent requests — it is carried by the token, which is why switching is
+   * an endpoint rather than a piece of client state.
+   *
+   * A 403 means no membership, and is the correct answer rather than an error
+   * to report: the id was not one of theirs.
+   */
+  selectOrganization: (id: string) =>
+    api.post<Session>(`/auth/organizations/${encodeURIComponent(id)}/select`),
 };
 
 /* ── health & status ──────────────────────────────────────────────────────── */

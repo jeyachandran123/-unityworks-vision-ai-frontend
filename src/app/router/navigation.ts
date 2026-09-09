@@ -95,9 +95,13 @@ export interface NavSection {
  * The five areas.
  *
  * Operations is "what is happening now". Compliance is "the record, and its
- * defence". Intelligence is "the business question". Platform is "the estate".
- * Engineering is "the system itself". A person works inside one of these at a
- * time, which is the test a section has to pass to exist.
+ * defence". Intelligence is "the business question". Estate is "the cameras and
+ * sites themselves". Engineering is "the system itself". A person works inside
+ * one of these at a time, which is the test a section has to pass to exist.
+ *
+ * None of them is the *Platform Control Plane*. That is a separate shell, a
+ * separate navigation model (`platform-navigation.ts`) and a separate
+ * principal, and it sits above every organisation rather than inside one.
  */
 export const PRODUCT_NAV: NavSection[] = [
   {
@@ -244,8 +248,19 @@ export const PRODUCT_NAV: NavSection[] = [
     ],
   },
   {
+    // Renamed from "Platform" to "Estate". The word had come to mean three
+    // different things in one product — Vision OS (called "the platform"
+    // throughout its own source), the cross-organisation control plane at
+    // `/platform`, and this section — so an organisation administrator saw a
+    // sidebar area called "Platform" that had nothing to do with the Platform
+    // layer. The section's own blurb already said "the estate", so the word was
+    // sitting right here.
+    //
+    // The `id` is deliberately left as `platform`: it is not display text, it
+    // is what `itemFor` and the navigation tests address, and renaming it would
+    // be churn in files this correction has no reason to touch.
     id: 'platform',
-    label: 'Platform',
+    label: 'Estate',
     blurb: 'The estate and its configuration',
     register: 'product',
     items: [

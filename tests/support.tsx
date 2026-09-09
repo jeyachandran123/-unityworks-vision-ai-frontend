@@ -15,7 +15,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@app/auth/AuthProvider';
 import { ConnectionProvider } from '@shared/realtime/useConnection';
 import { ToastProvider } from '@shared/ui/primitives';
-import type { Identity } from '@shared/api/services';
+import type { Identity, OrganizationSummary } from '@shared/api/services';
 // The evaluation fixtures are annotated with the real API types rather than
 // left to inference. A fixture that drifts from the contract would let a test
 // pass against a payload the backend cannot produce.
@@ -50,6 +50,25 @@ export function identity(overrides: Partial<Identity> = {}): Identity {
     ],
     camera_scope: { breadth: 'listed', camera_ids: ['cam-fixture-01'] },
     site_ids: ['site-fixture'],
+    // An ordinary session. Only a platform-operator entry sets this, and a
+    // fixture that set it by default would mark every test's shell as a
+    // read-only visit.
+    acting_as: '',
+    ...overrides,
+  };
+}
+
+/** One organisation, as the chooser and the shell read it. */
+export function organization(
+  overrides: Partial<OrganizationSummary> = {},
+): OrganizationSummary {
+  return {
+    id: 'org-test',
+    name: 'Test Organisation',
+    slug: 'test',
+    status: 'active',
+    site_count: 2,
+    camera_count: 6,
     ...overrides,
   };
 }
@@ -901,7 +920,59 @@ function defaultPermissionRows(): Array<{
   }));
 }
 
+/** One membership row, as the platform stub stores and mutates it. */
+interface StubMembership {
+  organization_id: string;
+  organization_name: string;
+  roles: string[];
+  is_home: boolean;
+  granted_at: string | null;
+  granted_by: string;
+}
+
+/** A person in the platform directory stub. */
+type StubPerson = Record<string, unknown> & {
+  id: string;
+  email: string;
+  home_organization_id: string;
+  memberships: StubMembership[];
+};
+
 export interface StubOptions {
+  /**
+   * The organisations `GET /auth/organizations` reports, and that the login
+   * response carries. Defaults to a single organisation matching the session's
+   * tenant — the shape almost every existing test assumes, and the one that
+   * must never produce a chooser.
+   */
+  organizations?: OrganizationSummary[];
+  /**
+   * What the **server** says about whether a choice is owed. Defaults to
+   * `organizations.length > 1 || isPlatformOperator`, mirroring the backend.
+   *
+   * Overridable on its own so a test can assert that the frontend obeys the
+   * server rather than recomputing the rule — which is exactly the bug that
+   * would send a platform operator straight into their home tenant.
+   */
+  mustSelect?: boolean;
+  isPlatformOperator?: boolean;
+  /**
+   * `GET /platform/organizations` — the operator's cross-customer list. Only
+   * requested when `isPlatformOperator`, so it defaults to empty.
+   */
+  platformOrganizations?: OrganizationSummary[];
+  /** `GET /platform/overview`. Only requested when `isPlatformOperator`. */
+  platformOverview?: unknown;
+  /** `GET /platform/operators`. */
+  platformOperators?: unknown[];
+  /**
+   * `GET /platform/people`, and the store the membership routes mutate.
+   *
+   * Mutable, like `adminUsers`: admitting somebody genuinely adds a membership
+   * here, so a refetch after the mutation shows the change — the same
+   * observable behaviour the real backend gives.
+   */
+  platformPeople?: Array<Record<string, unknown>>;
   /** Overrides the camera block on /status. */
   cameras?: unknown;
   /** Overrides the live_runtime block on /status. */
@@ -982,6 +1053,24 @@ export function stubFetch(options: StubOptions = {}) {
   const { session = identity(), routes = {}, calls = [] } = options;
   let networkFailures = options.refreshNetworkFailures ?? 0;
 
+  // The session is mutable here because selecting or entering an organisation
+  // genuinely replaces it on the server. A stub that kept answering `/auth/me`
+  // with the original tenant would let a broken switch pass.
+  let activeSession: Identity | null = session;
+  const organizationState: OrganizationSummary[] =
+    options.organizations ?? (session ? [organization({ id: session.tenant_id })] : []);
+  const operator = options.isPlatformOperator ?? false;
+  const platformList: OrganizationSummary[] = options.platformOrganizations ?? [];
+  const mustSelect = options.mustSelect ?? (organizationState.length > 1 || operator);
+  // Mutated by the membership routes, so admitting and removing are genuinely
+  // observable — the same discipline `adminUsersState` follows. `memberships` is
+  // cloned rather than shared, because fixtures are module-level consts and a
+  // mutation here would otherwise leak into the next test.
+  const peopleState: StubPerson[] = (options.platformPeople ?? []).map((person) => ({
+    ...(person as StubPerson),
+    memberships: [...(((person as StubPerson).memberships ?? []) as StubMembership[])],
+  }));
+
   // Mutable per-call state for the Stage 5/7 admin surface. Seeded once from
   // `options.adminUsers`/`options.adminUserPermissions`; every mutation below
   // writes into it, so a GET after a mutation reflects the change — the same
@@ -1022,8 +1111,13 @@ export function stubFetch(options: StubOptions = {}) {
         networkFailures -= 1;
         throw new TypeError('network failure');
       }
-      return session
-        ? jsonResponse({ access_token: 'access-1', token_type: 'bearer', expires_at: '', user: session })
+      return activeSession
+        ? jsonResponse({
+            access_token: 'access-1',
+            token_type: 'bearer',
+            expires_at: '',
+            user: activeSession,
+          })
         : envelope('UNAUTHENTICATED', 401);
     }
 
@@ -1033,14 +1127,242 @@ export function stubFetch(options: StubOptions = {}) {
         access_token: 'access-1',
         token_type: 'bearer',
         expires_at: '',
-        user: session ?? identity(),
+        user: activeSession ?? identity(),
+        // The three fields the routing decision is made from, exactly as the
+        // real login returns them.
+        organizations: organizationState,
+        must_select: mustSelect,
+        is_platform_operator: operator,
       });
     }
 
     if (url.includes('/auth/logout')) return jsonResponse({ ok: true });
 
+    // ── organisation access ───────────────────────────────────────────────
+    //
+    // Declared before `/auth/me` and before the generic `routes` sweep, and in
+    // *this* order among themselves: every one of these paths contains
+    // `/auth/organizations`, so the most specific has to match first or
+    // selecting an organisation would be answered by the list endpoint.
+
+    const select = /\/auth\/organizations\/([^/]+)\/select/.exec(url);
+    if (select && method === 'POST') {
+      const target = decodeURIComponent(select[1] ?? '');
+      if (!organizationState.some((organization) => organization.id === target)) {
+        // The real refusal: no membership, 403, and identical whether the
+        // organisation exists or not.
+        return envelope('OUT_OF_SCOPE', 403);
+      }
+      // The switch is a *new session*, so the stub mints one — this is what
+      // makes a test able to observe that the tenant actually changed rather
+      // than that a component set some state.
+      activeSession = { ...(activeSession ?? identity()), tenant_id: target, acting_as: '' };
+      return jsonResponse({
+        access_token: `access-${target}`,
+        token_type: 'bearer',
+        expires_at: '',
+        user: activeSession,
+      });
+    }
+
+    if (url.includes('/auth/organizations')) {
+      return jsonResponse({
+        organizations: organizationState,
+        active: activeSession?.tenant_id ?? '',
+        acting_as: activeSession?.acting_as ?? '',
+        is_platform_operator: operator,
+      });
+    }
+
+    // ── the platform control plane ────────────────────────────────────────
+    //
+    // Declared before the organisation-entry routes below, and most-specific
+    // first among themselves, because every one of these paths contains
+    // `/platform/organizations`.
+
+    const members = /\/platform\/organizations\/([^/]+)\/members(?:\/([^/]+))?/.exec(url);
+    if (members) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const organizationId = decodeURIComponent(members[1] ?? '');
+      const memberId = members[2] ? decodeURIComponent(members[2]) : '';
+
+      if (method === 'POST') {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const person = peopleState.find((p) => p.id === String(body.user_id));
+        if (!person) return envelope('NOT_FOUND', 404);
+        if (person.memberships.some((m) => m.organization_id === organizationId)) {
+          return envelope('CONFLICT', 409);
+        }
+        person.memberships = [
+          ...person.memberships,
+          {
+            organization_id: organizationId,
+            organization_name: organizationId,
+            roles: [],
+            is_home: person.home_organization_id === organizationId,
+            granted_at: null,
+            granted_by: 'operator@example.com',
+          },
+        ];
+        return jsonResponse(person);
+      }
+
+      if (method === 'DELETE') {
+        const person = peopleState.find((p) => p.id === memberId);
+        if (!person) return envelope('NOT_FOUND', 404);
+        const wasHome = person.home_organization_id === organizationId;
+        person.memberships = person.memberships.filter(
+          (m) => m.organization_id !== organizationId,
+        );
+        return jsonResponse({
+          organization_id: organizationId,
+          user_id: memberId,
+          email: person.email,
+          removed: true,
+          was_home_organization: wasHome,
+          organizations_remaining: person.memberships.length,
+          left_without_access: person.memberships.length === 0,
+        });
+      }
+
+      return jsonResponse({
+        organization_id: organizationId,
+        members: peopleState.filter((p) =>
+          p.memberships.some((m) => m.organization_id === organizationId),
+        ),
+        count: peopleState.filter((p) =>
+          p.memberships.some((m) => m.organization_id === organizationId),
+        ).length,
+      });
+    }
+
+    if (url.includes('/platform/overview')) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      return jsonResponse(
+        options.platformOverview ?? {
+          organizations: {
+            total: platformList.length,
+            active: platformList.length,
+            suspended: 0,
+            archived: 0,
+          },
+          estate: { sites: 4, cameras: 12, cameras_running: 9 },
+          people: {
+            users: peopleState.length,
+            active_users: peopleState.length,
+            multi_organization_users: peopleState.filter((p) => p.memberships.length > 1).length,
+            never_signed_in: 0,
+            platform_operators: 1,
+          },
+          attention: { organizations_needing_setup: [] },
+          recent_activity: [],
+        },
+      );
+    }
+
+    const person = /\/platform\/people\/([^/?]+)/.exec(url);
+    if (person && method === 'GET') {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const found = peopleState.find((p) => p.id === decodeURIComponent(person[1] ?? ''));
+      return found ? jsonResponse(found) : envelope('NOT_FOUND', 404);
+    }
+
+    if (url.includes('/platform/people')) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      return jsonResponse({
+        people: peopleState,
+        count: peopleState.length,
+        total: peopleState.length,
+        limit: 100,
+        offset: 0,
+      });
+    }
+
+    if (url.includes('/platform/operators')) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      return jsonResponse({
+        operators: options.platformOperators ?? [],
+        count: (options.platformOperators ?? []).length,
+        grant_is_manageable_here: false,
+        how_to_grant: 'scripts/manage.py grant-operator --email ... --reason ...',
+      });
+    }
+
+    if (url.includes('/platform/roles')) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      return jsonResponse({
+        roles: [{ role: 'org_admin', permissions: ['view_live'], permission_count: 1, is_platform_role: false }],
+        permissions: ['view_live'],
+        editable: false,
+        customization: {
+          mechanism: 'permission_overrides',
+          scope: 'per user, per organization',
+          where: "the organization's own user administration",
+          note: 'Two people holding the same role are made to differ per person.',
+        },
+      });
+    }
+
+    // One organisation, for the administrative detail page. Declared before the
+    // list route because `/platform/organizations/org-acme` contains
+    // `/platform/organizations`.
+    const oneOrganization = /\/platform\/organizations\/([^/?]+)$/.exec(url);
+    if (oneOrganization && method === 'GET') {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const id = decodeURIComponent(oneOrganization[1] ?? '');
+      const found = platformList.find((o) => o.id === id);
+      if (!found) return envelope('NOT_FOUND', 404);
+      return jsonResponse({
+        ...found,
+        status_changed_at: null,
+        status_reason: '',
+        created_at: null,
+        user_count: 3,
+        running_cameras: 0,
+      });
+    }
+
+    const enter = /\/platform\/organizations\/([^/]+)\/enter/.exec(url);
+    if (enter && method === 'POST') {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const target = decodeURIComponent(enter[1] ?? '');
+      // Read-only, no roles, and the marker the shell renders from.
+      activeSession = {
+        ...(activeSession ?? identity()),
+        tenant_id: target,
+        acting_as: 'platform_operator',
+        roles: [],
+      };
+      return jsonResponse({
+        access_token: `access-${target}`,
+        token_type: 'bearer',
+        expires_at: '',
+        organization: { id: target, name: target, slug: target, status: 'active' },
+        acting_as: 'platform_operator',
+        read_only: true,
+        permissions: activeSession.permissions,
+      });
+    }
+
+    if (url.includes('/platform/organizations')) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      return jsonResponse({
+        organizations: platformList,
+        count: platformList.length,
+        total: platformList.length,
+        limit: 200,
+        offset: 0,
+      });
+    }
+
+    if (url.includes('/platform/me')) {
+      return operator
+        ? jsonResponse({ subject: 'operator@example.com', display_name: 'Operator', is_platform_operator: true })
+        : envelope('OUT_OF_SCOPE', 403);
+    }
+
     if (url.includes('/auth/me')) {
-      return session ? jsonResponse(session) : envelope('UNAUTHENTICATED', 401);
+      return activeSession ? jsonResponse(activeSession) : envelope('UNAUTHENTICATED', 401);
     }
 
     for (const [path, payload] of Object.entries(routes)) {

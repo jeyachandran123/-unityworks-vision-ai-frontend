@@ -36,6 +36,118 @@ export function RequireAuth() {
 }
 
 /**
+ * Requires that this session is *in* an organisation before the application
+ * loads.
+ *
+ * ### Where the routing rule actually lives
+ *
+ * Not here. The decision "does this person owe us a choice" is made once, by
+ * the server, at login — `must_select` on the login response — and acted on
+ * once, by the login screen, which sends them to `/platform` instead of
+ * `/dashboard`. Putting it in a guard as well was tried and is wrong: a guard
+ * that redirects whenever the account *could* choose has no way to know that it
+ * just did, so choosing an organisation bounces straight back to the chooser.
+ *
+ * What is left for a guard is the thing that is true for the whole life of the
+ * session rather than for one navigation: the shell renders an organisation's
+ * application, so there has to be an organisation. A session always has one
+ * after login, so in practice this admits every time — it is the statement that
+ * the shell has a precondition, and the safety net if a future path ever
+ * produces a session without one.
+ *
+ * ### It is not a tenant boundary
+ *
+ * Like every other guard in this file, it is UX. The organisation a session can
+ * reach is the tenant claim inside its access token, checked against the
+ * membership table on every single request. Editing your way past this
+ * component gets you the application for exactly the organisation your token
+ * already named.
+ */
+export function RequireOrganization() {
+  const { status, user } = useAuth();
+
+  if (status === 'restoring') {
+    return <LoadingState label="Restoring session" />;
+  }
+
+  return user?.tenant_id ? <Outlet /> : <Navigate to="/choose-organization" replace />;
+}
+
+/**
+ * The chooser's own gate: it exists only for accounts with something to choose
+ * between.
+ *
+ * A single-organisation administrator who types the chooser's address is sent
+ * to their Command Center rather than shown a page with one card on it. That is
+ * the requirement stated from the other side — "do not force
+ * single-organisation users to select their organisation" — and it has to be
+ * enforced on the route as well as on the redirect, because a bookmark is not a
+ * redirect.
+ *
+ * ### Membership count, not `mustSelect`
+ *
+ * `mustSelect` is true for a platform operator even when they belong to exactly
+ * one organisation, because the customers they administer are not the ones they
+ * are a member of. That makes it the right signal for *where to send somebody
+ * after login* and the wrong one for *may this page render*: an operator with
+ * one membership has nothing to choose between here, and their destination is
+ * the control plane. So this gate counts memberships, and sends an operator on
+ * to the console rather than to a chooser with a single card.
+ */
+export function RequireChoosableOrganizations() {
+  const { status, organizations, isPlatformOperator, organizationsResolved } = useAuth();
+
+  // The list is empty until the server has answered, and a reload lands here
+  // before it has. Redirecting on the unresolved value would bounce somebody
+  // off the chooser they just reloaded — so wait for the answer.
+  if (status === 'restoring' || !organizationsResolved) {
+    return <LoadingState label="Restoring session" />;
+  }
+
+  if (organizations.length > 1) return <Outlet />;
+  return <Navigate to={isPlatformOperator ? '/platform' : '/dashboard'} replace />;
+}
+
+/**
+ * Requires a platform operator. The single door to the control plane.
+ *
+ * ### One gate on the group, not one per page
+ *
+ * Every other guard in this file declares a `Permission`, because every other
+ * route belongs to an organisation and permissions are what an organisation
+ * grants. The control plane has none: a `PlatformOperator` carries no
+ * `Permission` and no tenant at all, deliberately, so that no role anywhere can
+ * produce one. There is therefore nothing per-page to check — the question is
+ * "is this account an operator", it is the same question on all seven pages,
+ * and it is asked once here.
+ *
+ * ### The redirect is to the application, not to the login screen
+ *
+ * Somebody who reaches `/platform` without platform authority is not
+ * unauthenticated and has done nothing wrong — most often they are a
+ * multi-organisation administrator who followed a stale link. They are sent to
+ * their own Command Center, which is the same redirect-not-403 posture
+ * `RequirePermission` takes.
+ *
+ * And, as with every guard here: this is UX. The server refuses all seven
+ * endpoints for anyone who is not an operator, and would still refuse them if
+ * this component were deleted.
+ */
+export function RequirePlatformOperator() {
+  const { status, isPlatformOperator, organizationsResolved } = useAuth();
+
+  // `isPlatformOperator` is `false` until the server has answered, and a reload
+  // straight onto a platform URL lands here before it has. Redirecting on the
+  // unresolved value would bounce an operator out of the console they just
+  // reloaded.
+  if (status === 'restoring' || !organizationsResolved) {
+    return <LoadingState label="Restoring session" />;
+  }
+
+  return isPlatformOperator ? <Outlet /> : <Navigate to="/dashboard" replace />;
+}
+
+/**
  * Requires one or more permissions.
  *
  * `mode="all"` for routes that genuinely need several. The default is `any`,

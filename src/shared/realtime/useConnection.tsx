@@ -37,6 +37,18 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   // role, and a permanent red badge they can do nothing about.
   const mayView = hasAny(user, [PERMISSIONS.viewLive]);
 
+  /**
+   * The organisation this socket belongs to.
+   *
+   * In the effect's dependencies because a live socket is scoped to a tenant
+   * exactly as every REST call is: it was opened with a token naming
+   * organisation A, and after a switch that token is gone. Without this the
+   * socket would keep streaming A's cameras into B's wall until it happened to
+   * reconnect — the one place stale organisation data could survive
+   * `queryClient.clear()`, because it is pushed rather than fetched.
+   */
+  const tenant = user?.tenant_id ?? '';
+
   useEffect(() => {
     if (authStatus !== 'authenticated' || !mayView) {
       connection.current?.disconnect();
@@ -61,7 +73,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       live.disconnect();
       connection.current = null;
     };
-  }, [authStatus, mayView]);
+  }, [authStatus, mayView, tenant]);
 
   const value = useMemo(() => status, [status]);
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

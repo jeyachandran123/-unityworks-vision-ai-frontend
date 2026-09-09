@@ -5,6 +5,27 @@
  * permission it needs — never a role, because roles change and the backend
  * already owns the mapping from role to permission.
  *
+ ### Two shells, and the boundary between them is the product
+ *
+ *     /login                  no session
+ *     /choose-organization    a session, no organisation chosen yet
+ *     /platform/*             PlatformShell — no tenant, cross-organisation
+ *     everything else         AppShell — one tenant, from the token
+ *
+ * `/platform/*` renders in its own shell and never inside `AppShell`. It used
+ * to: `/platform/organizations` was declared inside the organisation shell,
+ * which put a cross-customer console inside one customer's navigation and made
+ * the console look like it belonged to whichever organisation happened to be
+ * selected. That was the route table contradicting the domain model, and moving
+ * it is the structural correction this layer needed.
+ *
+ * The chooser is a third thing again, and it is deliberately *not* under
+ * `/platform`. Most of the people who see it are not platform administrators —
+ * a multi-organisation `org_admin` owes an organisation choice and must never
+ * be shown a cross-customer console. Serving both from one address made those
+ * two audiences look like one group, and they are separated by a security
+ * boundary rather than by a layout preference.
+ *
  * ### DevTools is one lazy chunk
  *
  * `React.lazy` at the route boundary means a restaurant manager's browser never
@@ -15,11 +36,31 @@
 
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { RequireAuth, RequirePermission } from '@app/permissions/guards';
+import {
+  RequireAuth,
+  RequireChoosableOrganizations,
+  RequireOrganization,
+  RequirePermission,
+  RequirePlatformOperator,
+} from '@app/permissions/guards';
 import { PERMISSIONS } from '@app/permissions/permissions';
 import { AppShell } from '@shared/layout/AppShell';
 import { LoadingState } from '@shared/ui/primitives';
 import { LoginPage } from '@features/auth/LoginPage';
+// The organisation chooser. Sits between login and the application, and renders
+// outside both shells — before an organisation is chosen there is nothing for
+// the product navigation to be about, and a chooser is not a control plane.
+import { OrganizationChooser } from '@features/platform/OrganizationChooser';
+// The Platform Control Plane. Its own shell, above every organisation.
+import { PlatformShell } from '@shared/layout/PlatformShell';
+import { PlatformDashboard } from '@features/platform/PlatformDashboard';
+import { PlatformPeoplePage, PlatformPersonPage } from '@features/platform/PlatformPeople';
+import {
+  PlatformAuditPage,
+  PlatformFleetPage,
+  PlatformOperatorsPage,
+  PlatformRolesPage,
+} from '@features/platform/PlatformAccess';
 import { DashboardPage, LiveMonitoringPage, NotFoundPage } from '@features/product-routes';
 // Reports left  when it stopped being a placeholder: it reads
 // incidents, observations, cameras and the audit trail, and is the densest page
@@ -87,6 +128,40 @@ export function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<RequireAuth />}>
+        {/* Authenticated, and deliberately in neither shell. The one product
+            surface that exists before an organisation does. Gated on having
+            something to choose between: a single-organisation administrator who
+            types this address is sent to their Command Center rather than shown
+            a page with one card on it. */}
+        <Route element={<RequireChoosableOrganizations />}>
+          <Route path="/choose-organization" element={<OrganizationChooser />} />
+        </Route>
+
+        {/* ── The Platform Control Plane ──────────────────────────────────
+            Its own shell, gated once on being a platform operator. Nothing
+            here declares a `Permission`, because the principal that reaches it
+            holds none — see `RequirePlatformOperator`. */}
+        <Route element={<RequirePlatformOperator />}>
+          <Route element={<PlatformShell />}>
+            <Route path="/platform" element={<PlatformDashboard />} />
+            <Route path="/platform/organizations" element={<OrganizationsPage />} />
+            <Route
+              path="/platform/organizations/:organizationId"
+              element={<OrganizationDetailPage />}
+            />
+            <Route path="/platform/people" element={<PlatformPeoplePage />} />
+            <Route path="/platform/people/:userId" element={<PlatformPersonPage />} />
+            <Route path="/platform/operators" element={<PlatformOperatorsPage />} />
+            <Route path="/platform/roles" element={<PlatformRolesPage />} />
+            {/* Structural: a place in the architecture, no backend behind it
+                yet. Each page says so rather than rendering an empty table. */}
+            <Route path="/platform/audit" element={<PlatformAuditPage />} />
+            <Route path="/platform/fleet" element={<PlatformFleetPage />} />
+            <Route path="/platform/*" element={<NotFoundPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<RequireOrganization />}>
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
 
@@ -263,18 +338,6 @@ export function AppRouter() {
             <Route path="/admin/users/:userId" element={<UserDetailPage />} />
           </Route>
 
-          {/* The platform console. Deliberately not behind `RequirePermission`:
-              there is no permission that grants it, and inventing one would be
-              exactly the redefinition of `super_admin` into a cross-customer
-              superuser that the tenant boundary exists to prevent. The page
-              asks the server whether this account is an operator, and the
-              server refuses every route here regardless. */}
-          <Route path="/platform/organizations" element={<OrganizationsPage />} />
-          <Route
-            path="/platform/organizations/:organizationId"
-            element={<OrganizationDetailPage />}
-          />
-
           <Route element={<RequirePermission permissions={[PERMISSIONS.accessDevtools]} />}>
             <Route
               path="/devtools/vision/*"
@@ -287,6 +350,7 @@ export function AppRouter() {
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
       </Route>
     </Routes>

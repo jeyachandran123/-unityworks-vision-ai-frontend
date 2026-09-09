@@ -30,7 +30,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@app/auth/AuthProvider';
 import { hasAll, hasAny, roleLabel, type Permission } from '@app/permissions/permissions';
 import {
@@ -58,8 +58,35 @@ const COLLAPSE_KEY = 'uwv.sidebar.collapsed';
 export const SHELL_BREAKPOINT = '62rem';
 
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, logout, organizations, activeOrganization, isPlatformOperator } =
+    useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  /**
+   * Is this a platform-operator entry session?
+   *
+   * Read from the identity the server issued, not from whether the account
+   * *could* be an operator. An operator working inside their own
+   * organisation as a member is having an ordinary session and must not be
+   * marked as if they were visiting.
+   */
+  const acting = user?.acting_as === 'platform_operator';
+
+  /**
+   * Whether there is anywhere to switch *to*.
+   *
+   * A single-organisation user is shown no switcher at all — an affordance
+   * whose only outcome is a page listing the organisation you are already
+   * in is worse than its absence.
+   */
+  const canSwitch = organizations.length > 1 || isPlatformOperator;
+
+  /** What to call the organisation on screen. The name when the session can
+      see it, the id when it cannot — an operator entering a customer they
+      are not a member of has no membership row to read a name from, and an
+      id is a true answer where a blank is a confusing one. */
+  const organizationLabel = activeOrganization?.name ?? user?.tenant_id ?? '';
   const narrow = useMediaQuery(`(max-width: ${SHELL_BREAKPOINT})`);
 
   const [collapsed, setCollapsed] = useState(
@@ -134,7 +161,7 @@ export function AppShell() {
             height: '100vh',
           }}
         >
-          <Wordmark collapsed={collapsed} />
+          <Wordmark collapsed={collapsed} organization={organizationLabel} />
           <SectionList sections={sections} collapsed={collapsed} />
           <div style={{ padding: 'var(--space-2)', borderTop: '1px solid var(--line-subtle)' }}>
             <IconButton
@@ -187,6 +214,7 @@ export function AppShell() {
               519px inside a 430px viewport, on every page in the product. */}
           {narrow ? <span style={{ flex: 1 }} /> : <Breadcrumb />}
 
+          {acting ? <OperatorMark organization={organizationLabel} /> : null}
           {engineering ? <RegisterMark /> : null}
 
           <ThemeToggle />
@@ -246,6 +274,15 @@ export function AppShell() {
               >
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>Signed in as</div>
                 <div style={{ fontSize: 'var(--text-sm)', wordBreak: 'break-all' }}>{user?.subject}</div>
+
+                {/* The organisation, named in the menu as well as in the
+                    sidebar. The menu is where somebody goes when they are
+                    unsure who they are signed in as, and "which customer am I
+                    looking at" is the same question. */}
+                <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
+                  Organisation
+                </div>
+                <div style={{ fontSize: 'var(--text-sm)' }}>{organizationLabel}</div>
                 <div style={{ marginTop: 'var(--space-2)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
                   {user?.roles.map((role) => (
                     <span
@@ -263,6 +300,29 @@ export function AppShell() {
                   ))}
                 </div>
                 <div style={{ borderTop: '1px solid var(--line-subtle)', margin: 'var(--space-3) 0' }} />
+                {/* Only when there is somewhere to go. Switching is a
+                    navigation to the chooser rather than a menu of
+                    organisations: picking one re-mints the session and clears
+                    every cache, which is too consequential to happen from a
+                    hover menu by accident. */}
+                {/* An operator's way out is the control plane, which lists
+                    every customer; a member's is the chooser, which lists only
+                    theirs. Sending a member to `/platform` would bounce them
+                    straight back, and sending an operator to a chooser holding
+                    one card would hide the console they actually work in. */}
+                {canSwitch ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      navigate(isPlatformOperator ? '/platform' : '/choose-organization')
+                    }
+                    role="menuitem"
+                    style={{ width: '100%' }}
+                  >
+                    {isPlatformOperator ? 'Platform control plane' : 'Switch organisation'}
+                  </Button>
+                ) : null}
                 <Button variant="ghost" size="sm" onClick={() => void logout()} role="menuitem" style={{ width: '100%' }}>
                   Sign out
                 </Button>
@@ -316,6 +376,48 @@ export function AppShell() {
   );
 }
 
+
+/**
+ * The persistent marker on a platform-operator entry session.
+ *
+ * Not a toast and not a one-time dialog: it is on screen for as long as the
+ * session lasts, because the fact it states is true for as long as the session
+ * lasts. Somebody three pages into a customer's incidents has to be able to
+ * tell — without remembering how they got there — that they are looking at
+ * another organisation's data under platform authority, read-only, and that
+ * their being here is recorded.
+ *
+ * It borrows the engineering register's device rather than inventing a third
+ * one: a marker in the topbar, mono, uppercase, tinted. Two registers that mean
+ * "you are not in the ordinary product" are enough.
+ */
+function OperatorMark({ organization }: { organization: string }) {
+  return (
+    <span
+      title="You entered this organisation from the platform console. The session is read-only and was recorded."
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        padding: '0.15rem 0.5rem',
+        borderRadius: 'var(--radius-xs)',
+        border: '1px solid var(--state-attention, var(--line-default))',
+        color: 'var(--state-attention, var(--ink-secondary))',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 'var(--text-2xs)',
+        letterSpacing: 'var(--tracking-wide)',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Platform operator · read-only
+      <span className="uwv-visually-hidden">
+        {` — viewing ${organization} from the platform console`}
+      </span>
+    </span>
+  );
+}
+
 /* ── the sidebar's parts ──────────────────────────────────────────────────── */
 
 /**
@@ -352,7 +454,21 @@ function Mark() {
   );
 }
 
-function Wordmark({ collapsed }: { collapsed: boolean }) {
+/**
+ * The mark, the product, and — since organisations became selectable — the
+ * organisation being worked in.
+ *
+ * The organisation belongs here rather than in the topbar because it qualifies
+ * *everything* below it: every count on the Command Center, every camera on the
+ * wall, every incident in the queue. Putting it at the head of the navigation
+ * says that the whole column is about one customer, which is exactly what is
+ * true.
+ *
+ * It is rendered for a single-organisation user too. Naming the organisation
+ * you are in is orientation, not a switcher, and hiding it from the people who
+ * only have one would mean the shell says less the more certain it is.
+ */
+function Wordmark({ collapsed, organization }: { collapsed: boolean; organization: string }) {
   return (
     <div
       style={{
@@ -379,6 +495,24 @@ function Wordmark({ collapsed }: { collapsed: boolean }) {
           >
             Vision AI
           </span>
+          {organization ? (
+            <span
+              title={organization}
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-2xs)',
+                letterSpacing: 'var(--tracking-wide)',
+                color: 'var(--ink-tertiary)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+              }}
+            >
+              {organization}
+            </span>
+          ) : null}
         </span>
       )}
     </div>

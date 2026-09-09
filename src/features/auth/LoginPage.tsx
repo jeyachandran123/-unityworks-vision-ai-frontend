@@ -33,7 +33,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, type LoginFailure } from '@app/auth/AuthProvider';
 import { STATES, type ObservationState } from '@shared/semantics/observation';
 import { Button, Input, LoadingState } from '@shared/ui/primitives';
@@ -43,8 +43,8 @@ import { Icon, StateIcons } from '@shared/ui/icons';
 const LEGEND: ObservationState[] = ['present', 'absent', 'not_visible', 'unknown'];
 
 export function LoginPage() {
-  const { status, login, endedReason, dismissEnded } = useAuth();
-  const navigate = useNavigate();
+  const { status, login, endedReason, dismissEnded, mustSelect, isPlatformOperator } =
+    useAuth();
   const location = useLocation();
 
   const [email, setEmail] = useState('');
@@ -55,12 +55,42 @@ export function LoginPage() {
   // Where the user was heading before the guard redirected them here.
   const destination = (location.state as { from?: string } | null)?.from ?? '/dashboard';
 
+  /**
+   * The one place the post-login route is decided. Three audiences, three
+   * destinations.
+   *
+   *     platform operator          → /platform, the control plane
+   *     several organisations      → /choose-organization, the chooser
+   *     one organisation           → straight in
+   *
+   * The operator case is checked first and separately, because it is not
+   * derivable from the membership count: an operator's own account usually
+   * belongs to exactly one organisation, and the customers they administer are
+   * not among their memberships. Sending them "straight in" would land them in
+   * the one place their job is not.
+   *
+   * `mustSelect` is the server's answer, computed at login from both facts. A
+   * single-organisation administrator has it false and is never shown a
+   * chooser, which is the whole point of asking the server rather than counting
+   * a list here.
+   *
+   * A deep link is deliberately dropped when a choice is owed: `/incidents/42`
+   * means nothing until it is known *whose* incident 42, and sending somebody
+   * to the wrong organisation's copy of that route would be worse than sending
+   * them to the chooser.
+   */
+  const target = isPlatformOperator
+    ? '/platform'
+    : mustSelect
+      ? '/choose-organization'
+      : destination;
+
   useEffect(() => {
     document.title = 'Sign in · UnityWorks Vision AI';
   }, []);
 
   if (status === 'restoring') return <LoadingState label="Checking your session" />;
-  if (status === 'authenticated') return <Navigate to={destination} replace />;
+  if (status === 'authenticated') return <Navigate to={target} replace />;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -71,8 +101,12 @@ export function LoginPage() {
     const result = await login(email.trim(), password);
     setBusy(false);
 
+    // On success the redirect is the declarative one above, not a call here.
+    // It has to be: `mustSelect` is set by `login` on the provider, and the
+    // value this closure captured predates it — navigating from here would send
+    // every multi-organisation user to the dashboard the chooser exists to come
+    // before.
     if (result) setFailure(result);
-    else navigate(destination, { replace: true });
   }
 
   return (

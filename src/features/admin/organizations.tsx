@@ -25,9 +25,13 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+
+import { useAuth } from '@app/auth/AuthProvider';
+import { isApiError } from '@shared/api/errors';
 
 import {
+  platformAdminApi,
   platformApi,
   STATUS_MEANING,
   type Organization,
@@ -329,6 +333,14 @@ export function OrganizationDetailPage() {
       </Region>
 
       <Region order={3}>
+        <SectionRule
+          label="Members"
+          detail="Who may enter this organisation. Membership is the entry ticket; roles decide what they can do once inside."
+        />
+        <Members organizationId={it.id} archived={it.status === 'archived'} />
+      </Region>
+
+      <Region order={4}>
         <SectionRule label="Name" detail="The slug and id cannot change. Only the display name." />
         <Plane>
           <form
@@ -357,10 +369,248 @@ export function OrganizationDetailPage() {
         </Plane>
       </Region>
 
-      <Region order={4}>
+      <Region order={5}>
+        <SectionRule
+          label="Enter this organisation"
+          detail="Administering an organisation and working inside it are different acts. This is the second one."
+        />
+        <EnterOrganization organization={it} />
+      </Region>
+
+      <Region order={6}>
         <Lifecycle organization={it} />
       </Region>
     </>
+  );
+}
+
+/**
+ * The explicit boundary between administering an organisation and entering it.
+ *
+ * ### Looking at this page did not change the active tenant, and must not
+ *
+ * Everything above is platform administration: it reads the organisation as an
+ * *object*, through operator-authorised endpoints, and the session's tenant is
+ * untouched by having opened it. Entering is a different act — it mints a new
+ * token, it changes which customer every subsequent request is about, and for
+ * an operator it writes an audit row against that customer before it returns.
+ *
+ * So it is a button, with the consequence written next to it, and never a side
+ * effect of navigation. A console where inspecting a customer silently moved
+ * the operator into that customer would make the audit trail describe browsing
+ * rather than intent.
+ *
+ * ### Members go in as themselves
+ *
+ * If the account actually belongs to this organisation, entry uses their
+ * membership — their real roles, their real camera scope. Only somebody with no
+ * membership enters as a read-only operator. Entering your own organisation as
+ * a stranger would be a worse experience and a misleading audit row.
+ */
+function EnterOrganization({ organization }: { organization: Organization }) {
+  const navigate = useNavigate();
+  const { organizations, selectOrganization, enterOrganization } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const asMember = organizations.some((candidate) => candidate.id === organization.id);
+  const archived = organization.status === 'archived';
+
+  async function go() {
+    setFailure(null);
+    setBusy(true);
+    try {
+      if (asMember) await selectOrganization(organization.id);
+      else await enterOrganization(organization.id);
+      navigate('/dashboard', { replace: true });
+    } catch (error) {
+      setBusy(false);
+      setFailure(
+        isApiError(error) ? error.friendlyMessage : 'This organisation could not be opened.',
+      );
+    }
+  }
+
+  return (
+    <Plane>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <Button onClick={() => void go()} disabled={busy || archived}>
+          {busy ? 'Opening…' : 'Enter organisation'}
+        </Button>
+        <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+          {archived
+            ? 'An archived organisation cannot be entered. Nobody may sign in to one.'
+            : asMember
+              ? 'You are a member here, so you will enter with your own roles and camera access, and the Command Center will be this organisation.'
+              : 'You will enter read-only, as a platform operator. The entry is recorded against this organisation, and evidence, patron identity and the audit trail stay closed.'}
+        </p>
+      </div>
+      {failure ? (
+        <p role="alert" style={{ marginBottom: 0, color: 'var(--severity-critical, inherit)' }}>
+          {failure}
+        </p>
+      ) : null}
+    </Plane>
+  );
+}
+
+/**
+ * Membership administration for one organisation.
+ *
+ * Admits and removes, and does nothing else. Roles are granted inside the
+ * organisation by somebody who holds `MANAGE_USERS` there — this console
+ * deliberately does not reach into a customer's user administration, because a
+ * cross-customer principal that could hand out roles inside any customer would
+ * be the unrestricted tenant authority the whole architecture avoids.
+ */
+function Members({ organizationId, archived }: { organizationId: string; archived: boolean }) {
+  const client = useQueryClient();
+  const [addUser, setAddUser] = useState('');
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const members = useQuery({
+    queryKey: ['platform', 'members', organizationId],
+    queryFn: () => platformAdminApi.members(organizationId),
+  });
+
+  const everyone = useQuery({
+    queryKey: ['platform', 'people', 'all-for-admit'],
+    queryFn: () => platformAdminApi.people({ limit: 200 }),
+  });
+
+  const invalidate = () => {
+    void client.invalidateQueries({ queryKey: ['platform', 'members', organizationId] });
+    void client.invalidateQueries({ queryKey: ['platform', 'people'] });
+    void client.invalidateQueries({ queryKey: ['platform', 'overview'] });
+  };
+
+  const add = useMutation({
+    mutationFn: (userId: string) => platformAdminApi.addMember(organizationId, userId),
+    onSuccess: () => {
+      setAddUser('');
+      setFailure(null);
+      invalidate();
+    },
+    onError: (error) =>
+      setFailure(isApiError(error) ? error.friendlyMessage : 'The member could not be added.'),
+  });
+
+  const remove = useMutation({
+    mutationFn: (userId: string) => platformAdminApi.removeMember(organizationId, userId),
+    onSuccess: (result) => {
+      // Reported rather than hidden: removing somebody's last membership means
+      // the account can no longer sign in anywhere, which is what offboarding
+      // looks like and is also what a mistake looks like.
+      setFailure(
+        result.left_without_access
+          ? `${result.email} now has no organisation and cannot sign in anywhere.`
+          : null,
+      );
+      invalidate();
+    },
+    onError: (error) =>
+      setFailure(isApiError(error) ? error.friendlyMessage : 'The member could not be removed.'),
+  });
+
+  if (members.isLoading) return <LoadingState label="Reading members" />;
+  if (members.isError) return <Failed error={members.error} />;
+
+  const rows = members.data?.members ?? [];
+  const held = new Set(rows.map((person) => person.id));
+  const admittable = (everyone.data?.people ?? []).filter((person) => !held.has(person.id));
+
+  return (
+    <Plane>
+      {failure ? (
+        <p role="alert" style={{ marginTop: 0 }}>
+          {failure}
+        </p>
+      ) : null}
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No members"
+          body="Nobody can sign in to this organisation yet. Admit someone below."
+        />
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
+          {rows.map((person) => (
+            <li
+              key={person.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                paddingBottom: 'var(--space-3)',
+                borderBottom: '1px solid var(--line-subtle)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: '14rem' }}>
+                <Link to={`/platform/people/${encodeURIComponent(person.id)}`}>
+                  {person.display_name || person.email}
+                </Link>
+                {person.home_organization_id === organizationId ? (
+                  <span style={{ marginLeft: 'var(--space-2)' }}>
+                    <Badge>home</Badge>
+                  </span>
+                ) : null}
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                  {(person.memberships.find((m) => m.organization_id === organizationId)?.roles ?? [])
+                    .length === 0
+                    ? 'No role here — can enter, sees nothing'
+                    : person.memberships
+                        .find((m) => m.organization_id === organizationId)!
+                        .roles.join(', ')}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(person.id)}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div
+        style={{
+          marginTop: 'var(--space-6)',
+          paddingTop: 'var(--space-5)',
+          borderTop: '1px solid var(--line-subtle)',
+          display: 'flex',
+          gap: 'var(--space-3)',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+        }}
+      >
+        <Select
+          label="Admit somebody"
+          value={addUser}
+          onChange={(event) => setAddUser(event.target.value)}
+          disabled={archived}
+        >
+          <option value="">Choose…</option>
+          {admittable.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.display_name || person.email} · {person.email}
+            </option>
+          ))}
+        </Select>
+        <Button disabled={!addUser || add.isPending || archived} onClick={() => add.mutate(addUser)}>
+          {add.isPending ? 'Admitting…' : 'Admit'}
+        </Button>
+        <p style={{ margin: 0, flexBasis: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+          {archived
+            ? 'An archived organisation takes no new members.'
+            : 'Admitting grants no role. They will be able to sign in and will see nothing until somebody grants them a role inside this organisation.'}
+        </p>
+      </div>
+    </Plane>
   );
 }
 
