@@ -12,18 +12,18 @@
  *
  * ### What deliberately is not here
  *
- * Incident counts, violation rates, compliance scores. Those are *organisation
+ * Incident counts, violation rates, compliance scores. Those are *organization
  * judgements* — "that is a hygiene violation" is an opinion a consumer forms
  * about its own kitchen — and aggregating opinions across unrelated customers
  * produces a number with no referent. They belong on a Command Center, which is
- * one organisation's reading of its own estate.
+ * one organization's reading of its own estate.
  *
  * ### The tile that earns its place
  *
  * "Cameras streaming" against "cameras configured". A customer whose cameras
  * have silently stopped is the failure that generates the angriest call, and
  * before this page nothing in the product compared those two numbers across
- * organisations. The runtime figure is read from the live wall registry, so it
+ * organizations. The runtime figure is read from the live wall registry, so it
  * reports what is happening rather than what configuration says ought to be.
  */
 
@@ -36,8 +36,8 @@ import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/produc
 
 /** Audit action strings, in the words a person would use. */
 const ACTION_LABEL: Record<string, string> = {
-  'organization.created': 'Organisation created',
-  'organization.updated': 'Organisation renamed',
+  'organization.created': 'organization created',
+  'organization.updated': 'organization renamed',
   'organization.status_changed': 'Status changed',
   'organization.operator_entered': 'Operator entered',
   'organization.member_added': 'Member added',
@@ -46,7 +46,7 @@ const ACTION_LABEL: Record<string, string> = {
 
 export function PlatformDashboard() {
   const overview = useQuery({
-    // Namespaced under `platform` so control-plane data and organisation data
+    // Namespaced under `platform` so control-plane data and organization data
     // never share a cache key. They are answers to different questions asked of
     // different principals, and a collision would be a tenant leak.
     queryKey: ['platform', 'overview'],
@@ -58,7 +58,7 @@ export function PlatformDashboard() {
     return (
       <ErrorState
         title="The platform overview could not be read"
-        body="The control plane is unavailable. Organisations and People may still work."
+        body="The control plane is unavailable. organizations and People may still work."
       />
     );
   }
@@ -72,11 +72,11 @@ export function PlatformDashboard() {
       <PageIntro
         eyebrow="Platform"
         title="Overview"
-        standfirst="Every organisation on this deployment, counted. Nothing here is scored or inferred."
+        standfirst="Every organization on this deployment, counted. Nothing here is scored or inferred."
       />
 
       <Region order={2}>
-        <SectionRule lead label="Customers" detail="Organisations by lifecycle state." />
+        <SectionRule lead label="Customers" detail="organizations by lifecycle state." />
         <Plane>
           <div
             style={{
@@ -85,7 +85,7 @@ export function PlatformDashboard() {
               gap: 'var(--space-6)',
             }}
           >
-            <Figure scale="hero" label="Organisations" value={it.organizations.total} />
+            <Figure scale="hero" label="organizations" value={it.organizations.total} />
             <Figure scale="lead" label="Active" value={it.organizations.active} />
             <Figure scale="lead" label="Suspended" value={it.organizations.suspended} />
             <Figure scale="lead" label="Archived" value={it.organizations.archived} />
@@ -96,7 +96,7 @@ export function PlatformDashboard() {
       <Region order={3}>
         <SectionRule
           label="Estate"
-          detail="Configured across every organisation, and what the runtime is actually streaming."
+          detail="Configured across every organization, and what the runtime is actually streaming."
         />
         <Plane>
           <div
@@ -124,7 +124,7 @@ export function PlatformDashboard() {
       <Region order={4}>
         <SectionRule
           label="People"
-          detail="Accounts across the platform. Membership is what lets somebody enter an organisation."
+          detail="Accounts across the platform. Membership is what lets somebody enter an organization."
         />
         <Plane>
           <div
@@ -138,7 +138,7 @@ export function PlatformDashboard() {
             <Figure scale="lead" label="Active" value={it.people.active_users} />
             <Figure
               scale="lead"
-              label="Multi-organisation"
+              label="Multi-organization"
               value={it.people.multi_organization_users}
               detail="People who may enter more than one customer."
             />
@@ -161,13 +161,13 @@ export function PlatformDashboard() {
       <Region order={5}>
         <SectionRule
           label="Needs attention"
-          detail="Active organisations with no sites or no cameras — onboarding that has not finished."
+          detail="Active organizations with no sites or no cameras — onboarding that has not finished."
         />
         <Plane>
           {stalled.length === 0 ? (
             <EmptyState
               title="Nothing outstanding"
-              body="Every active organisation has at least one site and one camera."
+              body="Every active organization has at least one site and one camera."
             />
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
@@ -203,7 +203,7 @@ export function PlatformDashboard() {
       <Region order={6}>
         <SectionRule
           label="Recent platform activity"
-          detail="Organisation lifecycle, membership and operator entry. Not a customer's own audit trail."
+          detail="organization lifecycle, membership and operator entry. Not a customer's own audit trail."
         />
         <Plane>
           {it.recent_activity.length === 0 ? (

@@ -1,11 +1,11 @@
 /**
- * The Platform layer: login → organisation → the existing application.
+ * The Platform layer: login → organization → the existing application.
  *
  * Every test here drives the **real** router, the real guards and the real
  * `AuthProvider` against a stubbed backend. Nothing mocks a hook or a
  * component, because the properties under test are entirely about how those
  * pieces compose: which page a login lands on, whether a chooser is offered at
- * all, and whether organisation A's data can still be on screen after switching
+ * all, and whether organization A's data can still be on screen after switching
  * to B.
  *
  * The three journeys map one-to-one onto the three tests at the top. The rest
@@ -20,7 +20,7 @@ import { adminIdentity, identity, installFetch, organization, renderApp } from '
 
 const ACME = organization({ id: 'org-acme', name: 'Acme Catering', site_count: 4, camera_count: 12 });
 
-/** One person in the platform directory, with a home organisation and one membership. */
+/** One person in the platform directory, with a home organization and one membership. */
 const PERSON = {
   id: 'user-1',
   email: 'dana@example.com',
@@ -60,9 +60,9 @@ async function signIn() {
   return user;
 }
 
-/* ── Scenario 2: one organisation ─────────────────────────────────────────── */
+/* ── Scenario 2: one organization ─────────────────────────────────────────── */
 
-describe('an administrator with one organisation', () => {
+describe('an administrator with one organization', () => {
   it('goes straight from login to the Command Center', async () => {
     installFetch({ session: null });
     renderApp(<AppRouter />, '/login');
@@ -74,7 +74,7 @@ describe('an administrator with one organisation', () => {
       expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument(),
     );
     // The requirement stated as an absence: no chooser, ever.
-    expect(screen.queryByRole('heading', { name: /choose an organisation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /choose an organization/i })).not.toBeInTheDocument();
   });
 
   it('is redirected away from the chooser if they type its address', async () => {
@@ -96,25 +96,25 @@ describe('an administrator with one organisation', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /org admin|admin@example\.com/i }));
-    expect(screen.queryByRole('menuitem', { name: /switch organisation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /switch organization/i })).not.toBeInTheDocument();
   });
 
-  it('still names the organisation it is showing', async () => {
+  it('still names the organization it is showing', async () => {
     installFetch({ session: soloAdmin(), organizations: [ACME] });
     renderApp(<AppRouter />, '/dashboard');
 
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument(),
     );
-    // Orientation is not a switcher. Somebody with one organisation should
+    // Orientation is not a switcher. Somebody with one organization should
     // still be told which one every page belongs to.
     expect(screen.getAllByText('Acme Catering').length).toBeGreaterThan(0);
   });
 });
 
-/* ── Scenario 3: several organisations ────────────────────────────────────── */
+/* ── Scenario 3: several organizations ────────────────────────────────────── */
 
-describe('an administrator with several organisations', () => {
+describe('an administrator with several organizations', () => {
   it('lands on the chooser, picks one, and enters the existing application', async () => {
     installFetch({ session: null });
     renderApp(<AppRouter />, '/login');
@@ -124,16 +124,16 @@ describe('an administrator with several organisations', () => {
 
     // Login → Platform.
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /choose an organisation/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /choose an organization/i })).toBeInTheDocument(),
     );
     // The Platform page is not the Command Center, and must not pretend to be.
     expect(screen.queryByRole('heading', { name: 'Command Center' })).not.toBeInTheDocument();
 
-    // Platform → the organisation's application.
+    // Platform → the organization's application.
     const cards = screen.getAllByRole('listitem');
     const bordenCard = cards.find((card) => card.textContent?.includes('Borden Foods'));
     expect(bordenCard).toBeDefined();
-    await user.click(within(bordenCard as HTMLElement).getByRole('button', { name: /enter organisation/i }));
+    await user.click(within(bordenCard as HTMLElement).getByRole('button', { name: /enter organization/i }));
 
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument(),
@@ -141,18 +141,18 @@ describe('an administrator with several organisations', () => {
     expect(screen.getAllByText('Borden Foods').length).toBeGreaterThan(0);
   });
 
-  it('shows only the organisations the account belongs to', async () => {
+  it('shows only the organizations the account belongs to', async () => {
     installFetch({ session: soloAdmin(), organizations: [ACME, BORDEN] });
     renderApp(<AppRouter />, '/choose-organization');
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /choose an organisation/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /choose an organization/i })).toBeInTheDocument(),
     );
 
     expect(screen.getByText('Acme Catering')).toBeInTheDocument();
     expect(screen.getByText('Borden Foods')).toBeInTheDocument();
     // The list is the server's answer to "which are mine", rendered as-is. A
-    // page that fetched every organisation and filtered on this side would be
+    // page that fetched every organization and filtered on this side would be
     // one bug away from showing a customer nobody may see.
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
@@ -167,14 +167,14 @@ describe('an administrator with several organisations', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /org admin|admin@example\.com/i }));
-    await user.click(screen.getByRole('menuitem', { name: /switch organisation/i }));
+    await user.click(screen.getByRole('menuitem', { name: /switch organization/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /choose an organisation/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /choose an organization/i })).toBeInTheDocument(),
     );
   });
 
-  it('identifies each organisation well enough to tell them apart', async () => {
+  it('identifies each organization well enough to tell them apart', async () => {
     installFetch({ session: soloAdmin(), organizations: [ACME, BORDEN] });
     renderApp(<AppRouter />, '/choose-organization');
 
@@ -221,7 +221,7 @@ describe('a platform operator', () => {
     await signIn();
 
     // `must_select` alone would have sent them to a chooser holding one card —
-    // their own organisation, which is the one place their job is not.
+    // their own organization, which is the one place their job is not.
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument(),
     );
@@ -232,20 +232,20 @@ describe('a platform operator', () => {
     installFetch(operatorStub());
     renderApp(<AppRouter />, '/platform');
 
-    await waitFor(() => expect(screen.getByText('Organisations')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('organizations')).toBeInTheDocument());
     // Estate figures come from the server, not from the length of a list here.
     expect(screen.getByText('Streaming now')).toBeInTheDocument();
   });
 
-  it('sees the organisations console inside the platform shell, not an organisation', async () => {
+  it('sees the organizations console inside the platform shell, not an organization', async () => {
     installFetch(operatorStub());
     renderApp(<AppRouter />, '/platform/organizations');
 
     await waitFor(() => expect(screen.getByText('Acme Catering')).toBeInTheDocument());
 
     // The defect this phase exists to fix: the cross-customer console used to
-    // render inside `AppShell`, so it appeared inside whichever organisation
-    // happened to be selected. The organisation's own navigation must be
+    // render inside `AppShell`, so it appeared inside whichever organization
+    // happened to be selected. The organization's own navigation must be
     // nowhere on this page.
     expect(screen.getByRole('navigation', { name: 'Platform' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
@@ -278,7 +278,7 @@ describe('a platform operator', () => {
     expect(screen.getByText('Read-only')).toBeInTheDocument();
   });
 
-  it('does not switch tenant merely by inspecting an organisation', async () => {
+  it('does not switch tenant merely by inspecting an organization', async () => {
     const calls: string[] = [];
     installFetch(operatorStub({ calls, platformPeople: [PERSON] }));
     renderApp(<AppRouter />, '/platform/organizations/org-acme');
@@ -291,7 +291,7 @@ describe('a platform operator', () => {
     // first; nothing here may quietly perform the second.
     expect(calls.some((call) => call.includes('/enter'))).toBe(false);
     expect(calls.some((call) => call.includes('/select'))).toBe(false);
-    expect(screen.getByRole('button', { name: /enter organisation/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enter organization/i })).toBeInTheDocument();
   });
 
   it('enters a customer only on the explicit action, and the shell then says so', async () => {
@@ -303,7 +303,7 @@ describe('a platform operator', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Acme Catering' })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /enter organisation/i }));
+    await user.click(screen.getByRole('button', { name: /enter organization/i }));
 
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument(),
@@ -324,14 +324,14 @@ describe('a platform operator', () => {
     // before the click rather than after it.
     expect(screen.getByText(/admitting grants no role/i)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText(/admit to organisation/i), 'org-borden');
+    await user.selectOptions(screen.getByLabelText(/admit to organization/i), 'org-borden');
     await user.click(screen.getByRole('button', { name: /^admit$/i }));
 
     await waitFor(() => expect(screen.getByText('org-borden')).toBeInTheDocument());
   });
 });
 
-describe('an ordinary multi-organisation administrator', () => {
+describe('an ordinary multi-organization administrator', () => {
   it('is refused the control plane and sent to their own application', async () => {
     // Not an operator. The chooser is theirs; the console is not.
     installFetch({ session: soloAdmin(), organizations: [ACME, BORDEN] });
@@ -346,8 +346,8 @@ describe('an ordinary multi-organisation administrator', () => {
 
 /* ── Isolation ────────────────────────────────────────────────────────────── */
 
-describe('organisation isolation', () => {
-  it('does not carry one organisation onto another', async () => {
+describe('organization isolation', () => {
+  it('does not carry one organization onto another', async () => {
     const calls: string[] = [];
     installFetch({
       session: soloAdmin(),
@@ -370,12 +370,12 @@ describe('organisation isolation', () => {
 
     // The selection actually re-minted the session server-side...
     expect(calls.some((call) => call.includes('/auth/organizations/org-borden/select'))).toBe(true);
-    // ...and the shell is now unambiguously about the new organisation.
+    // ...and the shell is now unambiguously about the new organization.
     expect(screen.getAllByText('Borden Foods').length).toBeGreaterThan(0);
     expect(screen.queryByText('Acme Catering')).not.toBeInTheDocument();
   });
 
-  it('refuses an organisation the account does not belong to', async () => {
+  it('refuses an organization the account does not belong to', async () => {
     // The chooser cannot offer this, so the test drives the refusal directly:
     // the stub 403s any id outside the membership list, exactly as the server
     // does, and the page must report it rather than navigate.

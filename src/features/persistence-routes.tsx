@@ -302,7 +302,7 @@ export function CamerasPage() {
             columns={columns}
             rows={list.cameras}
             rowKey={(camera) => camera.camera_key}
-            caption="Cameras registered in this organisation, with their channel, stream and enabled state"
+            caption="Cameras registered in this organization, with their channel, stream and enabled state"
             empty={
               <EmptyState
                 title="No cameras registered"
@@ -482,7 +482,7 @@ export function IncidentsPage() {
             columns={columns}
             rows={rows}
             rowKey={(incident) => incident.id}
-            caption="Incidents in this organisation, with severity, what happened, camera, time observed, status and evidence count"
+            caption="Incidents in this organization, with severity, what happened, camera, time observed, status and evidence count"
             empty={
               <EmptyState
                 title={filter === 'all' ? 'No incidents recorded' : `No ${filter} incidents`}
@@ -1251,11 +1251,11 @@ export function AuditPage() {
           columns={columns}
           rows={events.data.events}
           rowKey={(event) => event.id}
-          caption="Audit events for this organisation, most recent first"
+          caption="Audit events for this organization, most recent first"
           empty={
             <EmptyState
               title="No audit events"
-              body="Nothing has been recorded for this organisation yet."
+              body="Nothing has been recorded for this organization yet."
             />
           }
         />
@@ -1359,7 +1359,7 @@ export function CameraDetailPage() {
         <PageIntro eyebrow="Platform · Camera" title="Not in this estate" meta={<Badge mono>{cameraKey}</Badge>} />
         <EmptyState
           title="No camera with that key"
-          body="It may have been retired, or it may belong to an organisation this account does not reach. Nothing is being hidden — the estate simply has no row with this key."
+          body="It may have been retired, or it may belong to an organization this account does not reach. Nothing is being hidden — the estate simply has no row with this key."
         />
       </>
     );

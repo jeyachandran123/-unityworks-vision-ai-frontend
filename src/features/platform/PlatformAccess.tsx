@@ -107,7 +107,7 @@ export function PlatformOperatorsPage() {
       <PageIntro
         eyebrow="Platform"
         title="Operators"
-        standfirst="Accounts that can reach every organisation on this deployment."
+        standfirst="Accounts that can reach every organization on this deployment."
       />
 
       <Region order={2}>
@@ -147,8 +147,8 @@ export function PlatformOperatorsPage() {
  * believe the change took effect.
  *
  * What *does* exist for making two holders of the same role differ is a
- * per-user, per-organisation permission override, applied inside the
- * organisation it affects. The page names that mechanism rather than leaving
+ * per-user, per-organization permission override, applied inside the
+ * organization it affects. The page names that mechanism rather than leaving
  * somebody to conclude the product cannot do it at all.
  */
 export function PlatformRolesPage() {
@@ -178,7 +178,7 @@ export function PlatformRolesPage() {
         <Plane>
           <p style={{ marginTop: 0 }}>
             Two people holding the same role are made to differ by granting or revoking individual
-            permissions <strong>on the person</strong>, inside the organisation it applies to —{' '}
+            permissions <strong>on the person</strong>, inside the organization it applies to —{' '}
             {it.customization.where}. That keeps one definition of “Kitchen Supervisor” across the
             platform while still letting one of them be read-only.
           </p>
@@ -280,9 +280,9 @@ export function PlatformAuditPage() {
   return (
     <Structural
       title="Audit"
-      standfirst="Platform activity across every organisation, filterable by organisation, actor and action."
+      standfirst="Platform activity across every organization, filterable by organization, actor and action."
       waitingFor={
-        'A cross-organisation read of the audit trail. The events are already written — organisation ' +
+        'A cross-organization read of the audit trail. The events are already written — organization ' +
         'lifecycle, membership changes and operator entry all record rows today, and the Dashboard ' +
         'shows the most recent of them. What is missing is the filtered, paginated read behind this ' +
         'page. A customer’s own operational audit stays inside that customer, where VIEW_AUDIT gates it.'
@@ -295,10 +295,10 @@ export function PlatformFleetPage() {
   return (
     <Structural
       title="Fleet Health"
-      standfirst="Cameras streaming against cameras configured, across every organisation."
+      standfirst="Cameras streaming against cameras configured, across every organization."
       waitingFor={
-        'A per-organisation breakdown of the live camera registry. The platform-wide totals are ' +
-        'already on the Dashboard, and each organisation’s own figure is on its detail page. What is ' +
+        'A per-organization breakdown of the live camera registry. The platform-wide totals are ' +
+        'already on the Dashboard, and each organization’s own figure is on its detail page. What is ' +
         'missing is the per-camera view that turns “eleven of sixteen” into “which five, and since ' +
         'when” — which needs a health read this console does not have yet.'
       }

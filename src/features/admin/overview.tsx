@@ -1,11 +1,11 @@
 /**
- * The organisation hub — what `/admin` is now instead of a stacked page.
+ * The organization hub — what `/admin` is now instead of a stacked page.
  *
  * The page this replaces put Sites, Zones and Accounts one under another in a
  * single vertical scroll, with a creation form for each. It worked, in the
  * sense that every control was on the screen somewhere. What it could not do
  * was let anyone *look at* a site, or a person, or answer "is this
- * organisation set up correctly" without reading three tables.
+ * organization set up correctly" without reading three tables.
  *
  * So this page answers that one question and hands off. It creates nothing:
  * every domain has its own surface now, and a hub that also had forms would
@@ -59,7 +59,7 @@ export function AdminOverviewPage() {
     {
       to: '/admin/sites',
       label: 'Sites',
-      body: 'The places this organisation operates, and the zones inside them.',
+      body: 'The places this organization operates, and the zones inside them.',
       permission: PERMISSIONS.viewSites,
       count: sites.data?.total,
     },
@@ -89,15 +89,15 @@ export function AdminOverviewPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Organisation"
+        eyebrow="organization"
         title="Administration"
-        standfirst="How this organisation is set up: where it operates, what is watching, and who can see it."
+        standfirst="How this organization is set up: where it operates, what is watching, and who can see it."
       />
 
       <Region order={2}>
         <SectionRule
           lead
-          label="This organisation"
+          label="This organization"
           detail="The three numbers that say whether it is configured at all."
         />
         <Plane>
@@ -337,7 +337,7 @@ export function RolesAndAccessPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Organisation"
+        eyebrow="organization"
         title="Roles & access"
         standfirst="What each role carries, and who holds it. Individual exceptions live on a person's own profile."
       />

@@ -33,11 +33,11 @@
  * What has to stay quiet is the **product**, and it does: the rejection
  * resolves to the login screen with nothing surfaced to the operator.
  *
- * ### The organisation is part of the session, not part of this app's state
+ * ### The organization is part of the session, not part of this app's state
  *
- * There is no "current organisation" variable here that requests read. The
- * active organisation is the tenant claim inside the access token, so switching
- * organisations means **getting a new token** — `POST /auth/organizations/{id}/select`
+ * There is no "current organization" variable here that requests read. The
+ * active organization is the tenant claim inside the access token, so switching
+ * organizations means **getting a new token** — `POST /auth/organizations/{id}/select`
  * for one of the caller's own memberships, or `POST /platform/organizations/{id}/enter`
  * for an audited platform-operator entry.
  *
@@ -48,11 +48,11 @@
  *
  * ### Switching clears the cache, and it has to happen here
  *
- * `queryClient.clear()` on every organisation change. TanStack Query keys in
- * this application do not carry an organisation id — `['cameras']` is
- * `['cameras']` in both — so without this, organisation A's cameras, incidents
+ * `queryClient.clear()` on every organization change. TanStack Query keys in
+ * this application do not carry an organization id — `['cameras']` is
+ * `['cameras']` in both — so without this, organization A's cameras, incidents
  * and counts stay on screen after the switch and are indistinguishable from
- * organisation B's. It is in this module rather than in a component because it
+ * organization B's. It is in this module rather than in a component because it
  * must happen on *every* path that changes the token's tenant, and a component
  * can be unmounted.
  */
@@ -92,14 +92,14 @@ interface AuthContextValue {
   endedReason: 'expired' | 'revoked' | null;
 
   /**
-   * Every organisation this account may enter, from the server.
+   * Every organization this account may enter, from the server.
    *
    * Empty while the session is still restoring, and empty for a platform
    * operator who is a member of nothing — which is why `mustSelect` is a
    * separate field and not `organizations.length > 1`.
    */
   organizations: OrganizationSummary[];
-  /** Whether the server says an organisation choice is owed before the app. */
+  /** Whether the server says an organization choice is owed before the app. */
   mustSelect: boolean;
   /**
    * Whether `organizations` and `mustSelect` are the server's answers yet.
@@ -112,15 +112,15 @@ interface AuthContextValue {
    */
   organizationsResolved: boolean;
   isPlatformOperator: boolean;
-  /** The active organisation's summary, when it is one of the caller's own. */
+  /** The active organization's summary, when it is one of the caller's own. */
   activeOrganization: OrganizationSummary | null;
 
   login: (email: string, password: string) => Promise<LoginFailure | null>;
   logout: () => Promise<void>;
   dismissEnded: () => void;
-  /** Enter one of the caller's own organisations. Throws on refusal. */
+  /** Enter one of the caller's own organizations. Throws on refusal. */
   selectOrganization: (organizationId: string) => Promise<void>;
-  /** Enter an organisation as a platform operator. Audited. Throws on refusal. */
+  /** Enter an organization as a platform operator. Audited. Throws on refusal. */
   enterOrganization: (organizationId: string) => Promise<void>;
 }
 
@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * Load the organisation list for the session that already exists.
+   * Load the organization list for the session that already exists.
    *
    * Used on restore, where the login response — which carries the list — is
    * long gone. `must_select` is recomputed the same way the server computes it
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMustSelect(accessible.organizations.length > 1 || accessible.is_platform_operator);
       setOrganizationsResolved(true);
     } catch {
-      // A session that cannot list its own organisations is one organisation
+      // A session that cannot list its own organizations is one organization
       // wide as far as this app is concerned. Failing closed here means the
       // chooser is not offered rather than being offered and then empty.
       if (!alive.current) return;
@@ -255,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // The routing facts come from the login response rather than from a
         // second round trip, so the answer cannot change between the two calls
-        // — and so a single-organisation user never touches the organisations
+        // — and so a single-organization user never touches the organizations
         // endpoint at all.
         setOrganizations(session.organizations ?? []);
         setIsPlatformOperator(session.is_platform_operator === true);
@@ -297,14 +297,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * Adopt a freshly minted session for a different organisation.
+   * Adopt a freshly minted session for a different organization.
    *
    * The order is deliberate and is the whole of the data-isolation guarantee:
    * the token is replaced *first*, the cache is emptied *second*, and the new
    * identity is published *last*. Any refetch a component triggers on the
    * re-render therefore carries the new tenant and finds nothing cached from
    * the old one. Publishing the identity first would give every mounted
-   * component one render against the previous organisation's cached data.
+   * component one render against the previous organization's cached data.
    */
   const adopt = useCallback(
     async (accessToken: string, identity?: Identity): Promise<void> => {
@@ -322,7 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await authApi.selectOrganization(organizationId);
       await adopt(session.access_token, session.user);
       // The list itself does not change when a member switches between their
-      // own organisations, but the counts on it might have, and this is the
+      // own organizations, but the counts on it might have, and this is the
       // moment the user is looking at them.
       await loadOrganizations();
     },
@@ -333,7 +333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (organizationId: string): Promise<void> => {
       const entry = await platformApi.enter(organizationId);
       // No identity in the entry response: it deliberately reports the
-      // organisation and the reach it granted rather than an `Identity`, so the
+      // organization and the reach it granted rather than an `Identity`, so the
       // shape of a tenant session has exactly one producer. `/auth/me` under
       // the new token is that producer.
       await adopt(entry.access_token);
@@ -351,7 +351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // apparently signed in because the network blipped is the worse outcome.
     }
     __resetClient();
-    // Same reason as an organisation switch, only more so: whatever is cached
+    // Same reason as an organization switch, only more so: whatever is cached
     // belongs to somebody who has just signed out, and the next person at this
     // browser must not be shown it while their own data loads.
     queryClient.clear();

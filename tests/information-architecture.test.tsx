@@ -141,7 +141,7 @@ function areasFor(holder: ReturnType<typeof identity>) {
 }
 
 describe('role-shaped navigation', () => {
-  it('an organisation admin sees no engineering area at all', () => {
+  it('an organization admin sees no engineering area at all', () => {
     // The Phase 4 correction, at the level of the whole sidebar rather than one
     // link: an org admin is an administrative role, not an engineering one.
     const areas = areasFor(adminIdentity());

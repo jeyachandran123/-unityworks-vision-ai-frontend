@@ -58,13 +58,13 @@ export function identity(overrides: Partial<Identity> = {}): Identity {
   };
 }
 
-/** One organisation, as the chooser and the shell read it. */
+/** One organization, as the chooser and the shell read it. */
 export function organization(
   overrides: Partial<OrganizationSummary> = {},
 ): OrganizationSummary {
   return {
     id: 'org-test',
-    name: 'Test Organisation',
+    name: 'Test organization',
     slug: 'test',
     status: 'active',
     site_count: 2,
@@ -940,8 +940,8 @@ type StubPerson = Record<string, unknown> & {
 
 export interface StubOptions {
   /**
-   * The organisations `GET /auth/organizations` reports, and that the login
-   * response carries. Defaults to a single organisation matching the session's
+   * The organizations `GET /auth/organizations` reports, and that the login
+   * response carries. Defaults to a single organization matching the session's
    * tenant — the shape almost every existing test assumes, and the one that
    * must never produce a chooser.
    */
@@ -1053,7 +1053,7 @@ export function stubFetch(options: StubOptions = {}) {
   const { session = identity(), routes = {}, calls = [] } = options;
   let networkFailures = options.refreshNetworkFailures ?? 0;
 
-  // The session is mutable here because selecting or entering an organisation
+  // The session is mutable here because selecting or entering an organization
   // genuinely replaces it on the server. A stub that kept answering `/auth/me`
   // with the original tenant would let a broken switch pass.
   let activeSession: Identity | null = session;
@@ -1138,19 +1138,19 @@ export function stubFetch(options: StubOptions = {}) {
 
     if (url.includes('/auth/logout')) return jsonResponse({ ok: true });
 
-    // ── organisation access ───────────────────────────────────────────────
+    // ── organization access ───────────────────────────────────────────────
     //
     // Declared before `/auth/me` and before the generic `routes` sweep, and in
     // *this* order among themselves: every one of these paths contains
     // `/auth/organizations`, so the most specific has to match first or
-    // selecting an organisation would be answered by the list endpoint.
+    // selecting an organization would be answered by the list endpoint.
 
     const select = /\/auth\/organizations\/([^/]+)\/select/.exec(url);
     if (select && method === 'POST') {
       const target = decodeURIComponent(select[1] ?? '');
       if (!organizationState.some((organization) => organization.id === target)) {
         // The real refusal: no membership, 403, and identical whether the
-        // organisation exists or not.
+        // organization exists or not.
         return envelope('OUT_OF_SCOPE', 403);
       }
       // The switch is a *new session*, so the stub mints one — this is what
@@ -1176,7 +1176,7 @@ export function stubFetch(options: StubOptions = {}) {
 
     // ── the platform control plane ────────────────────────────────────────
     //
-    // Declared before the organisation-entry routes below, and most-specific
+    // Declared before the organization-entry routes below, and most-specific
     // first among themselves, because every one of these paths contains
     // `/platform/organizations`.
 
@@ -1303,7 +1303,7 @@ export function stubFetch(options: StubOptions = {}) {
       });
     }
 
-    // One organisation, for the administrative detail page. Declared before the
+    // One organization, for the administrative detail page. Declared before the
     // list route because `/platform/organizations/org-acme` contains
     // `/platform/organizations`.
     const oneOrganization = /\/platform\/organizations\/([^/?]+)$/.exec(url);

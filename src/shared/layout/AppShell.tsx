@@ -68,7 +68,7 @@ export function AppShell() {
    *
    * Read from the identity the server issued, not from whether the account
    * *could* be an operator. An operator working inside their own
-   * organisation as a member is having an ordinary session and must not be
+   * organization as a member is having an ordinary session and must not be
    * marked as if they were visiting.
    */
   const acting = user?.acting_as === 'platform_operator';
@@ -76,13 +76,13 @@ export function AppShell() {
   /**
    * Whether there is anywhere to switch *to*.
    *
-   * A single-organisation user is shown no switcher at all — an affordance
-   * whose only outcome is a page listing the organisation you are already
+   * A single-organization user is shown no switcher at all — an affordance
+   * whose only outcome is a page listing the organization you are already
    * in is worse than its absence.
    */
   const canSwitch = organizations.length > 1 || isPlatformOperator;
 
-  /** What to call the organisation on screen. The name when the session can
+  /** What to call the organization on screen. The name when the session can
       see it, the id when it cannot — an operator entering a customer they
       are not a member of has no membership row to read a name from, and an
       id is a true answer where a blank is a confusing one. */
@@ -275,12 +275,12 @@ export function AppShell() {
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>Signed in as</div>
                 <div style={{ fontSize: 'var(--text-sm)', wordBreak: 'break-all' }}>{user?.subject}</div>
 
-                {/* The organisation, named in the menu as well as in the
+                {/* The organization, named in the menu as well as in the
                     sidebar. The menu is where somebody goes when they are
                     unsure who they are signed in as, and "which customer am I
                     looking at" is the same question. */}
                 <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-                  Organisation
+                  organization
                 </div>
                 <div style={{ fontSize: 'var(--text-sm)' }}>{organizationLabel}</div>
                 <div style={{ marginTop: 'var(--space-2)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
@@ -302,7 +302,7 @@ export function AppShell() {
                 <div style={{ borderTop: '1px solid var(--line-subtle)', margin: 'var(--space-3) 0' }} />
                 {/* Only when there is somewhere to go. Switching is a
                     navigation to the chooser rather than a menu of
-                    organisations: picking one re-mints the session and clears
+                    organizations: picking one re-mints the session and clears
                     every cache, which is too consequential to happen from a
                     hover menu by accident. */}
                 {/* An operator's way out is the control plane, which lists
@@ -320,7 +320,7 @@ export function AppShell() {
                     role="menuitem"
                     style={{ width: '100%' }}
                   >
-                    {isPlatformOperator ? 'Platform control plane' : 'Switch organisation'}
+                    {isPlatformOperator ? 'Platform control plane' : 'Switch organization'}
                   </Button>
                 ) : null}
                 <Button variant="ghost" size="sm" onClick={() => void logout()} role="menuitem" style={{ width: '100%' }}>
@@ -384,7 +384,7 @@ export function AppShell() {
  * session lasts, because the fact it states is true for as long as the session
  * lasts. Somebody three pages into a customer's incidents has to be able to
  * tell — without remembering how they got there — that they are looking at
- * another organisation's data under platform authority, read-only, and that
+ * another organization's data under platform authority, read-only, and that
  * their being here is recorded.
  *
  * It borrows the engineering register's device rather than inventing a third
@@ -394,7 +394,7 @@ export function AppShell() {
 function OperatorMark({ organization }: { organization: string }) {
   return (
     <span
-      title="You entered this organisation from the platform console. The session is read-only and was recorded."
+      title="You entered this organization from the platform console. The session is read-only and was recorded."
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -455,16 +455,16 @@ function Mark() {
 }
 
 /**
- * The mark, the product, and — since organisations became selectable — the
- * organisation being worked in.
+ * The mark, the product, and — since organizations became selectable — the
+ * organization being worked in.
  *
- * The organisation belongs here rather than in the topbar because it qualifies
+ * The organization belongs here rather than in the topbar because it qualifies
  * *everything* below it: every count on the Command Center, every camera on the
  * wall, every incident in the queue. Putting it at the head of the navigation
  * says that the whole column is about one customer, which is exactly what is
  * true.
  *
- * It is rendered for a single-organisation user too. Naming the organisation
+ * It is rendered for a single-organization user too. Naming the organization
  * you are in is orientation, not a switcher, and hiding it from the people who
  * only have one would mean the shell says less the more certain it is.
  */

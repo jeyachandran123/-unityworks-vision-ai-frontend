@@ -23,7 +23,7 @@ export interface CameraScope {
 export interface Identity {
   subject: string;
   display_name: string;
-  /** The **active** organisation. Comes from the token, never from this app. */
+  /** The **active** organization. Comes from the token, never from this app. */
   tenant_id: string;
   /**
    * `''` for an ordinary session; `'platform_operator'` for one reached by an
@@ -42,12 +42,12 @@ export interface Identity {
 }
 
 /**
- * One organisation, as the chooser needs it.
+ * One organization, as the chooser needs it.
  *
  * Enough to recognise a customer and go in, and no more. This is deliberately
  * not `platform.Organization`: that type serves the operator's *lifecycle*
  * console and carries `running_cameras`, `status_reason` and `user_count`,
- * none of which a member choosing between their own two organisations has any
+ * none of which a member choosing between their own two organizations has any
  * business reading.
  */
 export interface OrganizationSummary {
@@ -64,7 +64,7 @@ export interface Session {
   token_type: string;
   expires_at: string;
   user?: Identity;
-  /** Login only: every organisation this account may enter. */
+  /** Login only: every organization this account may enter. */
   organizations?: OrganizationSummary[];
   /**
    * Login only, and the whole of the routing decision — **answered by the
@@ -72,7 +72,7 @@ export interface Session {
    *
    * Not derivable from `organizations.length` on this side: a platform
    * operator is owed the chooser even when their own account belongs to one
-   * organisation, because the organisations they administer are not the ones
+   * organization, because the organizations they administer are not the ones
    * they are a member of.
    */
   must_select?: boolean;
@@ -81,7 +81,7 @@ export interface Session {
 
 export interface AccessibleOrganizations {
   organizations: OrganizationSummary[];
-  /** The organisation this session is currently in. */
+  /** The organization this session is currently in. */
   active: string;
   acting_as: '' | 'platform_operator';
   /**
@@ -105,14 +105,14 @@ export const authApi = {
 
   me: () => api.get<Identity>('/auth/me'),
 
-  /** The organisations this account may enter. Membership only. */
+  /** The organizations this account may enter. Membership only. */
   organizations: () => api.get<AccessibleOrganizations>('/auth/organizations'),
 
   /**
-   * Move this session into another of the caller's organisations.
+   * Move this session into another of the caller's organizations.
    *
-   * Returns a **new access token** whose tenant is the selected organisation,
-   * and rotates the refresh cookie to match. The organisation is never sent on
+   * Returns a **new access token** whose tenant is the selected organization,
+   * and rotates the refresh cookie to match. The organization is never sent on
    * subsequent requests — it is carried by the token, which is why switching is
    * an endpoint rather than a piece of client state.
    *

@@ -20,7 +20,7 @@
  * predicting the result locally. A permission override is the one place in
  * this product where showing the *wrong* answer for half a second is worse
  * than showing nothing for half a second — `decide()` composes roles,
- * overrides and organisation lifecycle together server-side, and this page
+ * overrides and organization lifecycle together server-side, and this page
  * never re-derives that.
  *
  * ### Vocabulary
@@ -228,7 +228,7 @@ export function UserDetailPage() {
         {notFound ? (
           <EmptyState
             title="No account with that id"
-            body="It may have been removed, or it may belong to an organisation this account does not reach."
+            body="It may have been removed, or it may belong to an organization this account does not reach."
           />
         ) : (
           <Failed error={userQuery.error} />
@@ -347,7 +347,7 @@ export function UserDetailPage() {
         >
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
             This account will be signed out and refused login immediately. It can be undone by
-            activating the account again, but if this is your organisation's only administrator
+            activating the account again, but if this is your organization's only administrator
             it may leave nobody able to reverse it — check before continuing.
           </p>
         </Modal>
@@ -456,7 +456,7 @@ export function UserDetailPage() {
         >
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
             {roleLabel(confirmRemoveRole ?? '')} carries administration-level access. Removing it
-            may take away this account's ability to manage users or the organisation's structure.
+            may take away this account's ability to manage users or the organization's structure.
           </p>
         </Modal>
       </Region>

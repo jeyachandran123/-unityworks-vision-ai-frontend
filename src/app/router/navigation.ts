@@ -101,7 +101,7 @@ export interface NavSection {
  *
  * None of them is the *Platform Control Plane*. That is a separate shell, a
  * separate navigation model (`platform-navigation.ts`) and a separate
- * principal, and it sits above every organisation rather than inside one.
+ * principal, and it sits above every organization rather than inside one.
  */
 export const PRODUCT_NAV: NavSection[] = [
   {
@@ -250,8 +250,8 @@ export const PRODUCT_NAV: NavSection[] = [
   {
     // Renamed from "Platform" to "Estate". The word had come to mean three
     // different things in one product — Vision OS (called "the platform"
-    // throughout its own source), the cross-organisation control plane at
-    // `/platform`, and this section — so an organisation administrator saw a
+    // throughout its own source), the cross-organization control plane at
+    // `/platform`, and this section — so an organization administrator saw a
     // sidebar area called "Platform" that had nothing to do with the Platform
     // layer. The section's own blurb already said "the estate", so the word was
     // sitting right here.
@@ -341,7 +341,7 @@ export const PRODUCT_NAV: NavSection[] = [
         // Moved out of Analyse. The gate was always correct; the placement was
         // not. Confusion matrices and a dataset's written admission that it
         // cannot measure detection recall do not belong in the list an
-        // organisation admin scans for footfall.
+        // organization admin scans for footfall.
         path: '/model-evaluation',
         permissions: [PERMISSIONS.viewModelEvaluation],
         icon: NavIcons.modelEvaluation,

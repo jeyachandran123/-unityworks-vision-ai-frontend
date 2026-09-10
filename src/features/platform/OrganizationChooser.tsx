@@ -1,25 +1,25 @@
 /**
- * The organisation chooser — pick one, then enter the application.
+ * The organization chooser — pick one, then enter the application.
  *
  * ### What this page is not
  *
  * It is not a dashboard, it is not a second Command Center, and it is **not the
  * Platform Control Plane**. It is the one screen that sits between signing in
- * and the organisation application, and its only job is to let somebody
+ * and the organization application, and its only job is to let somebody
  * recognise the customer they meant and go in. Everything after that click is
  * the application that was already there.
  *
  * ### Why it is not at `/platform` any more
  *
  * Because most of the people who see it are not platform administrators. A
- * multi-organisation `org_admin` — somebody who manages two restaurant groups
- * and nothing else — owes an organisation choice and must never be shown a
+ * multi-organization `org_admin` — somebody who manages two restaurant groups
+ * and nothing else — owes an organization choice and must never be shown a
  * cross-customer console. Serving both from one address made the chooser's
  * audience and the control plane's audience look like one group; they are not,
  * and the difference is a security boundary rather than a layout preference.
  *
  * A platform operator reaching this page sees the same chooser, plus a way into
- * the console. Everyone else sees only their own organisations.
+ * the console. Everyone else sees only their own organizations.
  *
  * That is why it shows a name, a status and two counts and stops. A chooser
  * that reported incident rates would be answering a question the Command Center
@@ -28,15 +28,15 @@
  *
  * ### It renders outside `AppShell`, deliberately
  *
- * Before an organisation is chosen there is no organisation context, so there
+ * Before an organization is chosen there is no organization context, so there
  * is nothing for the sidebar to be *about*. Rendering the product navigation
- * here would offer Live Wall and Incidents for an organisation the session is
+ * here would offer Live Wall and Incidents for an organization the session is
  * not yet in — every one of which the backend would refuse, correctly, and
  * confusingly.
  *
  * ### Two data sources, because there are two questions
  *
- * A member asks "which of my organisations?" and is answered from
+ * A member asks "which of my organizations?" and is answered from
  * `GET /auth/organizations` — membership, and nothing else. A platform operator
  * asks "which customer?" and is answered from `GET /platform/organizations`,
  * which requires a different principal entirely. They are not merged into one
@@ -45,10 +45,10 @@
  *
  * ### An operator who is also a member enters through the member door
  *
- * If one of the organisations an operator can see is one they actually belong
+ * If one of the organizations an operator can see is one they actually belong
  * to, selecting it uses their **membership** — their real roles, their real
  * camera scope — rather than a read-only operator entry. Entering their own
- * organisation as a stranger would be a worse experience and a misleading audit
+ * organization as a stranger would be a worse experience and a misleading audit
  * row.
  */
 
@@ -87,7 +87,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_NOTE: Record<string, string> = {
   active: '',
   suspended: 'Reads work. Changes are refused and cameras are stopped.',
-  archived: 'Cannot be entered. Nobody may sign in to an archived organisation.',
+  archived: 'Cannot be entered. Nobody may sign in to an archived organization.',
 };
 
 export function OrganizationChooser() {
@@ -134,7 +134,7 @@ export function OrganizationChooser() {
     setBusy(organization.id);
     try {
       // Membership first. An operator standing in front of their own
-      // organisation should go in as themselves, not as a read-only visitor.
+      // organization should go in as themselves, not as a read-only visitor.
       if (memberOf.has(organization.id)) {
         await selectOrganization(organization.id);
       } else {
@@ -199,7 +199,7 @@ export function OrganizationChooser() {
               letterSpacing: 'var(--tracking-tight)',
             }}
           >
-            {isPlatformOperator ? 'Choose a customer' : 'Choose an organisation'}
+            {isPlatformOperator ? 'Choose a customer' : 'Choose an organization'}
           </h1>
           <p
             style={{
@@ -211,14 +211,14 @@ export function OrganizationChooser() {
           >
             {isPlatformOperator
               ? 'Entering a customer opens their application read-only and records that you did. Evidence, patron identity and the audit trail stay closed.'
-              : 'Everything after this point — the Command Center, the wall, alerts, reports — belongs to the organisation you pick.'}
+              : 'Everything after this point — the Command Center, the wall, alerts, reports — belongs to the organization you pick.'}
           </p>
         </header>
 
         {isPlatformOperator && rows.length > 6 ? (
           <div style={{ maxWidth: '22rem', marginBottom: 'var(--space-6)' }}>
             <Input
-              label="Find an organisation"
+              label="Find an organization"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Name or id"
@@ -243,28 +243,28 @@ export function OrganizationChooser() {
           </div>
         ) : null}
 
-        {loading ? <LoadingState label="Loading organisations" /> : null}
+        {loading ? <LoadingState label="Loading organizations" /> : null}
 
         {!loading && everyOrganization.isError ? (
           <ErrorState
-            title="Organisations could not be loaded"
-            body="The platform list is unavailable. Any organisation you are a member of is still listed below."
+            title="organizations could not be loaded"
+            body="The platform list is unavailable. Any organization you are a member of is still listed below."
           />
         ) : null}
 
         {!loading && rows.length === 0 ? (
           <EmptyState
-            title="No organisations"
+            title="No organizations"
             body={
               isPlatformOperator
-                ? 'No organisation matches. Create one in the management console.'
-                : 'This account is not a member of any organisation. Contact your administrator.'
+                ? 'No organization matches. Create one in the management console.'
+                : 'This account is not a member of any organization. Contact your administrator.'
             }
           />
         ) : null}
 
         <ul
-          aria-label="Organisations"
+          aria-label="organizations"
           style={{
             listStyle: 'none',
             margin: 0,
@@ -295,7 +295,7 @@ export function OrganizationChooser() {
               <Icon icon={ControlIcons.goTo} size="inline" />
             </Button>
             <span style={{ marginLeft: 'var(--space-3)', color: 'var(--ink-tertiary)' }}>
-              Organisations, people, operators and access — above every customer, in its own
+              organizations, people, operators and access — above every customer, in its own
               console. A different job from entering one.
             </span>
           </p>
@@ -405,7 +405,7 @@ function OrganizationCard({
         }}
       >
         <Button onClick={onOpen} disabled={disabled || archived} size="sm">
-          {busy ? 'Opening…' : active ? 'Continue' : 'Enter organisation'}
+          {busy ? 'Opening…' : active ? 'Continue' : 'Enter organization'}
         </Button>
         {/* Said before the click, not discovered after it. An operator entering
             a customer they do not belong to gets a read-only session, and that

@@ -60,23 +60,23 @@ export function LoginPage() {
    * destinations.
    *
    *     platform operator          → /platform, the control plane
-   *     several organisations      → /choose-organization, the chooser
-   *     one organisation           → straight in
+   *     several organizations      → /choose-organization, the chooser
+   *     one organization           → straight in
    *
    * The operator case is checked first and separately, because it is not
    * derivable from the membership count: an operator's own account usually
-   * belongs to exactly one organisation, and the customers they administer are
+   * belongs to exactly one organization, and the customers they administer are
    * not among their memberships. Sending them "straight in" would land them in
    * the one place their job is not.
    *
    * `mustSelect` is the server's answer, computed at login from both facts. A
-   * single-organisation administrator has it false and is never shown a
+   * single-organization administrator has it false and is never shown a
    * chooser, which is the whole point of asking the server rather than counting
    * a list here.
    *
    * A deep link is deliberately dropped when a choice is owed: `/incidents/42`
    * means nothing until it is known *whose* incident 42, and sending somebody
-   * to the wrong organisation's copy of that route would be worse than sending
+   * to the wrong organization's copy of that route would be worse than sending
    * them to the chooser.
    */
   const target = isPlatformOperator
@@ -104,7 +104,7 @@ export function LoginPage() {
     // On success the redirect is the declarative one above, not a call here.
     // It has to be: `mustSelect` is set by `login` on the provider, and the
     // value this closure captured predates it — navigating from here would send
-    // every multi-organisation user to the dashboard the chooser exists to come
+    // every multi-organization user to the dashboard the chooser exists to come
     // before.
     if (result) setFailure(result);
   }
@@ -243,7 +243,7 @@ export function LoginPage() {
               Sign in
             </h1>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-tertiary)' }}>
-              Use the account your organisation issued you.
+              Use the account your organization issued you.
             </p>
           </div>
 
@@ -330,7 +330,7 @@ export function LoginPage() {
               color: 'var(--ink-tertiary)',
             }}
           >
-            Access is granted by your organisation administrator.
+            Access is granted by your organization administrator.
           </p>
         </div>
       </main>

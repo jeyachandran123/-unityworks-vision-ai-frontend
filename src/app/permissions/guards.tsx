@@ -36,7 +36,7 @@ export function RequireAuth() {
 }
 
 /**
- * Requires that this session is *in* an organisation before the application
+ * Requires that this session is *in* an organization before the application
  * loads.
  *
  * ### Where the routing rule actually lives
@@ -46,21 +46,21 @@ export function RequireAuth() {
  * once, by the login screen, which sends them to `/platform` instead of
  * `/dashboard`. Putting it in a guard as well was tried and is wrong: a guard
  * that redirects whenever the account *could* choose has no way to know that it
- * just did, so choosing an organisation bounces straight back to the chooser.
+ * just did, so choosing an organization bounces straight back to the chooser.
  *
  * What is left for a guard is the thing that is true for the whole life of the
- * session rather than for one navigation: the shell renders an organisation's
- * application, so there has to be an organisation. A session always has one
+ * session rather than for one navigation: the shell renders an organization's
+ * application, so there has to be an organization. A session always has one
  * after login, so in practice this admits every time — it is the statement that
  * the shell has a precondition, and the safety net if a future path ever
  * produces a session without one.
  *
  * ### It is not a tenant boundary
  *
- * Like every other guard in this file, it is UX. The organisation a session can
+ * Like every other guard in this file, it is UX. The organization a session can
  * reach is the tenant claim inside its access token, checked against the
  * membership table on every single request. Editing your way past this
- * component gets you the application for exactly the organisation your token
+ * component gets you the application for exactly the organization your token
  * already named.
  */
 export function RequireOrganization() {
@@ -77,17 +77,17 @@ export function RequireOrganization() {
  * The chooser's own gate: it exists only for accounts with something to choose
  * between.
  *
- * A single-organisation administrator who types the chooser's address is sent
+ * A single-organization administrator who types the chooser's address is sent
  * to their Command Center rather than shown a page with one card on it. That is
  * the requirement stated from the other side — "do not force
- * single-organisation users to select their organisation" — and it has to be
+ * single-organization users to select their organization" — and it has to be
  * enforced on the route as well as on the redirect, because a bookmark is not a
  * redirect.
  *
  * ### Membership count, not `mustSelect`
  *
  * `mustSelect` is true for a platform operator even when they belong to exactly
- * one organisation, because the customers they administer are not the ones they
+ * one organization, because the customers they administer are not the ones they
  * are a member of. That makes it the right signal for *where to send somebody
  * after login* and the wrong one for *may this page render*: an operator with
  * one membership has nothing to choose between here, and their destination is
@@ -114,7 +114,7 @@ export function RequireChoosableOrganizations() {
  * ### One gate on the group, not one per page
  *
  * Every other guard in this file declares a `Permission`, because every other
- * route belongs to an organisation and permissions are what an organisation
+ * route belongs to an organization and permissions are what an organization
  * grants. The control plane has none: a `PlatformOperator` carries no
  * `Permission` and no tenant at all, deliberately, so that no role anywhere can
  * produce one. There is therefore nothing per-page to check — the question is
@@ -125,7 +125,7 @@ export function RequireChoosableOrganizations() {
  *
  * Somebody who reaches `/platform` without platform authority is not
  * unauthenticated and has done nothing wrong — most often they are a
- * multi-organisation administrator who followed a stale link. They are sent to
+ * multi-organization administrator who followed a stale link. They are sent to
  * their own Command Center, which is the same redirect-not-403 posture
  * `RequirePermission` takes.
  *

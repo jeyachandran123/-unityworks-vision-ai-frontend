@@ -393,7 +393,7 @@ export function PosIntegrationPage() {
                 ]}
                 rows={connectors.data?.connectors ?? []}
                 rowKey={(row) => row.id}
-                caption="Point-of-sale connectors configured for this organisation"
+                caption="Point-of-sale connectors configured for this organization"
                 empty={
                   <EmptyState
                     title="No connector is configured"

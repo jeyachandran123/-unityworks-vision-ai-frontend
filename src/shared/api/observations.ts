@@ -1,5 +1,5 @@
 /**
- * PPE observations, and the organisation they happened in.
+ * PPE observations, and the organization they happened in.
  *
  * Separate from `persistence.ts` because the two answer different questions and
  * are backed by different stores. Everything there is an application row
@@ -131,7 +131,7 @@ export function attributeLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/* ── organisation ─────────────────────────────────────────────────────────── */
+/* ── organization ─────────────────────────────────────────────────────────── */
 
 export interface Restaurant {
   id: string;

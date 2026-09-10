@@ -1,30 +1,30 @@
 /**
  * People — everyone on the platform, and what they may enter.
  *
- * ### This is not the organisation's user administration, and must not become it
+ * ### This is not the organization's user administration, and must not become it
  *
- * `/admin/people` inside an organisation answers "who works here, and what may
+ * `/admin/people` inside an organization answers "who works here, and what may
  * they do here". It creates accounts, assigns roles, sets camera scope, and it
- * is gated on `MANAGE_USERS` held *in that organisation* by somebody who works
+ * is gated on `MANAGE_USERS` held *in that organization* by somebody who works
  * there.
  *
  * This page answers a different question that nothing else can: "who exists
  * across the platform, and which customers can they reach". It administers
  * **membership** — the entry ticket — and nothing else. Roles stay where they
- * belong, granted inside the organisation they apply to, by somebody
+ * belong, granted inside the organization they apply to, by somebody
  * accountable there.
  *
  * Keeping that line is what stops the control plane becoming a back door into
  * every customer's user administration.
  *
- * ### Home organisation and memberships are always shown separately
+ * ### Home organization and memberships are always shown separately
  *
  * `home_organization_id` is where the account *lives*: it owns email
  * uniqueness and it is where a failed login is filed. It is not, by itself,
  * permission to enter anywhere. `memberships` is what the person may actually
  * enter. For nearly every account the two agree — and the moment they stop
  * agreeing is exactly when somebody needs to see both, so the page never
- * collapses them into one "organisation" column.
+ * collapses them into one "organization" column.
  */
 
 import { useMemo, useState } from 'react';
@@ -98,7 +98,7 @@ export function PlatformPeoplePage() {
       },
       {
         key: 'home',
-        header: 'Home organisation',
+        header: 'Home organization',
         render: (person) => (
           <span title="Where the account lives. Not, by itself, permission to enter.">
             {person.home_organization_name}
@@ -121,7 +121,7 @@ export function PlatformPeoplePage() {
               {person.organization_count}
               <span style={{ color: 'var(--ink-tertiary)' }}>
                 {' '}
-                {person.organization_count === 1 ? 'organisation' : 'organisations'}
+                {person.organization_count === 1 ? 'organization' : 'organizations'}
               </span>
             </span>
           ),
@@ -147,7 +147,7 @@ export function PlatformPeoplePage() {
       <PageIntro
         eyebrow="Platform"
         title="People"
-        standfirst="Everyone on the platform. Membership is what lets somebody enter an organisation; roles decide what they can do once inside."
+        standfirst="Everyone on the platform. Membership is what lets somebody enter an organization; roles decide what they can do once inside."
       />
 
       <Region order={2}>
@@ -161,7 +161,7 @@ export function PlatformPeoplePage() {
               placeholder="Name or email"
             />
             <Select
-              label="In organisation"
+              label="In organization"
               value={organizationId}
               onChange={(event) => setOrganizationId(event.target.value)}
             >
@@ -178,7 +178,7 @@ export function PlatformPeoplePage() {
           {people.isError ? <ErrorState title="People could not be read" body="The directory is unavailable." /> : null}
           {people.data ? (
             <DataTable
-              caption="Everyone on the platform, with their home organisation and what they may enter"
+              caption="Everyone on the platform, with their home organization and what they may enter"
               rows={people.data.people}
               columns={columns}
               rowKey={(person) => person.id}
@@ -288,14 +288,14 @@ export function PlatformPersonPage() {
       <Region order={2}>
         <SectionRule
           lead
-          label="Organisations they may enter"
-          detail="Membership is the entry ticket. Roles are granted inside each organisation, by somebody accountable there."
+          label="organizations they may enter"
+          detail="Membership is the entry ticket. Roles are granted inside each organization, by somebody accountable there."
         />
         <Plane>
           {it.home_membership_missing ? (
             <p style={{ marginTop: 0, color: 'var(--ink-secondary)' }}>
               This account is filed in <strong>{it.home_organization_name}</strong> but has no
-              membership there, so it cannot enter its own home organisation. That is a legitimate
+              membership there, so it cannot enter its own home organization. That is a legitimate
               state — it is also what a mistaken revocation looks like.
             </p>
           ) : null}
@@ -303,7 +303,7 @@ export function PlatformPersonPage() {
           {it.memberships.length === 0 ? (
             <EmptyState
               title="No memberships"
-              body="This account cannot sign in to any organisation. Add one below to admit them."
+              body="This account cannot sign in to any organization. Add one below to admit them."
             />
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
@@ -330,7 +330,7 @@ export function PlatformPersonPage() {
             }}
           >
             <Select
-              label="Admit to organisation"
+              label="Admit to organization"
               value={addTo}
               onChange={(event) => setAddTo(event.target.value)}
             >
@@ -354,7 +354,7 @@ export function PlatformPersonPage() {
               }}
             >
               Admitting grants no role. They will be able to sign in and will see nothing until
-              somebody grants them a role inside that organisation.
+              somebody grants them a role inside that organization.
             </p>
           </div>
         </Plane>

@@ -13,10 +13,10 @@
  */
 
 export const PERMISSIONS = {
-  /** Organisation settings and lifecycle only. It is deliberately no longer
+  /** organization settings and lifecycle only. It is deliberately no longer
       the blanket write permission for sites and zones — those have their own
       keys below, which is what makes "may edit the estate" and "may
-      reconfigure the organisation" separable. */
+      reconfigure the organization" separable. */
   manageOrganization: 'manage_organization',
   manageUsers: 'manage_users',
   /** The user roster, and nothing else. It historically also gated reading
@@ -122,7 +122,7 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 /** Human labels. The only place a role name becomes display text. */
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
-  org_admin: 'Organisation Admin',
+  org_admin: 'organization Admin',
   restaurant_manager: 'Restaurant Manager',
   kitchen_supervisor: 'Kitchen Supervisor',
   hygiene_officer: 'Hygiene Officer',

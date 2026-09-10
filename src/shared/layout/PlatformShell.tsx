@@ -3,8 +3,8 @@
  *
  * ### Why this is a second shell and not a third register inside `AppShell`
  *
- * `AppShell` is an *organisation's* application shell. Everything in it is
- * about one tenant: it names the active organisation at the head of the
+ * `AppShell` is an *organization's* application shell. Everything in it is
+ * about one tenant: it names the active organization at the head of the
  * sidebar, it filters navigation by the permissions held inside that tenant, it
  * carries a live-connection indicator for that tenant's cameras, and its
  * breadcrumb is rooted in that tenant's information architecture.
@@ -12,23 +12,23 @@
  * The control plane has no tenant. Rendering it inside `AppShell` — which is
  * what `/platform/organizations` did before this — put a cross-customer console
  * inside one customer's navigation, visually asserting that the console
- * belonged to whichever organisation happened to be selected. That is not a
+ * belonged to whichever organization happened to be selected. That is not a
  * styling problem; it is the route table contradicting the domain model.
  *
  * So: two shells, and the boundary between them is the thing the product is
  * actually made of.
  *
- *     /platform/*   → PlatformShell   no tenant, cross-organisation
+ *     /platform/*   → PlatformShell   no tenant, cross-organization
  *     everything else → AppShell      one tenant, from the token
  *
  * ### What it deliberately does not carry
  *
  * No connection indicator: there is no tenant whose cameras it could describe.
  * No permission filtering: a `PlatformOperator` holds no `Permission`, and the
- * gate is on the route group instead. No organisation name: naming one would
+ * gate is on the route group instead. No organization name: naming one would
  * re-introduce exactly the confusion this shell exists to remove — even when
- * the session happens to be inside an organisation, the console above it is
- * not about that organisation.
+ * the session happens to be inside an organization, the console above it is
+ * not about that organization.
  *
  * ### The register is cold on purpose
  *
@@ -76,7 +76,7 @@ export function PlatformShell() {
   /**
    * Where "Leave the console" goes.
    *
-   * An operator always has a session in *some* organisation — their own, or one
+   * An operator always has a session in *some* organization — their own, or one
    * they entered — so there is always somewhere to return to. The chooser is
    * the right destination only when they genuinely have a choice to make.
    */
@@ -134,7 +134,7 @@ export function PlatformShell() {
               ))}
             </div>
 
-            {/* The way back into an organisation's application. Explicit, and
+            {/* The way back into an organization's application. Explicit, and
                 at the foot of the console rather than in it — leaving the
                 control plane is not one of its destinations. */}
             <div style={{ padding: 'var(--space-3)', borderTop: '1px solid var(--line-subtle)' }}>
@@ -145,7 +145,7 @@ export function PlatformShell() {
                 style={{ width: '100%', justifyContent: 'flex-start' }}
               >
                 <Icon icon={ControlIcons.goTo} size="inline" />
-                Organisation application
+                organization application
               </Button>
             </div>
           </nav>
@@ -270,7 +270,7 @@ export function PlatformShell() {
                   role="menuitem"
                   style={{ width: '100%' }}
                 >
-                  Organisation application
+                  organization application
                 </Button>
                 <Button
                   variant="ghost"
@@ -396,7 +396,7 @@ function PlatformWordmark() {
 function PlatformMark() {
   return (
     <span
-      title="You are in the platform control plane, above every organisation."
+      title="You are in the platform control plane, above every organization."
       style={{
         display: 'inline-flex',
         alignItems: 'center',

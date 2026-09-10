@@ -38,13 +38,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const mayView = hasAny(user, [PERMISSIONS.viewLive]);
 
   /**
-   * The organisation this socket belongs to.
+   * The organization this socket belongs to.
    *
    * In the effect's dependencies because a live socket is scoped to a tenant
    * exactly as every REST call is: it was opened with a token naming
-   * organisation A, and after a switch that token is gone. Without this the
+   * organization A, and after a switch that token is gone. Without this the
    * socket would keep streaming A's cameras into B's wall until it happened to
-   * reconnect — the one place stale organisation data could survive
+   * reconnect — the one place stale organization data could survive
    * `queryClient.clear()`, because it is pushed rather than fetched.
    */
   const tenant = user?.tenant_id ?? '';

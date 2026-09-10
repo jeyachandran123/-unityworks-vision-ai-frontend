@@ -3,7 +3,7 @@
  *
  * ### Why this is not "the admin page for super admins"
  *
- * Every other surface in this application belongs to *one organisation*. This
+ * Every other surface in this application belongs to *one organization*. This
  * one is above them, and the account that reaches it is a different kind of
  * principal, not a more powerful role. A tenant `super_admin` holds every
  * permission there is and cannot open this page — the server does not check a
@@ -111,7 +111,7 @@ export function OrganizationsPage() {
   const columns: ReadonlyArray<Column<Organization>> = [
     {
       key: 'name',
-      header: 'Organisation',
+      header: 'organization',
       render: (organization) => (
         <Link to={`/platform/organizations/${encodeURIComponent(organization.id)}`}>
           {organization.name}
@@ -142,11 +142,11 @@ export function OrganizationsPage() {
     <>
       <PageIntro
         eyebrow="Platform"
-        title="Organisations"
+        title="organizations"
         standfirst="Every customer on this deployment. Creating, suspending and archving one happens here and nowhere else."
         actions={
           <Button onClick={() => setAdding((open) => !open)}>
-            {adding ? 'Cancel' : 'New organisation'}
+            {adding ? 'Cancel' : 'New organization'}
           </Button>
         }
       />
@@ -154,7 +154,7 @@ export function OrganizationsPage() {
       {adding ? (
         <Region order={2}>
           <SectionRule
-            label="New organisation"
+            label="New organization"
             detail="It starts active, with no sites, cameras or people."
           />
           <Plane>
@@ -175,7 +175,7 @@ export function OrganizationsPage() {
               />
               <div>
                 <Button type="submit" disabled={!name.trim() || create.isPending}>
-                  {create.isPending ? 'Creating…' : 'Create organisation'}
+                  {create.isPending ? 'Creating…' : 'Create organization'}
                 </Button>
               </div>
               {create.isError ? <Failed error={create.error} /> : null}
@@ -194,7 +194,7 @@ export function OrganizationsPage() {
               gap: 'var(--space-6)',
             }}
           >
-            <Figure scale="lead" label="Organisations" value={String(all.length)} />
+            <Figure scale="lead" label="organizations" value={String(all.length)} />
             <Figure
               scale="lead"
               label="Active"
@@ -213,7 +213,7 @@ export function OrganizationsPage() {
       <Region order={adding ? 4 : 3}>
         <SectionRule
           lead
-          label="Organisations"
+          label="organizations"
           actions={
             <div
               style={{
@@ -238,11 +238,11 @@ export function OrganizationsPage() {
           }
         />
         <Plane>
-          {organizations.isLoading ? <LoadingState label="Reading organisations" /> : null}
+          {organizations.isLoading ? <LoadingState label="Reading organizations" /> : null}
           {organizations.isError ? <Failed error={organizations.error} /> : null}
           {organizations.data ? (
             <DataTable
-              caption="Organisations on this platform"
+              caption="organizations on this platform"
               columns={columns}
               rows={all}
               rowKey={(organization) => organization.id}
@@ -255,7 +255,7 @@ export function OrganizationsPage() {
   );
 }
 
-/* ── one organisation ─────────────────────────────────────────────────────── */
+/* ── one organization ─────────────────────────────────────────────────────── */
 
 export function OrganizationDetailPage() {
   const { organizationId = '' } = useParams();
@@ -277,7 +277,7 @@ export function OrganizationDetailPage() {
     },
   });
 
-  if (organization.isLoading) return <LoadingState label="Reading organisation" />;
+  if (organization.isLoading) return <LoadingState label="Reading organization" />;
   if (organization.isError) return <Failed error={organization.error} />;
   if (!organization.data) return null;
 
@@ -286,7 +286,7 @@ export function OrganizationDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Organisation"
+        eyebrow="organization"
         title={it.name}
         standfirst={
           <>
@@ -294,7 +294,7 @@ export function OrganizationDetailPage() {
           </>
         }
         meta={<StatusBadge tone={TONE[it.status]}>{LABEL[it.status]}</StatusBadge>}
-        actions={<Link to="/platform/organizations">All organisations</Link>}
+        actions={<Link to="/platform/organizations">All organizations</Link>}
       />
 
       <Region order={2}>
@@ -313,7 +313,7 @@ export function OrganizationDetailPage() {
               scale="lead"
               label="Running now"
               value={String(it.running_cameras)}
-              detail="From the live runtime. If this is not zero for a suspended or archived organisation, something is wrong."
+              detail="From the live runtime. If this is not zero for a suspended or archived organization, something is wrong."
             />
             <Figure scale="lead" label="People" value={String(it.user_count)} />
           </div>
@@ -335,7 +335,7 @@ export function OrganizationDetailPage() {
       <Region order={3}>
         <SectionRule
           label="Members"
-          detail="Who may enter this organisation. Membership is the entry ticket; roles decide what they can do once inside."
+          detail="Who may enter this organization. Membership is the entry ticket; roles decide what they can do once inside."
         />
         <Members organizationId={it.id} archived={it.status === 'archived'} />
       </Region>
@@ -371,8 +371,8 @@ export function OrganizationDetailPage() {
 
       <Region order={5}>
         <SectionRule
-          label="Enter this organisation"
-          detail="Administering an organisation and working inside it are different acts. This is the second one."
+          label="Enter this organization"
+          detail="Administering an organization and working inside it are different acts. This is the second one."
         />
         <EnterOrganization organization={it} />
       </Region>
@@ -385,11 +385,11 @@ export function OrganizationDetailPage() {
 }
 
 /**
- * The explicit boundary between administering an organisation and entering it.
+ * The explicit boundary between administering an organization and entering it.
  *
  * ### Looking at this page did not change the active tenant, and must not
  *
- * Everything above is platform administration: it reads the organisation as an
+ * Everything above is platform administration: it reads the organization as an
  * *object*, through operator-authorised endpoints, and the session's tenant is
  * untouched by having opened it. Entering is a different act — it mints a new
  * token, it changes which customer every subsequent request is about, and for
@@ -402,9 +402,9 @@ export function OrganizationDetailPage() {
  *
  * ### Members go in as themselves
  *
- * If the account actually belongs to this organisation, entry uses their
+ * If the account actually belongs to this organization, entry uses their
  * membership — their real roles, their real camera scope. Only somebody with no
- * membership enters as a read-only operator. Entering your own organisation as
+ * membership enters as a read-only operator. Entering your own organization as
  * a stranger would be a worse experience and a misleading audit row.
  */
 function EnterOrganization({ organization }: { organization: Organization }) {
@@ -426,7 +426,7 @@ function EnterOrganization({ organization }: { organization: Organization }) {
     } catch (error) {
       setBusy(false);
       setFailure(
-        isApiError(error) ? error.friendlyMessage : 'This organisation could not be opened.',
+        isApiError(error) ? error.friendlyMessage : 'This organization could not be opened.',
       );
     }
   }
@@ -435,14 +435,14 @@ function EnterOrganization({ organization }: { organization: Organization }) {
     <Plane>
       <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <Button onClick={() => void go()} disabled={busy || archived}>
-          {busy ? 'Opening…' : 'Enter organisation'}
+          {busy ? 'Opening…' : 'Enter organization'}
         </Button>
         <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
           {archived
-            ? 'An archived organisation cannot be entered. Nobody may sign in to one.'
+            ? 'An archived organization cannot be entered. Nobody may sign in to one.'
             : asMember
-              ? 'You are a member here, so you will enter with your own roles and camera access, and the Command Center will be this organisation.'
-              : 'You will enter read-only, as a platform operator. The entry is recorded against this organisation, and evidence, patron identity and the audit trail stay closed.'}
+              ? 'You are a member here, so you will enter with your own roles and camera access, and the Command Center will be this organization.'
+              : 'You will enter read-only, as a platform operator. The entry is recorded against this organization, and evidence, patron identity and the audit trail stay closed.'}
         </p>
       </div>
       {failure ? (
@@ -455,10 +455,10 @@ function EnterOrganization({ organization }: { organization: Organization }) {
 }
 
 /**
- * Membership administration for one organisation.
+ * Membership administration for one organization.
  *
  * Admits and removes, and does nothing else. Roles are granted inside the
- * organisation by somebody who holds `MANAGE_USERS` there — this console
+ * organization by somebody who holds `MANAGE_USERS` there — this console
  * deliberately does not reach into a customer's user administration, because a
  * cross-customer principal that could hand out roles inside any customer would
  * be the unrestricted tenant authority the whole architecture avoids.
@@ -503,7 +503,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
       // looks like and is also what a mistake looks like.
       setFailure(
         result.left_without_access
-          ? `${result.email} now has no organisation and cannot sign in anywhere.`
+          ? `${result.email} now has no organization and cannot sign in anywhere.`
           : null,
       );
       invalidate();
@@ -530,7 +530,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
       {rows.length === 0 ? (
         <EmptyState
           title="No members"
-          body="Nobody can sign in to this organisation yet. Admit someone below."
+          body="Nobody can sign in to this organization yet. Admit someone below."
         />
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
@@ -606,8 +606,8 @@ function Members({ organizationId, archived }: { organizationId: string; archive
         </Button>
         <p style={{ margin: 0, flexBasis: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
           {archived
-            ? 'An archived organisation takes no new members.'
-            : 'Admitting grants no role. They will be able to sign in and will see nothing until somebody grants them a role inside this organisation.'}
+            ? 'An archived organization takes no new members.'
+            : 'Admitting grants no role. They will be able to sign in and will see nothing until somebody grants them a role inside this organization.'}
         </p>
       </div>
     </Plane>
@@ -693,7 +693,7 @@ function Lifecycle({ organization }: { organization: Organization }) {
             <DangerConfirm
               expect={organization.name}
               label={`Type ${organization.name} to confirm`}
-              actionLabel="Archive this organisation"
+              actionLabel="Archive this organization"
               pending={change.isPending}
               hint={
                 <>

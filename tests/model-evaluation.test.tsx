@@ -248,7 +248,7 @@ describe('the route is gated on its own permission', () => {
     // Stage 3 removed `view_model_evaluation` from ORG_ADMIN. Evaluation
     // artifacts answer "should we ship this model" — attribute agreement on a
     // 43-subject split, per-state confusion matrices — which is an engineering
-    // question. The accountability an organisation administrator has for what
+    // question. The accountability an organization administrator has for what
     // the system claims is served by reports, which carry coverage and the
     // ruleset version behind every figure, and which this role still holds.
     installFetch({ session: adminIdentity() });

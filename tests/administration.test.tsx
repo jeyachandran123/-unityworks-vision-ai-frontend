@@ -4,7 +4,7 @@
  * The assertions worth having are still about the boundary rather than the
  * table — but the boundary moved, and moved for a reason. Reading the estate
  * and reading the staff list used to be the same permission; editing a zone
- * and reconfiguring the organisation used to be the same permission. Both are
+ * and reconfiguring the organization used to be the same permission. Both are
  * now separable, and these tests are about whether that separation actually
  * reaches the screen.
  */
@@ -126,7 +126,7 @@ describe('sites are their own domain', () => {
     expect(timezone.tagName).toBe('SELECT');
   });
 
-  it('creates a site through the organisation API', async () => {
+  it('creates a site through the organization API', async () => {
     const calls: string[] = [];
     installFetch({ session: adminIdentity(), restaurants: SITES, calls });
     renderApp(<AppRouter />, '/admin/sites');

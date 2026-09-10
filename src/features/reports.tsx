@@ -172,7 +172,7 @@ export function ReportsPage() {
           lead
           order={2}
           label="Choose a report"
-          detail="Twelve types. The ones backed by records in this organisation are listed first; the rest are listed on purpose, because an omitted module reads as nothing to report."
+          detail="Twelve types. The ones backed by records in this organization are listed first; the rest are listed on purpose, because an omitted module reads as nothing to report."
         />
         <div
           className="uwv-arrive"
@@ -260,7 +260,7 @@ function ReportPicker({
   return (
     <Card padded={false}>
       <nav aria-label="Report types" style={{ padding: 'var(--space-3)' }}>
-        <Group title="Backed by data" hint="Real records in this organisation">
+        <Group title="Backed by data" hint="Real records in this organization">
           {backed.map((report) => (
             <PickerItem
               key={report.id}

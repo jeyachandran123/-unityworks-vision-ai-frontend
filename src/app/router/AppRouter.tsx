@@ -8,20 +8,20 @@
  ### Two shells, and the boundary between them is the product
  *
  *     /login                  no session
- *     /choose-organization    a session, no organisation chosen yet
- *     /platform/*             PlatformShell — no tenant, cross-organisation
+ *     /choose-organization    a session, no organization chosen yet
+ *     /platform/*             PlatformShell — no tenant, cross-organization
  *     everything else         AppShell — one tenant, from the token
  *
  * `/platform/*` renders in its own shell and never inside `AppShell`. It used
- * to: `/platform/organizations` was declared inside the organisation shell,
+ * to: `/platform/organizations` was declared inside the organization shell,
  * which put a cross-customer console inside one customer's navigation and made
- * the console look like it belonged to whichever organisation happened to be
+ * the console look like it belonged to whichever organization happened to be
  * selected. That was the route table contradicting the domain model, and moving
  * it is the structural correction this layer needed.
  *
  * The chooser is a third thing again, and it is deliberately *not* under
  * `/platform`. Most of the people who see it are not platform administrators —
- * a multi-organisation `org_admin` owes an organisation choice and must never
+ * a multi-organization `org_admin` owes an organization choice and must never
  * be shown a cross-customer console. Serving both from one address made those
  * two audiences look like one group, and they are separated by a security
  * boundary rather than by a layout preference.
@@ -47,11 +47,11 @@ import { PERMISSIONS } from '@app/permissions/permissions';
 import { AppShell } from '@shared/layout/AppShell';
 import { LoadingState } from '@shared/ui/primitives';
 import { LoginPage } from '@features/auth/LoginPage';
-// The organisation chooser. Sits between login and the application, and renders
-// outside both shells — before an organisation is chosen there is nothing for
+// The organization chooser. Sits between login and the application, and renders
+// outside both shells — before an organization is chosen there is nothing for
 // the product navigation to be about, and a chooser is not a control plane.
 import { OrganizationChooser } from '@features/platform/OrganizationChooser';
-// The Platform Control Plane. Its own shell, above every organisation.
+// The Platform Control Plane. Its own shell, above every organization.
 import { PlatformShell } from '@shared/layout/PlatformShell';
 import { PlatformDashboard } from '@features/platform/PlatformDashboard';
 import { PlatformPeoplePage, PlatformPersonPage } from '@features/platform/PlatformPeople';
@@ -73,7 +73,7 @@ import { ReportsPage } from '@features/reports';
 import { StaffHygienePage } from '@features/hygiene';
 import { UserDetailPage } from '@features/user-detail';
 // Administration is no longer one page. Sites, Cameras, People, Roles & Access
-// and the organisation hub are separate surfaces, because a site and a person
+// and the organization hub are separate surfaces, because a site and a person
 // are objects worth looking at and the stacked page had nowhere to look at
 // them. The platform console sits above all of them and answers to a different
 // principal entirely — see `@shared/api/platform`.
@@ -129,8 +129,8 @@ export function AppRouter() {
 
       <Route element={<RequireAuth />}>
         {/* Authenticated, and deliberately in neither shell. The one product
-            surface that exists before an organisation does. Gated on having
-            something to choose between: a single-organisation administrator who
+            surface that exists before an organization does. Gated on having
+            something to choose between: a single-organization administrator who
             types this address is sent to their Command Center rather than shown
             a page with one card on it. */}
         <Route element={<RequireChoosableOrganizations />}>
@@ -240,7 +240,7 @@ export function AppRouter() {
           </Route>
 
           {/* Incidents are not implied by observations: an incident is what the
-              organisation decided to do about a finding, and acting on one is a
+              organization decided to do about a finding, and acting on one is a
               further privilege still. */}
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewIncidents]} />}>
             <Route path="/incidents" element={<IncidentsPage />} />

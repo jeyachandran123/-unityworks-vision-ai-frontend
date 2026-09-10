@@ -103,7 +103,7 @@ export function AdminCamerasPage() {
       <PageIntro
         eyebrow="Estate"
         title="Cameras"
-        standfirst="Every configured camera in this organisation, whether or not it is currently switched on."
+        standfirst="Every configured camera in this organization, whether or not it is currently switched on."
         actions={
           <PermissionGate permission={PERMISSIONS.manageCameras}>
             <Link to="/admin/cameras/new">
@@ -190,7 +190,7 @@ export function AdminCamerasPage() {
                       ? 'Try clearing the search or the filter.'
                       : has(PERMISSIONS.manageCameras)
                         ? 'Add one to start watching a kitchen.'
-                        : 'Nobody has added a camera to this organisation yet.'
+                        : 'Nobody has added a camera to this organization yet.'
                   }
                 />
               }
@@ -216,7 +216,7 @@ export function AdminCameraDetailPage() {
     return (
       <EmptyState
         title="No such camera"
-        body={`Nothing in this organisation is called ${cameraKey}.`}
+        body={`Nothing in this organization is called ${cameraKey}.`}
       />
     );
   }
@@ -335,7 +335,7 @@ function CameraOverview({ camera }: { camera: Camera }) {
                       fontSize: 'var(--text-sm)',
                     }}
                   >
-                    Globally unique. Two organisations may each have a <code>cam-01</code>; this
+                    Globally unique. Two organizations may each have a <code>cam-01</code>; this
                     is what keeps them apart everywhere it matters.
                   </span>
                 </>,

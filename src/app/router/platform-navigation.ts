@@ -2,9 +2,9 @@
  * The Platform Control Plane's navigation model.
  *
  * A separate model from `PRODUCT_NAV`, not an extra section inside it, and the
- * separation is the point. `PRODUCT_NAV` describes one organisation's
+ * separation is the point. `PRODUCT_NAV` describes one organization's
  * application and every entry in it is filtered by a `Permission` — a tenant
- * concept, held inside one organisation. Nothing here is: the whole console
+ * concept, held inside one organization. Nothing here is: the whole console
  * answers to a `PlatformOperator`, which carries no permissions at all and no
  * tenant, so there is no per-item permission to declare and inventing one would
  * be the redefinition of platform authority into a tenant role that
@@ -50,7 +50,7 @@ export interface PlatformNavSection {
 /**
  * Four areas.
  *
- * Overview is "is anything wrong, anywhere". Customers is "the organisations
+ * Overview is "is anything wrong, anywhere". Customers is "the organizations
  * themselves". Access is "who can reach what". Assurance is "prove it". A
  * platform administrator works inside one of those at a time, which is the test
  * a section has to pass to exist.
@@ -120,7 +120,7 @@ export const PLATFORM_NAV: PlatformNavSection[] = [
         label: 'Audit',
         path: '/platform/audit',
         icon: NavIcons.audit,
-        hint: 'Platform activity across every organisation',
+        hint: 'Platform activity across every organization',
         readiness: 'awaiting',
       },
       {

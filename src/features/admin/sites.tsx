@@ -130,7 +130,7 @@ export function SitesPage() {
       <PageIntro
         eyebrow="Estate"
         title="Sites"
-        standfirst="The places this organisation operates. Every camera hangs off one, and every finding is attributed to one."
+        standfirst="The places this organization operates. Every camera hangs off one, and every finding is attributed to one."
         actions={
           <PermissionGate permission={PERMISSIONS.manageSites}>
             <Button onClick={() => setCreating((open) => !open)}>
@@ -187,7 +187,7 @@ export function SitesPage() {
           label="Sites"
           detail={
             sites.data
-              ? `${sites.data.total} in this organisation`
+              ? `${sites.data.total} in this organization`
               : 'Reading the estate'
           }
           actions={
@@ -229,7 +229,7 @@ export function SitesPage() {
           {sites.data ? (
             <>
               <DataTable
-                caption="Sites in this organisation"
+                caption="Sites in this organization"
                 columns={columns}
                 rows={sites.data.restaurants}
                 rowKey={(site) => site.id}
@@ -241,7 +241,7 @@ export function SitesPage() {
                         ? 'Try a shorter search, or clear it to see everything.'
                         : has(PERMISSIONS.manageSites)
                           ? 'Add the first one to start placing cameras.'
-                          : 'Nobody has added a site to this organisation yet.'
+                          : 'Nobody has added a site to this organization yet.'
                     }
                   />
                 }

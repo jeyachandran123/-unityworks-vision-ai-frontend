@@ -5,7 +5,7 @@
  * separate principal. Tenant routes authorise on a `Permission` carried by an
  * `AccessDecision`; these authorise on a `PlatformOperator`, which no role can
  * produce and which has no tenant at all. That is not a naming convention —
- * it is the boundary that stops an organisation administrator becoming a
+ * it is the boundary that stops an organization administrator becoming a
  * cross-customer superuser by acquiring a role.
  *
  * Which means `isOperator()` is the only correct way to decide whether to show
@@ -30,7 +30,7 @@ export interface Organization {
   camera_count: number;
   user_count: number;
   /**
-   * How many of this organisation's cameras the runtime is *actually*
+   * How many of this organization's cameras the runtime is *actually*
    * streaming, read from the live registry rather than from configuration. An
    * operator looking at a suspended customer needs to see that the cameras
    * have in fact stopped, not that the status field says they ought to have.
@@ -107,21 +107,21 @@ export const platformApi = {
     api.patch<Organization>(`/platform/organizations/${encodeURIComponent(id)}`, { name }),
 
   /**
-   * Enter an organisation as a platform operator.
+   * Enter an organization as a platform operator.
    *
    * Not a navigation — an act. It writes an audit row against the customer and
-   * returns a **new access token** whose tenant is that organisation, carrying
+   * returns a **new access token** whose tenant is that organization, carrying
    * `act: platform_operator`. Everything reachable with it is read-only, and
    * evidence, patron identity and the audit trail are excluded outright.
    *
-   * Refused for an archived organisation: nobody may sign in to one, and
+   * Refused for an archived organization: nobody may sign in to one, and
    * platform authority does not exempt this session from that.
    */
   enter: (id: string) =>
     api.post<OperatorEntry>(`/platform/organizations/${encodeURIComponent(id)}/enter`),
 
   /**
-   * Move an organisation through its lifecycle.
+   * Move an organization through its lifecycle.
    *
    * `reason` is required by the server for `suspended` and `archived`. It is
    * not paperwork: the change stops a paying customer's product working, and
@@ -137,10 +137,10 @@ export const platformApi = {
 /* ── the control plane ────────────────────────────────────────────────────── */
 
 /**
- * One organisation a person may enter, from the platform's point of view.
+ * One organization a person may enter, from the platform's point of view.
  *
  * `is_home` is not the same question as membership and must never be rendered
- * as if it were: the home organisation is where the account *lives* — it owns
+ * as if it were: the home organization is where the account *lives* — it owns
  * email uniqueness and is where a failed login is filed — while membership is
  * what they may actually enter. For most accounts the two agree; the moment
  * they stop agreeing is exactly when somebody needs to see both.
@@ -148,7 +148,7 @@ export const platformApi = {
 export interface PersonMembership {
   organization_id: string;
   organization_name: string;
-  /** Roles held *in that organisation*. Never merged across organisations. */
+  /** Roles held *in that organization*. Never merged across organizations. */
   roles: string[];
   is_home: boolean;
   granted_at: string | null;
@@ -166,7 +166,7 @@ export interface Person {
   organization_count: number;
   last_login_at: string | null;
   is_platform_operator: boolean;
-  /** The account is filed in an organisation it can no longer enter. */
+  /** The account is filed in an organization it can no longer enter. */
   home_membership_missing: boolean;
 }
 
@@ -269,7 +269,7 @@ export const platformAdminApi = {
     ),
 
   /**
-   * Admit an existing account to an organisation.
+   * Admit an existing account to an organization.
    *
    * Writes one membership row and grants no role — the person may then sign in
    * and, until somebody grants them a role *there*, see nothing. Admitting and

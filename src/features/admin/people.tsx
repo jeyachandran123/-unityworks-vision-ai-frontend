@@ -53,7 +53,7 @@ const PAGE = 25;
 export const SCOPE_MEANING: Record<ScopeBreadth, string> = {
   none: 'No cameras. This account can sign in and use everything its role allows that does not involve video.',
   listed: 'Only the cameras named below.',
-  all_in_tenant: 'Every camera in this organisation, including ones added later.',
+  all_in_tenant: 'Every camera in this organization, including ones added later.',
 };
 
 export function PeoplePage() {
@@ -128,7 +128,7 @@ export function PeoplePage() {
   return (
     <>
       <PageIntro
-        eyebrow="Organisation"
+        eyebrow="organization"
         title="People"
         standfirst="Everyone with an account here, the roles they hold, and the cameras they can reach."
         actions={
@@ -157,7 +157,7 @@ export function PeoplePage() {
         <SectionRule
           lead
           label="People"
-          detail={people.data ? `${people.data.total} in this organisation` : 'Reading the roster'}
+          detail={people.data ? `${people.data.total} in this organization` : 'Reading the roster'}
           actions={
             <div
               style={{
@@ -212,7 +212,7 @@ export function PeoplePage() {
           {people.data ? (
             <>
               <DataTable
-                caption="People in this organisation"
+                caption="People in this organization"
                 columns={columns}
                 rows={people.data.users}
                 rowKey={(user) => user.id}
@@ -406,7 +406,7 @@ function AddPerson({
             <Input
               label="Email"
               type="email"
-              hint="How they sign in. Unique within this organisation."
+              hint="How they sign in. Unique within this organization."
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoFocus
@@ -593,7 +593,7 @@ export function CameraPicker({
   if (cameras.length === 0) {
     return (
       <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-        This organisation has no cameras yet, so there are none to choose.
+        This organization has no cameras yet, so there are none to choose.
       </p>
     );
   }

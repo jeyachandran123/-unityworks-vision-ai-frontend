@@ -22,7 +22,7 @@ export interface Camera {
   camera_key: string;
   /**
    * Globally unique: `organization_id:camera_key`. A camera key alone is
-   * unique only within its organisation, so anything process-wide — a stream
+   * unique only within its organization, so anything process-wide — a stream
    * registry, an observation partition — is keyed on this instead.
    */
   runtime_id: string;
