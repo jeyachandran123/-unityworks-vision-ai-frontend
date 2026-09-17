@@ -1,0 +1,2 @@
+# Scripts run by bash must keep LF endings on Windows checkouts (core.autocrlf).
+.claude/team/checks/** text eol=lf
