@@ -38,7 +38,7 @@ npm run lint
 
 | Step | Failure means | Do |
 |---|---|---|
-| `types:check` | `openapi.ts` differs from the backend's committed export | `unityworks-team:contract-sync`. Never edit `openapi.ts` |
+| `types:check` | `openapi.ts` differs from the backend's committed export | `contract-sync`. Never edit `openapi.ts` |
 | `typecheck` | Often a regenerated type moved | Fix consumers. `noUncheckedIndexedAccess`: index reads are `T \| undefined`; `verbatimModuleSyntax`: `import type` |
 | `lint` | Zero warnings allowed | `no-explicit-any` is an error; `no-console` allows only `warn`/`error`; `eqeqeq` always. Don't add disables |
 | `test` | See below | |

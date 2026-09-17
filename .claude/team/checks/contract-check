@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# contract-check — the backend → frontend OpenAPI seam, end to end, changing no files.
+#
+#   1. backend:  export_openapi.py --check   (routes vs committed export)
+#   2. frontend: types:check                  (committed export vs committed types)
+#   3. frontend: types:check against the CI pin, exactly as frontend CI does
+#
+# Run through /check contract (unityworks-team), which supplies REPO_SELF and
+# REPO_BACKEND / REPO_FRONTEND located by .claude/team.conf "kind" — never by
+# folder name. Declared in both repositories' team.conf.
+# Procedure when it fails: the contract-sync skill.
+
+set -uo pipefail
+
+FRONTEND="${REPO_FRONTEND:-${REPO_SELF:?run via /check}}"
+BACKEND="${REPO_BACKEND:-$REPO_SELF}"
+if [ "$FRONTEND" = "$BACKEND" ]; then
+    echo "contract-check: could not locate both repositories (kinds vision-backend and vision-frontend)." >&2
+    exit 1
+fi
+
+native() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+
+PY="$BACKEND/.venv/Scripts/python.exe"
+[ -x "$PY" ] || PY="$BACKEND/.venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3 || command -v python)"
+
+# The generator's default schema path assumes a sibling folder with a fixed
+# name; point it at the backend actually found instead.
+SCHEMA="$(native "$BACKEND/docs/api/openapi.json")"
+
+status=0
+step() {
+    local name="$1"; shift
+    local out rc
+    out="$("$@" 2>&1)"; rc=$?
+    if [ "$rc" -eq 0 ]; then
+        printf 'PASS  %s\n' "$name"
+    else
+        printf 'FAIL  %s (exit %s)\n' "$name" "$rc"
+        printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
+        status=1
+    fi
+}
+
+step "backend export is current (export_openapi.py --check)" \
+    bash -c "cd \"$BACKEND\" && \"$PY\" scripts/export_openapi.py --check"
+
+step "frontend types match the backend export (types:check)" \
+    bash -c "cd \"$FRONTEND\" && UWV_SCHEMA_PATH=\"$SCHEMA\" npm run --silent types:check"
+
+pin="$(tr -d '[:space:]' < "$FRONTEND/.github/backend-schema.sha" 2>/dev/null || true)"
+if [ -z "$pin" ]; then
+    printf 'FAIL  CI pin: .github/backend-schema.sha is missing or empty\n'
+    status=1
+else
+    tmp="$(mktemp -d)"
+    if git -C "$BACKEND" show "$pin:docs/api/openapi.json" > "$tmp/openapi.json" 2>/dev/null; then
+        step "frontend types match the CI-pinned schema ($(printf '%.7s' "$pin"))" \
+            bash -c "cd \"$FRONTEND\" && UWV_SCHEMA_PATH=\"$(native "$tmp/openapi.json")\" npm run --silent types:check"
+        if ! git -C "$BACKEND" branch -r --contains "$pin" 2>/dev/null | grep -q .; then
+            printf 'FAIL  CI pin %.7s is not on any remote branch — CI cannot fetch it\n' "$pin"
+            status=1
+        fi
+    else
+        printf 'FAIL  CI pin %s is not in the local backend history (fetch the backend?)\n' "$pin"
+        status=1
+    fi
+    rm -rf "$tmp"
+fi
+
+[ "$status" -eq 0 ] || printf '\nProcedure: the contract-sync skill.\n'
+exit "$status"
