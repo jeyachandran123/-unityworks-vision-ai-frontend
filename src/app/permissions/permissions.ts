@@ -81,7 +81,8 @@ export const PERMISSIONS = {
 
   /** The most sensitive read in the product. Never implied by anything. */
   viewPatronId: 'view_patron_id',
-  /** Held by super_admin alone, and even then the write path still refuses. */
+  /** Held by the Organization Admin; the write path still refuses until the
+      legal gate (DPIA, DPO sign-off) is satisfied. */
   managePatronId: 'manage_patron_id',
 
   viewPosIntegration: 'view_pos_integration',
@@ -108,7 +109,6 @@ export const PERMISSIONS = {
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export const ROLES = {
-  superAdmin: 'super_admin',
   orgAdmin: 'org_admin',
   restaurantManager: 'restaurant_manager',
   kitchenSupervisor: 'kitchen_supervisor',
@@ -119,16 +119,24 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
-/** Human labels. The only place a role name becomes display text. */
+/**
+ * Human labels. The only place a role name becomes display text.
+ *
+ * Two admins exist: the Platform Admin, who is not a role at all (a
+ * platform-operator grant, see `PLATFORM_ADMIN_LABEL`), and the Organization
+ * Admin, the top role inside an organization. There is no "Super Admin".
+ */
 export const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin',
-  org_admin: 'organization Admin',
+  org_admin: 'Organization Admin',
   restaurant_manager: 'Restaurant Manager',
   kitchen_supervisor: 'Kitchen Supervisor',
   hygiene_officer: 'Hygiene Officer',
   auditor: 'Auditor',
   developer: 'Developer',
 };
+
+/** What the platform-operator grant is called on screen. */
+export const PLATFORM_ADMIN_LABEL = 'Platform Admin';
 
 export function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;

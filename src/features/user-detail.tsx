@@ -142,15 +142,15 @@ const PERMISSION_GROUPS: ReadonlyArray<{ label: string; permissions: string[] }>
 
 /**
  * Roles that carry `MANAGE_USERS` or `MANAGE_ORGANIZATION` today
- * (`ROLE_PERMISSIONS`, `app/authorization/model.py`, confirmed by the Stage 5
- * report's own §12 investigation: exactly `super_admin` and `org_admin`).
+ * (`ROLE_PERMISSIONS`, `app/authorization/model.py`): exactly `org_admin`, the
+ * only admin role since `super_admin` was merged into it on 2026-09-22.
  * Used only to decide whether removing a role needs confirmation — not a
  * general permission table, and not re-derived client-side, because the
  * frontend deliberately keeps no copy of `ROLE_PERMISSIONS` (Stage 6
  * discovery report §7). If the backend's role/permission mapping changes,
  * this constant must be revisited by hand.
  */
-const ADMIN_CARRYING_ROLES = new Set<string>([ROLES.superAdmin, ROLES.orgAdmin]);
+const ADMIN_CARRYING_ROLES = new Set<string>([ROLES.orgAdmin]);
 
 export function UserDetailPage() {
   const { userId = '' } = useParams();

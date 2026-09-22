@@ -78,8 +78,11 @@ export interface OperatorEntry {
   expires_at: string;
   organization: Organization;
   acting_as: 'platform_operator';
-  read_only: true;
-  /** The reach granted, as the server enumerated it. Reads only. */
+  /** `false`: the Platform Admin has full access inside any organization he
+      enters. Kept on the wire because older entries were read-only. */
+  read_only: boolean;
+  /** The reach granted, as the server enumerated it. Every permission, less
+      the writes a suspended organization refuses to anyone. */
   permissions: string[];
 }
 
@@ -111,8 +114,8 @@ export const platformApi = {
    *
    * Not a navigation — an act. It writes an audit row against the customer and
    * returns a **new access token** whose tenant is that organization, carrying
-   * `act: platform_operator`. Everything reachable with it is read-only, and
-   * evidence, patron identity and the audit trail are excluded outright.
+   * `act: platform_operator`. It carries full access: the Platform Admin can do
+   * anything inside any organization, and every entry is recorded.
    *
    * Refused for an archived organization: nobody may sign in to one, and
    * platform authority does not exempt this session from that.
@@ -160,7 +163,8 @@ export interface Person {
   email: string;
   display_name: string;
   is_active: boolean;
-  home_organization_id: string;
+  /** `null` for the Platform Admin, who belongs to no organization. */
+  home_organization_id: string | null;
   home_organization_name: string;
   memberships: PersonMembership[];
   organization_count: number;
@@ -212,7 +216,8 @@ export interface OperatorRow {
   email: string;
   display_name: string;
   is_active: boolean;
-  home_organization_id: string;
+  /** `null`: a Platform Admin belongs to no organization. */
+  home_organization_id: string | null;
   home_organization_name: string;
   granted_at: string | null;
   granted_by: string;
@@ -244,6 +249,12 @@ export interface RolePolicy {
   customization: { mechanism: string; scope: string; where: string; note: string };
 }
 
+export interface NewOrganizationAdmin {
+  email: string;
+  display_name: string;
+  password: string;
+}
+
 export interface MembershipRemoval {
   organization_id: string;
   user_id: string;
@@ -271,14 +282,27 @@ export const platformAdminApi = {
   /**
    * Admit an existing account to an organization.
    *
-   * Writes one membership row and grants no role — the person may then sign in
-   * and, until somebody grants them a role *there*, see nothing. Admitting and
-   * authorising are two decisions and this is only the first.
+   * With `role: 'org_admin'` the person also becomes that organization's
+   * Organization Admin, with every camera, in the same step — which is how one
+   * Organization Admin comes to hold several organizations. Without it, one
+   * membership row and no role: they may sign in and see nothing.
    */
-  addMember: (organizationId: string, userId: string) =>
-    api.post<Person>(`/platform/organizations/${encodeURIComponent(organizationId)}/members`, {
-      user_id: userId,
-    }),
+  addMember: (organizationId: string, userId: string, role?: 'org_admin') =>
+    api.post<Person>(
+      `/platform/organizations/${encodeURIComponent(organizationId)}/members`,
+      role ? { user_id: userId, role } : { user_id: userId },
+    ),
+
+  /**
+   * Create a new Organization Admin: account, membership, role and every camera,
+   * in one step. The password must be at least 12 characters; a refusal
+   * creates nothing.
+   */
+  createOrganizationAdmin: (organizationId: string, draft: NewOrganizationAdmin) =>
+    api.post<Person>(
+      `/platform/organizations/${encodeURIComponent(organizationId)}/people`,
+      draft,
+    ),
 
   /** Takes effect on the person's next request, not their next login. */
   removeMember: (organizationId: string, userId: string) =>

@@ -13,6 +13,7 @@ import { render, type RenderResult } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@app/auth/AuthProvider';
+import { PERMISSIONS } from '@app/permissions/permissions';
 import { ConnectionProvider } from '@shared/realtime/useConnection';
 import { ToastProvider } from '@shared/ui/primitives';
 import type { Identity, OrganizationSummary } from '@shared/api/services';
@@ -52,7 +53,7 @@ export function identity(overrides: Partial<Identity> = {}): Identity {
     site_ids: ['site-fixture'],
     // An ordinary session. Only a platform-operator entry sets this, and a
     // fixture that set it by default would mark every test's shell as a
-    // read-only visit.
+    // Platform Admin visit.
     acting_as: '',
     ...overrides,
   };
@@ -157,47 +158,9 @@ export const adminIdentity = (): Identity =>
     subject: 'admin@example.com',
     display_name: 'Org Admin',
     roles: ['org_admin'],
-    permissions: [
-      'acknowledge_incidents',
-      'delete_evidence',
-      'manage_cameras',
-      'retire_cameras',
-      'manage_cutting_board',
-      'manage_organization',
-      'manage_sites',
-      'manage_zones',
-      'view_sites',
-      'view_zones',
-      'manage_pos_integration',
-      'manage_table_occupancy',
-      'manage_users',
-      'register_demand',
-      'resolve_incidents',
-      'view_audit',
-      'view_camera_health',
-      'view_cameras',
-      'view_cutting_board',
-      'view_demography',
-      'view_evidence',
-      'view_incidents',
-      'view_live',
-      'view_meal_detection',
-      // No `view_model_evaluation`. Removed from ORG_ADMIN on the backend in
-      // Stage 3: evaluation artifacts answer a shipping question, and the
-      // accountability this role has for what the system claims is served by
-      // reports, which carry coverage and the ruleset version behind every
-      // figure. Holders are now super_admin and developer.
-      'view_observations',
-      // Reads that patron identification exists and is blocked. Deliberately
-      // NOT manage_patron_id, which super_admin alone holds.
-      'view_patron_id',
-      'view_people_count',
-      'view_pos_integration',
-      'view_reports',
-      'view_table_occupancy',
-      'view_users',
-      'export_reports',
-    ],
+    // Every permission: the Organization Admin is the complete set on the
+    // backend (`ROLE_PERMISSIONS[ORG_ADMIN] == frozenset(Permission)`).
+    permissions: Object.values(PERMISSIONS),
     camera_scope: { breadth: 'all_in_tenant', camera_ids: [] },
   });
 
@@ -934,7 +897,7 @@ interface StubMembership {
 type StubPerson = Record<string, unknown> & {
   id: string;
   email: string;
-  home_organization_id: string;
+  home_organization_id: string | null;
   memberships: StubMembership[];
 };
 
@@ -1180,6 +1143,40 @@ export function stubFetch(options: StubOptions = {}) {
     // first among themselves, because every one of these paths contains
     // `/platform/organizations`.
 
+    const newAdmin = /\/platform\/organizations\/([^/]+)\/people$/.exec(url);
+    if (newAdmin && method === 'POST') {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const organizationId = decodeURIComponent(newAdmin[1] ?? '');
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (String(body.password ?? '').length < 12) return envelope('VALIDATION_FAILED', 422);
+      if (peopleState.some((p) => p.email === body.email)) return envelope('CONFLICT', 409);
+      const created: StubPerson = {
+        id: `user-${String(body.email)}`,
+        email: String(body.email),
+        display_name: String(body.display_name ?? ''),
+        is_active: true,
+        home_organization_id: organizationId,
+        home_organization_name: organizationId,
+        organization_count: 1,
+        last_login_at: null,
+        is_platform_operator: false,
+        home_membership_missing: false,
+        memberships: [
+          {
+            organization_id: organizationId,
+            organization_name:
+              platformList.find((o) => o.id === organizationId)?.name ?? organizationId,
+            roles: ['org_admin'],
+            is_home: true,
+            granted_at: null,
+            granted_by: 'operator@example.com',
+          },
+        ],
+      };
+      peopleState.push(created);
+      return jsonResponse(created);
+    }
+
     const members = /\/platform\/organizations\/([^/]+)\/members(?:\/([^/]+))?/.exec(url);
     if (members) {
       if (!operator) return envelope('OUT_OF_SCOPE', 403);
@@ -1198,7 +1195,9 @@ export function stubFetch(options: StubOptions = {}) {
           {
             organization_id: organizationId,
             organization_name: organizationId,
-            roles: [],
+            // `role: 'org_admin'` makes them that organization's admin in the
+            // same step, as the server does.
+            roles: body.role === 'org_admin' ? ['org_admin'] : [],
             is_home: person.home_organization_id === organizationId,
             granted_at: null,
             granted_by: 'operator@example.com',
@@ -1326,12 +1325,13 @@ export function stubFetch(options: StubOptions = {}) {
     if (enter && method === 'POST') {
       if (!operator) return envelope('OUT_OF_SCOPE', 403);
       const target = decodeURIComponent(enter[1] ?? '');
-      // Read-only, no roles, and the marker the shell renders from.
+      // Full access, no roles, and the marker the shell renders from.
       activeSession = {
         ...(activeSession ?? identity()),
         tenant_id: target,
         acting_as: 'platform_operator',
         roles: [],
+        permissions: Object.values(PERMISSIONS),
       };
       return jsonResponse({
         access_token: `access-${target}`,
@@ -1339,7 +1339,7 @@ export function stubFetch(options: StubOptions = {}) {
         expires_at: '',
         organization: { id: target, name: target, slug: target, status: 'active' },
         acting_as: 'platform_operator',
-        read_only: true,
+        read_only: false,
         permissions: activeSession.permissions,
       });
     }

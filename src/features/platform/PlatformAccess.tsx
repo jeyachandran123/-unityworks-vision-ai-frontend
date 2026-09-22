@@ -20,6 +20,11 @@ import {
   StatusBadge,
 } from '@shared/ui/primitives';
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import {
+  CreateOrganizationAdmin,
+  GiveOrganization,
+  PlatformAdminNote,
+} from '@features/platform/OrganizationAdmins';
 import type { OperatorRow } from '@shared/api/platform';
 
 /* ── operators ────────────────────────────────────────────────────────────── */
@@ -64,7 +69,12 @@ export function PlatformOperatorsPage() {
         </div>
       ),
     },
-    { key: 'home', header: 'Account lives in', render: (row) => row.home_organization_name },
+    {
+      key: 'home',
+      header: 'Organization',
+      render: (row) =>
+        row.home_organization_id === null ? 'None — belongs to all' : row.home_organization_name,
+    },
     {
       key: 'reason',
       header: 'Why',
@@ -165,13 +175,32 @@ export function PlatformRolesPage() {
       <PageIntro
         eyebrow="Platform"
         title="Roles & Access"
-        standfirst="What each role grants, product-wide. These definitions are part of the application, not settings."
-        meta={<Badge>{it.editable ? 'Editable' : 'Read-only'}</Badge>}
+        standfirst="Create Organization Admins and give them organizations. Below that, what each role grants, product-wide."
+        meta={<Badge>{it.editable ? 'Role definitions editable' : 'Role definitions fixed'}</Badge>}
       />
 
       <Region order={2}>
         <SectionRule
           lead
+          label="New Organization Admin"
+          detail="Creates the account, gives it the organization, the Organization Admin role and every camera — in one step."
+        />
+        <CreateOrganizationAdmin />
+      </Region>
+
+      <Region order={3}>
+        <SectionRule
+          label="Give an Organization Admin another organization"
+          detail="One Organization Admin can run several organizations. With more than one, they choose which to open when they sign in."
+        />
+        <GiveOrganization />
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <PlatformAdminNote />
+        </div>
+      </Region>
+
+      <Region order={4}>
+        <SectionRule
           label="How access is customised"
           detail="Role definitions are the same everywhere. Individuals differ by exception, not by redefining the role."
         />
@@ -188,7 +217,7 @@ export function PlatformRolesPage() {
         </Plane>
       </Region>
 
-      <Region order={3}>
+      <Region order={5}>
         <SectionRule label="Roles" detail={`${it.roles.length} roles · ${it.permissions.length} permissions`} />
         <Plane>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-5)' }}>

@@ -244,20 +244,13 @@ describe('the route is gated on its own permission', () => {
     expect(await openDashboard()).toBeInTheDocument();
   });
 
-  it('redirects an org admin', async () => {
-    // Stage 3 removed `view_model_evaluation` from ORG_ADMIN. Evaluation
-    // artifacts answer "should we ship this model" — attribute agreement on a
-    // 43-subject split, per-state confusion matrices — which is an engineering
-    // question. The accountability an organization administrator has for what
-    // the system claims is served by reports, which carry coverage and the
-    // ruleset version behind every figure, and which this role still holds.
+  it('opens for an org admin', async () => {
+    // The Organization Admin holds every permission inside their organizations
+    // (2026-09-22), `view_model_evaluation` included.
     installFetch({ session: adminIdentity() });
     renderApp(<AppRouter />, '/model-evaluation');
 
-    await screen.findByRole('heading', { name: 'Command Center' });
-    expect(
-      screen.queryByRole('heading', { name: 'Model Evaluation' }),
-    ).not.toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Model Evaluation' });
   });
 
   it('redirects a restaurant manager', async () => {
@@ -280,11 +273,11 @@ describe('the route is gated on its own permission', () => {
     expect(within(nav).getByRole('link', { name: /model evaluation/i })).toBeInTheDocument();
   });
 
-  it('is absent from an org admin’s navigation, and the route agrees', async () => {
+  it('is absent from a restaurant manager’s navigation, and the route agrees', async () => {
     // Navigation visibility and route access must say the same thing. Hiding
     // the entry is not closing the door; the route redirect above is the door,
     // and the backend refuses the request underneath both.
-    installFetch({ session: adminIdentity() });
+    installFetch({ session: managerIdentity() });
     renderApp(<AppRouter />, '/dashboard');
     await screen.findByRole('heading', { name: 'Command Center' });
 

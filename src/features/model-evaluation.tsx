@@ -194,9 +194,9 @@ export function ModelEvaluationPage() {
  * The page opening, in the engineering register.
  *
  * Stage 2 moved this page out of "Analyse", where it sat between Meal Detection
- * and Demography, and into Engineering — and Stage 3 removed
- * `view_model_evaluation` from ORG_ADMIN, so its readers are now super_admin
- * and developer. The eyebrow says so on the page itself, because a screenshot
+ * and Demography, and into Engineering. Its readers are the Organization
+ * Admin (who holds every permission) and the developer. The eyebrow says it is
+ * engineering on the page itself, because a screenshot
  * of confusion matrices should never be mistakable for an operational reading
  * of a kitchen.
  */

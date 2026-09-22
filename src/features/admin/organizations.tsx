@@ -1,14 +1,14 @@
 /**
  * The platform-operator console — organizations, and their lifecycle.
  *
- * ### Why this is not "the admin page for super admins"
+ * ### Why this is not "the admin page for organization admins"
  *
  * Every other surface in this application belongs to *one organization*. This
- * one is above them, and the account that reaches it is a different kind of
- * principal, not a more powerful role. A tenant `super_admin` holds every
- * permission there is and cannot open this page — the server does not check a
- * permission here, it checks whether the account is a platform operator, which
- * no role can confer.
+ * one is above them, and the account that reaches it — the Platform Admin — is
+ * a different kind of principal, not a more powerful role. An Organization
+ * Admin holds every permission there is and cannot open this page — the server
+ * does not check a permission here, it checks whether the account is a
+ * platform operator, which no role can confer.
  *
  * Which is why the surface looks different rather than merely deeper. Mixing
  * it into `/admin` would say the two are the same kind of authority, and the
@@ -49,6 +49,7 @@ import {
   StatusBadge,
 } from '@shared/ui/primitives';
 import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { CreateOrganizationAdmin } from '@features/platform/OrganizationAdmins';
 
 import { DangerConfirm, Failed, SearchField, useDebounced, when, whenExact } from './shared';
 
@@ -338,6 +339,15 @@ export function OrganizationDetailPage() {
           detail="Who may enter this organization. Membership is the entry ticket; roles decide what they can do once inside."
         />
         <Members organizationId={it.id} archived={it.status === 'archived'} />
+        {it.status === 'archived' ? null : (
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <SectionRule
+              label="New Organization Admin"
+              detail="Creates the person who runs this organization: account, Organization Admin role and every camera, in one step."
+            />
+            <CreateOrganizationAdmin organizationId={it.id} />
+          </div>
+        )}
       </Region>
 
       <Region order={4}>
@@ -400,28 +410,25 @@ export function OrganizationDetailPage() {
  * the operator into that customer would make the audit trail describe browsing
  * rather than intent.
  *
- * ### Members go in as themselves
+ * ### Always the recorded door
  *
- * If the account actually belongs to this organization, entry uses their
- * membership — their real roles, their real camera scope. Only somebody with no
- * membership enters as a read-only operator. Entering your own organization as
- * a stranger would be a worse experience and a misleading audit row.
+ * The Platform Admin belongs to no organization, so there is no membership to
+ * select: entry gives him full access and writes a row into this
+ * organization's audit trail before it returns.
  */
 function EnterOrganization({ organization }: { organization: Organization }) {
   const navigate = useNavigate();
-  const { organizations, selectOrganization, enterOrganization } = useAuth();
+  const { enterOrganization } = useAuth();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const asMember = organizations.some((candidate) => candidate.id === organization.id);
   const archived = organization.status === 'archived';
 
   async function go() {
     setFailure(null);
     setBusy(true);
     try {
-      if (asMember) await selectOrganization(organization.id);
-      else await enterOrganization(organization.id);
+      await enterOrganization(organization.id);
       navigate('/dashboard', { replace: true });
     } catch (error) {
       setBusy(false);
@@ -440,9 +447,7 @@ function EnterOrganization({ organization }: { organization: Organization }) {
         <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
           {archived
             ? 'An archived organization cannot be entered. Nobody may sign in to one.'
-            : asMember
-              ? 'You are a member here, so you will enter with your own roles and camera access, and the Command Center will be this organization.'
-              : 'You will enter read-only, as a platform operator. The entry is recorded against this organization, and evidence, patron identity and the audit trail stay closed.'}
+            : 'You will enter as Platform Admin, with full access. The entry is recorded in this organization’s audit trail.'}
         </p>
       </div>
       {failure ? (
@@ -457,11 +462,9 @@ function EnterOrganization({ organization }: { organization: Organization }) {
 /**
  * Membership administration for one organization.
  *
- * Admits and removes, and does nothing else. Roles are granted inside the
- * organization by somebody who holds `MANAGE_USERS` there — this console
- * deliberately does not reach into a customer's user administration, because a
- * cross-customer principal that could hand out roles inside any customer would
- * be the unrestricted tenant authority the whole architecture avoids.
+ * Admits Organization Admins and removes members. The platform gives exactly
+ * one role — Organization Admin — and every other role is granted inside the
+ * organization by that admin, who knows who works there.
  */
 function Members({ organizationId, archived }: { organizationId: string; archived: boolean }) {
   const client = useQueryClient();
@@ -485,7 +488,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
   };
 
   const add = useMutation({
-    mutationFn: (userId: string) => platformAdminApi.addMember(organizationId, userId),
+    mutationFn: (userId: string) => platformAdminApi.addMember(organizationId, userId, 'org_admin'),
     onSuccess: () => {
       setAddUser('');
       setFailure(null);
@@ -517,7 +520,11 @@ function Members({ organizationId, archived }: { organizationId: string; archive
 
   const rows = members.data?.members ?? [];
   const held = new Set(rows.map((person) => person.id));
-  const admittable = (everyone.data?.people ?? []).filter((person) => !held.has(person.id));
+  // The Platform Admin is never admitted: he belongs to no organization and
+  // enters any of them from the console.
+  const admittable = (everyone.data?.people ?? []).filter(
+    (person) => !held.has(person.id) && !person.is_platform_operator,
+  );
 
   return (
     <Plane>
@@ -589,7 +596,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
         }}
       >
         <Select
-          label="Admit somebody"
+          label="Add an existing person as Organization Admin"
           value={addUser}
           onChange={(event) => setAddUser(event.target.value)}
           disabled={archived}
@@ -602,12 +609,12 @@ function Members({ organizationId, archived }: { organizationId: string; archive
           ))}
         </Select>
         <Button disabled={!addUser || add.isPending || archived} onClick={() => add.mutate(addUser)}>
-          {add.isPending ? 'Admitting…' : 'Admit'}
+          {add.isPending ? 'Adding…' : 'Add as Organization Admin'}
         </Button>
         <p style={{ margin: 0, flexBasis: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
           {archived
             ? 'An archived organization takes no new members.'
-            : 'Admitting grants no role. They will be able to sign in and will see nothing until somebody grants them a role inside this organization.'}
+            : 'They become Organization Admin here, with every camera, alongside any organizations they already run.'}
         </p>
       </div>
     </Plane>

@@ -271,11 +271,16 @@ describe('user detail: permission overrides', () => {
   });
 
   it('GRANT is offered only for a permission the acting admin holds themselves', async () => {
-    // adminIdentity() holds `register_demand` but not `access_devtools` — the
-    // two rows in the Engineering group split exactly the case this test
-    // needs: one row must offer "+ Add", the other must not.
+    // An administrator holding everything except `access_devtools`. The
+    // Organization Admin now holds every permission, so the actor is narrowed
+    // by hand: the two rows in the Engineering group then split exactly the
+    // case this test needs — one row must offer "+ Add", the other must not.
+    const admin = adminIdentity();
     installFetch({
-      session: adminIdentity(),
+      session: {
+        ...admin,
+        permissions: admin.permissions.filter((p) => p !== 'access_devtools'),
+      },
       adminUsers: [MANAGER],
       adminUserPermissions: { 'user-1': permRows() },
     });

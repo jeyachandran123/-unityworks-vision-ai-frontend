@@ -383,9 +383,9 @@ export function AppShell() {
  * Not a toast and not a one-time dialog: it is on screen for as long as the
  * session lasts, because the fact it states is true for as long as the session
  * lasts. Somebody three pages into a customer's incidents has to be able to
- * tell — without remembering how they got there — that they are looking at
- * another organization's data under platform authority, read-only, and that
- * their being here is recorded.
+ * tell — without remembering how they got there — that they are inside an
+ * organization under platform authority, with full access, and that their
+ * being here is recorded.
  *
  * It borrows the engineering register's device rather than inventing a third
  * one: a marker in the topbar, mono, uppercase, tinted. Two registers that mean
@@ -394,7 +394,7 @@ export function AppShell() {
 function OperatorMark({ organization }: { organization: string }) {
   return (
     <span
-      title="You entered this organization from the platform console. The session is read-only and was recorded."
+      title="You entered this organization from the platform console as Platform Admin. You have full access here, and the entry was recorded in this organization's audit trail."
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -410,7 +410,7 @@ function OperatorMark({ organization }: { organization: string }) {
         whiteSpace: 'nowrap',
       }}
     >
-      Platform operator · read-only
+      Platform Admin · recorded
       <span className="uwv-visually-hidden">
         {` — viewing ${organization} from the platform console`}
       </span>

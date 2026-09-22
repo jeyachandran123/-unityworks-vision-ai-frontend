@@ -275,7 +275,45 @@ describe('a platform operator', () => {
       expect(screen.getByRole('heading', { name: 'Roles & Access' })).toBeInTheDocument(),
     );
     // Role definitions are code. The page must not imply otherwise.
-    expect(screen.getByText('Read-only')).toBeInTheDocument();
+    expect(screen.getByText('Role definitions fixed')).toBeInTheDocument();
+    // And it is where Organization Admins are created.
+    expect(screen.getByRole('button', { name: /create organization admin/i })).toBeInTheDocument();
+  });
+
+  it('creates an Organization Admin from Roles & Access in one step', async () => {
+    installFetch(operatorStub({ platformPeople: [PERSON] }));
+    renderApp(<AppRouter />, '/platform/roles');
+
+    const user = userEvent.setup();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Roles & Access' })).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        within(screen.getByLabelText('Organization')).getByRole('option', {
+          name: 'Borden Foods',
+        }),
+      ).toBeInTheDocument(),
+    );
+
+    await user.selectOptions(screen.getByLabelText('Organization'), 'org-borden');
+    await user.type(screen.getByLabelText('Name'), 'Priya Raman');
+    await user.type(screen.getByLabelText('Email'), 'priya@borden.example');
+    await user.type(screen.getByLabelText('Password'), 'short');
+
+    // The 12-character floor is said before the click, not discovered after it.
+    const create = screen.getByRole('button', { name: /create organization admin/i });
+    expect(screen.getByText(/7 more characters needed/i)).toBeInTheDocument();
+    expect(create).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Password'), '-but-now-long');
+    await user.click(create);
+
+    await screen.findByText(
+      (_, element) =>
+        element?.getAttribute('role') === 'status' &&
+        /Priya Raman is now Organization Admin of Borden Foods/i.test(element.textContent ?? ''),
+    );
   });
 
   it('does not switch tenant merely by inspecting an organization', async () => {
@@ -309,23 +347,24 @@ describe('a platform operator', () => {
       expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument(),
     );
     expect(calls.some((call) => call.includes('/platform/organizations/org-acme/enter'))).toBe(true);
-    // A read-only operator session is marked for as long as it lasts.
-    expect(screen.getByText(/platform operator · read-only/i)).toBeInTheDocument();
+    // A Platform Admin entry is marked for as long as it lasts, and no longer
+    // claims to be read-only.
+    expect(screen.getByText(/platform admin · recorded/i)).toBeInTheDocument();
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });
 
-  it('administers membership without touching roles', async () => {
+  it('gives an existing person an organization as its Organization Admin', async () => {
     installFetch(operatorStub({ platformPeople: [PERSON] }));
     renderApp(<AppRouter />, '/platform/people/user-1');
 
     const user = userEvent.setup();
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Dana Reed' })).toBeInTheDocument());
 
-    // Admitting is the entry ticket and nothing more, and the page says so
-    // before the click rather than after it.
-    expect(screen.getByText(/admitting grants no role/i)).toBeInTheDocument();
+    // Said before the click: the platform gives exactly one role.
+    expect(screen.getByText(/they become organization admin/i)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText(/admit to organization/i), 'org-borden');
-    await user.click(screen.getByRole('button', { name: /^admit$/i }));
+    await user.selectOptions(screen.getByLabelText(/make organization admin of/i), 'org-borden');
+    await user.click(screen.getByRole('button', { name: /add as organization admin/i }));
 
     await waitFor(() => expect(screen.getByText('org-borden')).toBeInTheDocument());
   });

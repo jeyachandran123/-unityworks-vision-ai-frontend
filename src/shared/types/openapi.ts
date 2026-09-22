@@ -63,6 +63,7 @@ export const API_PATHS = [
   "/api/v1/platform/organizations/{organization_id}/enter",
   "/api/v1/platform/organizations/{organization_id}/members",
   "/api/v1/platform/organizations/{organization_id}/members/{user_id}",
+  "/api/v1/platform/organizations/{organization_id}/people",
   "/api/v1/platform/organizations/{organization_id}/status",
   "/api/v1/platform/overview",
   "/api/v1/platform/people",
@@ -293,6 +294,9 @@ export type AddMemberApiV1PlatformOrganizationsOrganizationIdMembersPostResponse
 
 /** `DELETE /api/v1/platform/organizations/{organization_id}/members/{user_id}` */
 export type RemoveMemberApiV1PlatformOrganizationsOrganizationIdMembersUserIdDeleteResponse = Record<string, unknown>;
+
+/** `POST /api/v1/platform/organizations/{organization_id}/people` */
+export type CreateOrganizationAdminApiV1PlatformOrganizationsOrganizationIdPeoplePostResponse = Record<string, unknown>;
 
 /** `PUT /api/v1/platform/organizations/{organization_id}/status` */
 export type SetOrganizationStatusApiV1PlatformOrganizationsOrganizationIdStatusPutResponse = Record<string, unknown>;

@@ -101,7 +101,9 @@ export function PlatformPeoplePage() {
         header: 'Home organization',
         render: (person) => (
           <span title="Where the account lives. Not, by itself, permission to enter.">
-            {person.home_organization_name}
+            {person.home_organization_id === null
+              ? 'None — Platform Admin'
+              : person.home_organization_name}
             {person.home_membership_missing ? (
               <span style={{ marginLeft: 'var(--space-2)' }}>
                 <Badge tone="accent">cannot enter</Badge>
@@ -217,7 +219,8 @@ export function PlatformPersonPage() {
   };
 
   const add = useMutation({
-    mutationFn: (organizationId: string) => platformAdminApi.addMember(organizationId, userId),
+    mutationFn: (organizationId: string) =>
+      platformAdminApi.addMember(organizationId, userId, 'org_admin'),
     onSuccess: () => {
       setAddTo('');
       setFailure(null);
@@ -254,7 +257,10 @@ export function PlatformPersonPage() {
         title={it.display_name || it.email}
         standfirst={
           <>
-            <code>{it.email}</code> · lives in {it.home_organization_name}
+            <code>{it.email}</code> ·{' '}
+            {it.home_organization_id === null
+              ? 'Platform Admin — belongs to no organization'
+              : `lives in ${it.home_organization_name}`}
           </>
         }
         meta={
@@ -300,10 +306,15 @@ export function PlatformPersonPage() {
             </p>
           ) : null}
 
-          {it.memberships.length === 0 ? (
+          {it.is_platform_operator && it.memberships.length === 0 ? (
+            <p style={{ margin: 0 }}>
+              Platform Admin. Belongs to no organization, and can enter any of them from the
+              organizations list.
+            </p>
+          ) : it.memberships.length === 0 ? (
             <EmptyState
               title="No memberships"
-              body="This account cannot sign in to any organization. Add one below to admit them."
+              body="This account cannot sign in to any organization. Give it one below."
             />
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
@@ -318,6 +329,7 @@ export function PlatformPersonPage() {
             </ul>
           )}
 
+          {it.is_platform_operator ? null : (
           <div
             style={{
               marginTop: 'var(--space-6)',
@@ -330,7 +342,7 @@ export function PlatformPersonPage() {
             }}
           >
             <Select
-              label="Admit to organization"
+              label="Make Organization Admin of"
               value={addTo}
               onChange={(event) => setAddTo(event.target.value)}
             >
@@ -342,7 +354,7 @@ export function PlatformPersonPage() {
               ))}
             </Select>
             <Button disabled={!addTo || add.isPending} onClick={() => add.mutate(addTo)}>
-              {add.isPending ? 'Admitting…' : 'Admit'}
+              {add.isPending ? 'Adding…' : 'Add as Organization Admin'}
             </Button>
             {/* Said before the click, because it is the part people get wrong. */}
             <p
@@ -353,10 +365,12 @@ export function PlatformPersonPage() {
                 fontSize: 'var(--text-xs)',
               }}
             >
-              Admitting grants no role. They will be able to sign in and will see nothing until
-              somebody grants them a role inside that organization.
+              They become Organization Admin of that organization, with every camera, alongside
+              any organizations they already run. With more than one, they choose which to open
+              when they sign in.
             </p>
           </div>
+          )}
         </Plane>
       </Region>
     </>

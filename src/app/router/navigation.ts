@@ -302,7 +302,7 @@ export const PRODUCT_NAV: NavSection[] = [
         id: 'patron-id',
         label: 'Patron ID',
         path: '/patron-id',
-        // Its own permission, held by org_admin and super_admin only. The page
+        // Its own permission, held by the Organization Admin only. The page
         // reports that the module is blocked; it offers nothing to operate.
         permissions: [PERMISSIONS.viewPatronId],
         icon: NavIcons.patronId,

@@ -141,12 +141,18 @@ function areasFor(holder: ReturnType<typeof identity>) {
 }
 
 describe('role-shaped navigation', () => {
-  it('an organization admin sees no engineering area at all', () => {
-    // The Phase 4 correction, at the level of the whole sidebar rather than one
-    // link: an org admin is an administrative role, not an engineering one.
+  it('an organization admin sees every area, engineering included', () => {
+    // The Organization Admin holds every permission inside their organizations
+    // (2026-09-22), so the whole sidebar is theirs.
     const areas = areasFor(adminIdentity());
-    expect(areas.map((a) => a.id)).toEqual(['operations', 'compliance', 'intelligence', 'platform']);
-    expect(areas.flatMap((a) => a.items).map((i) => i.id)).not.toContain('model-evaluation');
+    expect(areas.map((a) => a.id)).toEqual([
+      'operations',
+      'compliance',
+      'intelligence',
+      'platform',
+      'engineering',
+    ]);
+    expect(areas.flatMap((a) => a.items).map((i) => i.id)).toContain('model-evaluation');
   });
 
   it('a developer gets a whole engineering area rather than one stray item', () => {

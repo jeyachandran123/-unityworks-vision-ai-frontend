@@ -43,13 +43,12 @@
  * endpoint: an endpoint that answers both would be a second authorization
  * system, and the second one is always the one that turns out to be wrong.
  *
- * ### An operator who is also a member enters through the member door
+ * ### The Platform Admin always enters through the recorded door
  *
- * If one of the organizations an operator can see is one they actually belong
- * to, selecting it uses their **membership** — their real roles, their real
- * camera scope — rather than a read-only operator entry. Entering their own
- * organization as a stranger would be a worse experience and a misleading audit
- * row.
+ * He belongs to no organization, so there is no membership to select: every
+ * organization he opens is entered through `POST /platform/organizations/{id}/enter`,
+ * which gives him full access there and writes a row into that organization's
+ * audit trail before it returns.
  */
 
 import { useMemo, useState } from 'react';
@@ -110,11 +109,6 @@ export function OrganizationChooser() {
     retry: false,
   });
 
-  const memberOf = useMemo(
-    () => new Set(organizations.map((organization) => organization.id)),
-    [organizations],
-  );
-
   const rows: OrganizationSummary[] = useMemo(() => {
     const source: OrganizationSummary[] = isPlatformOperator
       ? (everyOrganization.data?.organizations ?? []).map(toSummary)
@@ -133,12 +127,10 @@ export function OrganizationChooser() {
     setFailure(null);
     setBusy(organization.id);
     try {
-      // Membership first. An operator standing in front of their own
-      // organization should go in as themselves, not as a read-only visitor.
-      if (memberOf.has(organization.id)) {
-        await selectOrganization(organization.id);
-      } else {
+      if (isPlatformOperator) {
         await enterOrganization(organization.id);
+      } else {
+        await selectOrganization(organization.id);
       }
       navigate('/dashboard', { replace: true });
     } catch (error) {
@@ -199,7 +191,7 @@ export function OrganizationChooser() {
               letterSpacing: 'var(--tracking-tight)',
             }}
           >
-            {isPlatformOperator ? 'Choose a customer' : 'Choose an organization'}
+            Choose an organization
           </h1>
           <p
             style={{
@@ -210,7 +202,7 @@ export function OrganizationChooser() {
             }}
           >
             {isPlatformOperator
-              ? 'Entering a customer opens their application read-only and records that you did. Evidence, patron identity and the audit trail stay closed.'
+              ? 'As Platform Admin you have full access inside any organization you enter. Each entry is recorded in that organization’s audit trail.'
               : 'Everything after this point — the Command Center, the wall, alerts, reports — belongs to the organization you pick.'}
           </p>
         </header>
@@ -279,7 +271,6 @@ export function OrganizationChooser() {
               key={organization.id}
               organization={organization}
               active={organization.id === user?.tenant_id}
-              asMember={memberOf.has(organization.id)}
               operator={isPlatformOperator}
               busy={busy === organization.id}
               disabled={busy !== null}
@@ -308,7 +299,6 @@ export function OrganizationChooser() {
 function OrganizationCard({
   organization,
   active,
-  asMember,
   operator,
   busy,
   disabled,
@@ -316,7 +306,6 @@ function OrganizationCard({
 }: {
   organization: OrganizationSummary;
   active: boolean;
-  asMember: boolean;
   operator: boolean;
   busy: boolean;
   disabled: boolean;
@@ -407,10 +396,9 @@ function OrganizationCard({
         <Button onClick={onOpen} disabled={disabled || archived} size="sm">
           {busy ? 'Opening…' : active ? 'Continue' : 'Enter organization'}
         </Button>
-        {/* Said before the click, not discovered after it. An operator entering
-            a customer they do not belong to gets a read-only session, and that
-            is a different thing from the session they get in their own. */}
-        {operator && !asMember && !archived ? (
+        {/* Said before the click, not discovered after it: the Platform Admin
+            goes in with full access, and the organization's trail records it. */}
+        {operator && !archived ? (
           <span
             style={{
               fontFamily: 'var(--font-mono)',
@@ -420,7 +408,7 @@ function OrganizationCard({
               color: 'var(--ink-tertiary)',
             }}
           >
-            Read-only · audited
+            Full access · recorded
           </span>
         ) : null}
       </div>
