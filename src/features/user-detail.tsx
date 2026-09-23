@@ -107,7 +107,7 @@ const PERMISSION_GROUPS: ReadonlyArray<{ label: string; permissions: string[] }>
       PERMISSIONS.viewCameraHealth,
     ],
   },
-  { label: 'Sites & cameras', permissions: [PERMISSIONS.manageCameras, PERMISSIONS.viewCameras] },
+  { label: 'Zones & cameras', permissions: [PERMISSIONS.manageCameras, PERMISSIONS.viewCameras] },
   {
     label: 'Incidents',
     permissions: [

@@ -126,7 +126,7 @@ export function OrganizationsPage() {
         <StatusBadge tone={TONE[organization.status]}>{LABEL[organization.status]}</StatusBadge>
       ),
     },
-    { key: 'sites', header: 'Sites', render: (organization) => organization.site_count },
+    { key: 'zones', header: 'Zones', render: (organization) => organization.zone_count },
     {
       key: 'cameras',
       header: 'Cameras',
@@ -308,7 +308,7 @@ export function OrganizationDetailPage() {
               gap: 'var(--space-6)',
             }}
           >
-            <Figure scale="lead" label="Sites" value={String(it.site_count)} />
+            <Figure scale="lead" label="Zones" value={String(it.zone_count)} />
             <Figure scale="lead" label="Cameras" value={String(it.camera_count)} />
             <Figure
               scale="lead"

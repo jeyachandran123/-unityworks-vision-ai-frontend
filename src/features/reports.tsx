@@ -76,7 +76,7 @@ export function ReportsPage() {
   const [selected, setSelected] = useState<string>('');
   const [periodId, setPeriodId] = useState('30d');
   const [granularity, setGranularity] = useState<Granularity>('total');
-  const [restaurantId, setRestaurantId] = useState('');
+  const [zoneId, setZoneId] = useState('');
 
   const catalogue = useQuery({
     queryKey: ['reports', 'types'],
@@ -84,13 +84,14 @@ export function ReportsPage() {
     staleTime: 60_000,
   });
 
-  // Sites drive the timezone the period boundaries are computed in, so this is
-  // not decoration: "September" for a Singapore kitchen is not September UTC.
-  const sites = useQuery({
-    queryKey: ['restaurants'],
-    queryFn: () => organizationApi.restaurants(),
+  // Zones scope a report. The timezone the period boundaries are computed in
+  // comes from the organization now — "September" for a Singapore kitchen is
+  // not September UTC, and a kitchen and its dine hall are in one place.
+  const zones = useQuery({
+    queryKey: ['zones'],
+    queryFn: () => organizationApi.zones({ limit: 200 }),
     staleTime: 60_000,
-    enabled: has(user, PERMISSIONS.viewUsers) || has(user, PERMISSIONS.manageOrganization),
+    enabled: has(user, PERMISSIONS.viewZones),
   });
 
   const days = PERIODS.find((p) => p.id === periodId)?.days ?? 30;
@@ -106,12 +107,12 @@ export function ReportsPage() {
     : 'total';
 
   const report = useQuery({
-    queryKey: ['reports', selected, since, effectiveGranularity, restaurantId],
+    queryKey: ['reports', selected, since, effectiveGranularity, zoneId],
     queryFn: () =>
       reportsApi.generate(selected, {
         since,
         granularity: effectiveGranularity,
-        restaurant_id: restaurantId || undefined,
+        zone_id: zoneId || undefined,
       }),
     enabled: Boolean(selected) && Boolean(active?.permitted),
   });
@@ -121,7 +122,7 @@ export function ReportsPage() {
       const { blob, filename } = await reportsApi.export(selected, format, {
         since,
         granularity: effectiveGranularity,
-        restaurant_id: restaurantId || undefined,
+        zone_id: zoneId || undefined,
       });
       // An object URL revoked immediately after the click: the bytes are
       // already in the download, and an un-revoked URL keeps a report about a
@@ -200,9 +201,9 @@ export function ReportsPage() {
               granularity={effectiveGranularity}
               granularities={granularities}
               onGranularity={setGranularity}
-              restaurantId={restaurantId}
-              onRestaurant={setRestaurantId}
-              sites={sites.data?.restaurants ?? []}
+              zoneId={zoneId}
+              onZone={setZoneId}
+              zones={zones.data?.zones ?? []}
               disabled={!active}
               maxWindowDays={catalogue.data.max_window_days}
             />
@@ -406,9 +407,9 @@ function Controls({
   granularity,
   granularities,
   onGranularity,
-  restaurantId,
-  onRestaurant,
-  sites,
+  zoneId,
+  onZone,
+  zones,
   disabled,
   maxWindowDays,
 }: {
@@ -417,9 +418,9 @@ function Controls({
   granularity: Granularity;
   granularities: Granularity[];
   onGranularity: (g: Granularity) => void;
-  restaurantId: string;
-  onRestaurant: (id: string) => void;
-  sites: Array<{ id: string; name: string; timezone: string }>;
+  zoneId: string;
+  onZone: (id: string) => void;
+  zones: Array<{ id: string; name: string }>;
   disabled: boolean;
   maxWindowDays: number;
 }) {
@@ -489,15 +490,17 @@ function Controls({
         </Select>
 
         <Select
-          label="Site (sets the timezone)"
-          value={restaurantId}
+          label="Zone"
+          value={zoneId}
           disabled={disabled}
-          onChange={(event) => onRestaurant(event.target.value)}
+          onChange={(event) => onZone(event.target.value)}
         >
-          <option value="">All sites · UTC boundaries</option>
-          {sites.map((site) => (
-            <option key={site.id} value={site.id}>
-              {site.name} · {site.timezone}
+          {/* The timezone is the organization's now, so narrowing to a zone
+              narrows the rows and nothing else. */}
+          <option value="">Every zone</option>
+          {zones.map((zone) => (
+            <option key={zone.id} value={zone.id}>
+              {zone.name}
             </option>
           ))}
         </Select>

@@ -68,7 +68,7 @@ export function organization(
     name: 'Test organization',
     slug: 'test',
     status: 'active',
-    site_count: 2,
+    zone_count: 2,
     camera_count: 6,
     ...overrides,
   };
@@ -100,10 +100,9 @@ export const managerIdentity = (): Identity =>
       'view_table_occupancy',
       'view_users',
       // Reads the estate, and cannot change it. This is what the read/manage
-      // split is for: a manager who *should* be able to edit sites gets
-      // `manage_sites` as a per-user grant, and the two managers then differ
+      // split is for: a manager who *should* be able to edit zones gets
+      // `manage_zones` as a per-user grant, and the two managers then differ
       // while holding the same role.
-      'view_sites',
       'view_zones',
       'export_reports',
     ],
@@ -946,8 +945,10 @@ export interface StubOptions {
   wall?: unknown;
   /** Overrides /observations. */
   observations?: unknown;
-  /** Overrides /restaurants. */
-  restaurants?: unknown;
+  /** Overrides `GET /zones` — the estate's one placement level. */
+  zones?: unknown;
+  /** What `GET /cameras/next-key` proposes for a new camera. */
+  nextCameraKey?: string;
   /** Overrides /users (the old, read-only `GET /users` route). */
   users?: unknown;
   /**
@@ -1245,7 +1246,7 @@ export function stubFetch(options: StubOptions = {}) {
             suspended: 0,
             archived: 0,
           },
-          estate: { sites: 4, cameras: 12, cameras_running: 9 },
+          estate: { zones: 4, cameras: 12, cameras_running: 9 },
           people: {
             users: peopleState.length,
             active_users: peopleState.length,
@@ -1595,29 +1596,48 @@ export function stubFetch(options: StubOptions = {}) {
       return envelope('NOT_FOUND', 404);
     }
 
-    if (url.includes('/restaurants')) {
-      const list = (options.restaurants ?? {
-        restaurants: [],
+    if (url.includes('/zones')) {
+      const list = (options.zones ?? {
+        zones: [],
         count: 0,
         total: 0,
         limit: 25,
         offset: 0,
-      }) as { restaurants?: Array<Record<string, unknown>> };
-      // `/restaurants/{id}` is a real route now: a site has its own page, and
-      // returning the list shape for it would let a detail view render
-      // `undefined` and still look like it worked.
-      const detail = /\/restaurants\/([^/?]+)/.exec(url)?.[1];
+      }) as { zones?: Array<Record<string, unknown>> };
+
+      // `/zones/{id}` is a real route: a zone has its own page, and returning
+      // the list shape for it would let a detail view render `undefined` and
+      // still look like it worked.
+      const detail = /\/zones\/([^/?]+)/.exec(url)?.[1];
       if (detail && method === 'GET') {
-        const found = (list.restaurants ?? []).find((r) => String(r['id']) === detail);
+        const found = (list.zones ?? []).find((zone) => String(zone['id']) === detail);
         return found
           ? jsonResponse(found)
-          : jsonResponse({ code: 'NOT_FOUND', message: 'no such site' }, 404);
+          : jsonResponse({ code: 'NOT_FOUND', message: 'no such zone' }, 404);
+      }
+      if (detail && method === 'DELETE') {
+        const found = (list.zones ?? []).find((zone) => String(zone['id']) === detail);
+        // The server refuses while it holds cameras, and the page is supposed
+        // to say so rather than offer the control at all.
+        if (found && Number(found['camera_count'] ?? 0) > 0) {
+          return jsonResponse(
+            { code: 'CONFLICT', message: `'${String(found['name'])}' holds cameras.` },
+            409,
+          );
+        }
+        return jsonResponse({ zone_id: detail, deleted: true });
+      }
+      if (method === 'POST') {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return jsonResponse({
+          id: `zone-${String(body.name ?? 'new').toLowerCase().replace(/\s+/g, '-')}`,
+          name: String(body.name ?? ''),
+          is_active: true,
+          camera_count: 0,
+          created_at: null,
+        });
       }
       return jsonResponse(list);
-    }
-
-    if (url.includes('/zones')) {
-      return jsonResponse({ zones: [], count: 0 });
     }
 
     if (url.includes('/users')) {
@@ -1630,6 +1650,10 @@ export function stubFetch(options: StubOptions = {}) {
             'Creating an account issues a credential, and this deployment has no invitation channel yet.',
         },
       );
+    }
+
+    if (url.includes('/cameras/next-key')) {
+      return jsonResponse({ camera_key: String(options.nextCameraKey ?? 'cam-17') });
     }
 
     if (url.includes('/cameras')) {

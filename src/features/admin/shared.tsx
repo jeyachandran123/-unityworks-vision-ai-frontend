@@ -2,7 +2,7 @@
  * The pieces every administration surface needs, in one place.
  *
  * Administration used to be a single stacked page, so there was nothing to
- * share. Now that Sites, Cameras, People, Access and Settings are separate
+ * share. Now that Zones, Cameras, People, Access and Settings are separate
  * surfaces, the small things they all do — say a request failed, format a
  * date, offer a search box, page through a list — need one implementation, or
  * five pages start disagreeing about what an empty list looks like.

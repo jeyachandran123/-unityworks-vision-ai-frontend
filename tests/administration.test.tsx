@@ -15,21 +15,25 @@ import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { adminIdentity, identity, installFetch, managerIdentity, renderApp } from './support';
 
-const SITES = {
-  restaurants: [
+const ZONES = {
+  zones: [
     {
-      id: 'rest-1',
+      id: 'zone-1',
       name: 'Harbour Kitchen',
-      slug: 'harbour-kitchen',
-      timezone: 'Asia/Singapore',
       is_active: true,
-      created_at: '2026-08-01T00:00:00Z',
-      zone_count: 2,
       camera_count: 4,
+      created_at: '2026-08-01T00:00:00Z',
+    },
+    {
+      id: 'zone-2',
+      name: 'Dine hall',
+      is_active: true,
+      camera_count: 0,
+      created_at: '2026-08-01T00:00:00Z',
     },
   ],
-  count: 1,
-  total: 1,
+  count: 2,
+  total: 2,
   limit: 25,
   offset: 0,
 };
@@ -51,7 +55,7 @@ const ADMIN_USERS = [
 
 describe('the administration hub', () => {
   it('names the areas this account can reach, and creates nothing itself', async () => {
-    installFetch({ session: adminIdentity(), restaurants: SITES, adminUsers: ADMIN_USERS });
+    installFetch({ session: adminIdentity(), zones: ZONES, adminUsers: ADMIN_USERS });
     renderApp(<AppRouter />, '/admin');
 
     await screen.findByRole('heading', { name: 'Administration' });
@@ -60,7 +64,7 @@ describe('the administration hub', () => {
     // also links to Cameras, and matching either would prove nothing. Exact
     // names, because "Cameras" is a prefix of several link texts here.
     const main = document.getElementById('main') as HTMLElement;
-    for (const area of ['Sites', 'Cameras', 'People', 'Roles & access']) {
+    for (const area of ['Zones', 'Cameras', 'People', 'Roles & access']) {
       // Anchored: a card's accessible name is its title *and* its body, and
       // the People card's body mentions cameras.
       expect(
@@ -74,100 +78,109 @@ describe('the administration hub', () => {
   });
 
   it('lists only the areas the account holds a read for', async () => {
-    // `view_sites` and nothing else. Showing four links and letting three of
+    // `view_zones` and nothing else. Showing four links and letting three of
     // them 403 is how a permission model becomes something users discover by
     // hitting errors.
     installFetch({
-      session: identity({ roles: ['restaurant_manager'], permissions: ['view_sites'] }),
-      restaurants: SITES,
+      session: identity({ roles: ['restaurant_manager'], permissions: ['view_zones'] }),
+      zones: ZONES,
     });
     renderApp(<AppRouter />, '/admin');
 
     await screen.findByRole('heading', { name: 'Administration' });
-    expect(screen.getByRole('link', { name: /sites/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /zones/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^people$/i })).not.toBeInTheDocument();
   });
 });
 
-/* ── sites ────────────────────────────────────────────────────────────────── */
+/* ── zones ────────────────────────────────────────────────────────────────── */
 
-describe('sites are their own domain', () => {
-  it('lists sites with their zone and camera counts', async () => {
-    installFetch({ session: adminIdentity(), restaurants: SITES });
-    renderApp(<AppRouter />, '/admin/sites');
+describe('zones are their own domain', () => {
+  it('lists zones with their camera counts', async () => {
+    installFetch({ session: adminIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones');
 
     const row = (await screen.findByRole('link', { name: 'Harbour Kitchen' })).closest('tr');
     expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText('2')).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText('4')).toBeInTheDocument();
-    expect(within(row as HTMLElement).getByText('Asia/Singapore')).toBeInTheDocument();
   });
 
-  it('says there are no sites rather than showing an empty table', async () => {
+  it('says how much of the list it is showing', async () => {
+    installFetch({ session: adminIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones');
+
+    // A list that shows a page and says nothing looks complete.
+    expect(await screen.findByText('Showing 1–2 of 2')).toBeInTheDocument();
+  });
+
+  it('says there are no zones rather than showing an empty table', async () => {
     installFetch({
       session: adminIdentity(),
-      restaurants: { restaurants: [], count: 0, total: 0, limit: 25, offset: 0 },
+      zones: { zones: [], count: 0, total: 0, limit: 25, offset: 0 },
     });
-    renderApp(<AppRouter />, '/admin/sites');
+    renderApp(<AppRouter />, '/admin/zones');
 
-    await screen.findByRole('heading', { name: 'Sites' });
-    expect(await screen.findByText(/no sites yet/i)).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Zones' });
+    expect(await screen.findByText(/no zones yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('collects the timezone at creation rather than defaulting it silently', async () => {
-    // The site's timezone decides what a day means. Defaulted to UTC and never
-    // shown, a restaurant in Chennai files reports five and a half hours wrong
-    // and they look right.
-    installFetch({ session: adminIdentity(), restaurants: SITES });
-    renderApp(<AppRouter />, '/admin/sites');
-
-    await userEvent.click(await screen.findByRole('button', { name: /add a site/i }));
-    const timezone = await screen.findByLabelText(/timezone/i);
-    expect(timezone.tagName).toBe('SELECT');
-  });
-
-  it('creates a site through the organization API', async () => {
+  it('creates a zone with nothing but a name', async () => {
     const calls: string[] = [];
-    installFetch({ session: adminIdentity(), restaurants: SITES, calls });
-    renderApp(<AppRouter />, '/admin/sites');
+    installFetch({ session: adminIdentity(), zones: ZONES, calls });
+    renderApp(<AppRouter />, '/admin/zones');
 
-    await userEvent.click(await screen.findByRole('button', { name: /add a site/i }));
-    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Adyar');
-    await userEvent.click(screen.getByRole('button', { name: /^add site$/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /new zone/i }));
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Pantry');
+    await userEvent.click(screen.getByRole('button', { name: /create zone/i }));
 
     await waitFor(() =>
-      expect(calls.some((c) => c.startsWith('POST') && c.includes('/restaurants'))).toBe(true),
+      expect(calls.some((c) => c.startsWith('POST') && c.includes('/zones'))).toBe(true),
     );
+  });
+
+  it('offers no delete for a zone that holds cameras, and says why', async () => {
+    installFetch({ session: adminIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones/zone-1');
+
+    await screen.findByRole('heading', { name: 'Harbour Kitchen' });
+    expect(screen.queryByRole('button', { name: /^delete zone$/i })).not.toBeInTheDocument();
+    expect(await screen.findByText(/4 cameras still belong here/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /deactivate zone/i })).toBeInTheDocument();
+  });
+
+  it('deletes an empty zone only once its name is typed', async () => {
+    installFetch({ session: adminIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones/zone-2');
+
+    await screen.findByRole('heading', { name: 'Dine hall' });
+    const confirm = await screen.findByRole('button', { name: /^delete zone$/i });
+    expect(confirm).toBeDisabled();
+
+    await userEvent.type(await screen.findByLabelText(/type the zone's name/i), 'Dine hall');
+    expect(confirm).toBeEnabled();
   });
 });
 
 /* ── the boundary ─────────────────────────────────────────────────────────── */
 
 describe('read and manage are genuinely separate', () => {
-  it('a manager who may read the estate reaches Sites and is offered no controls', async () => {
-    // The case that could not be expressed at all before: `view_sites` without
-    // `manage_sites`. The page has to read as complete rather than broken,
-    // because this is a routine state and not an error.
-    installFetch({ session: managerIdentity(), restaurants: SITES });
-    renderApp(<AppRouter />, '/admin/sites');
+  it('a manager who may read the estate reaches Zones and is offered no controls', async () => {
+    // `view_zones` without `manage_zones`. The page has to read as complete
+    // rather than broken, because this is a routine state and not an error.
+    installFetch({ session: managerIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones');
 
     expect(await screen.findByRole('link', { name: 'Harbour Kitchen' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /add a site/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /new zone/i })).not.toBeInTheDocument();
   });
 
   it('an org admin who may manage the estate is offered the controls', async () => {
-    installFetch({ session: adminIdentity(), restaurants: SITES });
-    renderApp(<AppRouter />, '/admin/sites');
+    installFetch({ session: adminIdentity(), zones: ZONES });
+    renderApp(<AppRouter />, '/admin/zones');
 
-    await screen.findByRole('heading', { name: 'Sites' });
-    expect(screen.getByRole('button', { name: /add a site/i })).toBeInTheDocument();
-  });
-
-  it("says why a site's settings are read-only rather than showing a dead form", async () => {
-    installFetch({ session: managerIdentity(), restaurants: SITES });
-    renderApp(<AppRouter />, '/admin/sites/rest-1/settings');
-
-    expect(await screen.findByText(/manage_sites/)).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Zones' });
+    expect(screen.getByRole('button', { name: /new zone/i })).toBeInTheDocument();
   });
 });
 

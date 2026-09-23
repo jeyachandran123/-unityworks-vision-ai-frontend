@@ -55,7 +55,7 @@ export interface OrganizationSummary {
   name: string;
   slug: string;
   status: 'active' | 'suspended' | 'archived';
-  site_count: number;
+  zone_count: number;
   camera_count: number;
 }
 

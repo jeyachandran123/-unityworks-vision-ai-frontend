@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { Figure, Meter } from '@shared/ui/product';
 import { adminIdentity, identity, installFetch, managerIdentity, renderApp } from './support';
@@ -196,23 +197,20 @@ describe('adding a camera', () => {
     expect(screen.queryByRole('link', { name: /add a camera/i })).not.toBeInTheDocument();
   });
 
-  it('asks for placement by choosing a site, never by typing an id', async () => {
-    // The form this replaced took `restaurant_id` as free text. Nobody knows a
-    // site's id, and a typo produced either a 404 or a camera attached
-    // somewhere unintended.
+  it('asks for placement by choosing a zone, never by typing an id', async () => {
+    // The form this replaced took `restaurant_id` as free text, then asked for
+    // a zone as well. Nobody knows either id, and a typo produced a camera
+    // attached somewhere unintended — or a 404.
     installFetch({
       session: adminIdentity(),
-      restaurants: {
-        restaurants: [
+      zones: {
+        zones: [
           {
-            id: 'rest-1',
+            id: 'zone-1',
             name: 'Harbour Kitchen',
-            slug: 'harbour-kitchen',
-            timezone: 'Asia/Singapore',
             is_active: true,
-            created_at: '2026-08-01T00:00:00Z',
-            zone_count: 1,
             camera_count: 0,
+            created_at: '2026-08-01T00:00:00Z',
           },
         ],
         count: 1,
@@ -224,14 +222,73 @@ describe('adding a camera', () => {
     renderApp(<AppRouter />, '/admin/cameras/new');
 
     await screen.findByRole('heading', { name: 'Add a camera' });
-    const site = await screen.findByLabelText(/^site$/i);
-    expect(site.tagName).toBe('SELECT');
-    expect(within(site as HTMLSelectElement).getByRole('option', { name: 'Harbour Kitchen' }))
+
+    // One placement control, not two: a camera is in a zone, and there is no
+    // level above it left to pick first.
+    const zone = await screen.findByLabelText(/^zone$/i);
+    expect(zone.tagName).toBe('SELECT');
+    expect(within(zone as HTMLSelectElement).getByRole('option', { name: 'Harbour Kitchen' }))
       .toBeInTheDocument();
+    expect(screen.queryByLabelText(/^site$/i)).not.toBeInTheDocument();
 
     // And no id field anywhere for somebody to paste one into.
-    expect(screen.queryByLabelText(/restaurant id/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/zone id/i)).not.toBeInTheDocument();
+  });
+
+  it('proposes the identifier rather than asking somebody to invent one', async () => {
+    installFetch({ session: adminIdentity(), nextCameraKey: 'cam-17', zones: {
+        zones: [
+          {
+            id: 'zone-1',
+            name: 'Harbour Kitchen',
+            is_active: true,
+            camera_count: 0,
+            created_at: '2026-08-01T00:00:00Z',
+          },
+        ],
+        count: 1,
+        total: 1,
+        limit: 200,
+        offset: 0,
+      } });
+    renderApp(<AppRouter />, '/admin/cameras/new');
+
+    await screen.findByRole('heading', { name: 'Add a camera' });
+    // The proposal arrives with the query, so the field is awaited rather than
+    // read on the first render.
+    expect(await screen.findByDisplayValue('cam-17')).toBeInTheDocument();
+  });
+
+  it('never asks where the password is kept', async () => {
+    // The old form put the server's own configuration in front of somebody
+    // adding a camera, as though it were a property of the camera.
+    installFetch({ session: adminIdentity(), zones: {
+        zones: [
+          {
+            id: 'zone-1',
+            name: 'Harbour Kitchen',
+            is_active: true,
+            camera_count: 0,
+            created_at: '2026-08-01T00:00:00Z',
+          },
+        ],
+        count: 1,
+        total: 1,
+        limit: 200,
+        offset: 0,
+      } });
+    renderApp(<AppRouter />, '/admin/cameras/new');
+
+    await screen.findByRole('heading', { name: 'Add a camera' });
+    // Reached step two, where the old form asked about it.
+    await userEvent.selectOptions(await screen.findByLabelText(/^zone$/i), 'zone-1');
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'Prep line');
+    await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
+
+    expect(await screen.findByLabelText(/^address$/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/where the password is kept/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/credential/i)).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
   it('has no field anywhere that could carry a password', async () => {

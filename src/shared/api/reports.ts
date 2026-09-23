@@ -121,7 +121,7 @@ export interface ReportQuery {
   since?: string;
   until?: string;
   granularity?: Granularity;
-  restaurant_id?: string;
+  zone_id?: string;
 }
 
 function query(params: ReportQuery & { format?: string }): string {
@@ -129,7 +129,7 @@ function query(params: ReportQuery & { format?: string }): string {
   if (params.since) search.set('since', params.since);
   if (params.until) search.set('until', params.until);
   if (params.granularity) search.set('granularity', params.granularity);
-  if (params.restaurant_id) search.set('restaurant_id', params.restaurant_id);
+  if (params.zone_id) search.set('zone_id', params.zone_id);
   if (params.format) search.set('format', params.format);
   const encoded = search.toString();
   return encoded ? `?${encoded}` : '';

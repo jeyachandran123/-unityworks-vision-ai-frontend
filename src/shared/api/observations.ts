@@ -133,46 +133,36 @@ export function attributeLabel(key: string): string {
 
 /* ── organization ─────────────────────────────────────────────────────────── */
 
-export interface Restaurant {
+/**
+ * A zone: the estate's one placement level.
+ *
+ * It belonged to a site until 2026-09-23 and belongs to the organization now —
+ * kitchen, dine hall, billing — because that is how the people running a
+ * restaurant say where a camera is.
+ */
+export interface Zone {
   id: string;
   name: string;
-  slug: string;
-  timezone: string;
+  /** Deactivated rather than deleted once it holds cameras. */
   is_active: boolean;
-  created_at: string | null;
-  zone_count: number;
   camera_count: number;
+  created_at: string | null;
 }
 
-export interface RestaurantList {
-  restaurants: Restaurant[];
+export interface ZoneList {
+  zones: Zone[];
   /** How many are on this page. */
   count: number;
-  /** How many match the query in total. Paginated from the start: the version
-      that fetches every site works right up until the day it does not. */
+  /** How many there are in total. Paginated from the start. */
   total: number;
   limit: number;
   offset: number;
 }
 
-export interface SiteQuery {
+export interface ZoneQuery {
   q?: string;
-  is_active?: boolean;
   limit?: number;
   offset?: number;
-}
-
-export interface Zone {
-  id: string;
-  restaurant_id: string;
-  name: string;
-  created_at: string | null;
-  camera_count: number;
-}
-
-export interface ZoneList {
-  zones: Zone[];
-  count: number;
 }
 
 export interface OrgUser {
@@ -209,24 +199,17 @@ function search(params: Record<string, string | number | boolean | undefined>): 
 }
 
 export const organizationApi = {
-  restaurants: (params: SiteQuery = {}) =>
-    api.get<RestaurantList>(`/restaurants${search({ ...params })}`),
-  restaurant: (id: string) => api.get<Restaurant>(`/restaurants/${encodeURIComponent(id)}`),
-  createRestaurant: (draft: { name: string; timezone?: string }) =>
-    api.post<Restaurant>('/restaurants', draft),
-  updateRestaurant: (
-    id: string,
-    changes: { name?: string; timezone?: string; is_active?: boolean },
-  ) => api.patch<Restaurant>(`/restaurants/${encodeURIComponent(id)}`, changes),
-
-  zones: (restaurantId?: string) =>
-    api.get<ZoneList>(
-      restaurantId ? `/zones?restaurant_id=${encodeURIComponent(restaurantId)}` : '/zones',
-    ),
-  createZone: (draft: { restaurant_id: string; name: string }) =>
-    api.post<Zone>('/zones', draft),
-  updateZone: (id: string, changes: { name: string }) =>
+  zones: (params: ZoneQuery = {}) => api.get<ZoneList>(`/zones${search({ ...params })}`),
+  zone: (id: string) => api.get<Zone>(`/zones/${encodeURIComponent(id)}`),
+  createZone: (draft: { name: string }) => api.post<Zone>('/zones', draft),
+  updateZone: (id: string, changes: { name?: string; is_active?: boolean }) =>
     api.patch<Zone>(`/zones/${encodeURIComponent(id)}`, changes),
+  /**
+   * Delete a zone. Refused by the server while it holds cameras — that zone is
+   * part of the record of what was watched, and deactivating keeps it.
+   */
+  deleteZone: (id: string) =>
+    api.del<{ zone_id: string; deleted: boolean }>(`/zones/${encodeURIComponent(id)}`),
 
   users: () => api.get<UserList>('/users'),
 };

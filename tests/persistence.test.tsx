@@ -151,7 +151,10 @@ describe('the camera page', () => {
     expect(screen.queryByRole('button', { name: /enable/i })).not.toBeInTheDocument();
   });
 
-  it('enabling a camera is a deliberate second act, sent as its own request', async () => {
+  it('enabling a camera dials it, rather than only changing a row', async () => {
+    // A PATCH set `enabled` and nothing opened a connection until the backend
+    // restarted: the camera reported itself on and was connected to nothing.
+    // Starting is its own act, with its own route.
     const calls: string[] = [];
     installFetch({
       session: adminIdentity(),
@@ -163,7 +166,9 @@ describe('the camera page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Enable' }));
 
     await waitFor(() =>
-      expect(calls.some((c) => c.startsWith('PATCH') && c.includes('/cameras/cam-01'))).toBe(true),
+      expect(calls.some((c) => c.startsWith('POST') && c.includes('/cameras/cam-01/start'))).toBe(
+        true,
+      ),
     );
   });
 });

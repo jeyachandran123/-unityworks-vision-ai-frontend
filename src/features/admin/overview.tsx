@@ -1,7 +1,7 @@
 /**
  * The organization hub — what `/admin` is now instead of a stacked page.
  *
- * The page this replaces put Sites, Zones and Accounts one under another in a
+ * The page this replaces put Zones and Accounts one under another in a
  * single vertical scroll, with a creation form for each. It worked, in the
  * sense that every control was on the screen somewhere. What it could not do
  * was let anyone *look at* a site, or a person, or answer "is this
@@ -39,10 +39,10 @@ export function AdminOverviewPage() {
   const { has } = usePermissions();
   const { user } = useAuth();
 
-  const sites = useQuery({
-    queryKey: ['sites', 'overview'],
-    queryFn: () => organizationApi.restaurants({ limit: 1 }),
-    enabled: has(PERMISSIONS.viewSites),
+  const zones = useQuery({
+    queryKey: ['zones', 'overview'],
+    queryFn: () => organizationApi.zones({ limit: 1 }),
+    enabled: has(PERMISSIONS.viewZones),
   });
   const cameras = useQuery({
     queryKey: ['cameras'],
@@ -57,11 +57,11 @@ export function AdminOverviewPage() {
 
   const surfaces = [
     {
-      to: '/admin/sites',
-      label: 'Sites',
+      to: '/admin/zones',
+      label: 'Zones',
       body: 'The places this organization operates, and the zones inside them.',
-      permission: PERMISSIONS.viewSites,
-      count: sites.data?.total,
+      permission: PERMISSIONS.viewZones,
+      count: zones.data?.total,
     },
     {
       to: '/admin/cameras',
@@ -101,7 +101,7 @@ export function AdminOverviewPage() {
           detail="The three numbers that say whether it is configured at all."
         />
         <Plane>
-          {sites.isError ? <Failed error={sites.error} /> : null}
+          {zones.isError ? <Failed error={zones.error} /> : null}
           <div
             style={{
               display: 'grid',
@@ -109,12 +109,12 @@ export function AdminOverviewPage() {
               gap: 'var(--space-6)',
             }}
           >
-            {has(PERMISSIONS.viewSites) ? (
+            {has(PERMISSIONS.viewZones) ? (
               <Figure
                 scale="lead"
-                label="Sites"
-                value={sites.data ? String(sites.data.total) : null}
-                unavailableReason={sites.isLoading ? 'Reading' : undefined}
+                label="Zones"
+                value={zones.data ? String(zones.data.total) : null}
+                unavailableReason={zones.isLoading ? 'Reading' : undefined}
               />
             ) : null}
             {has(PERMISSIONS.viewCameras) ? (
@@ -233,10 +233,10 @@ const FEATURES: ReadonlyArray<{
   rows: ReadonlyArray<{ label: string; permission: Permission }>;
 }> = [
   {
-    label: 'Sites',
+    label: 'Zones',
     rows: [
-      { label: 'View sites', permission: PERMISSIONS.viewSites },
-      { label: 'Manage sites', permission: PERMISSIONS.manageSites },
+      { label: 'View zones', permission: PERMISSIONS.viewZones },
+      { label: 'Manage zones', permission: PERMISSIONS.manageZones },
     ],
   },
   {
@@ -358,7 +358,7 @@ export function RolesAndAccessPage() {
               person.
             </p>
             <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-              This is what lets two people on the same role differ. A manager who may edit sites
+              This is what lets two people on the same role differ. A manager who may edit zones
               and one who may only read them are both Restaurant Managers; the difference is one
               added permission on the first, not a second role.
             </p>

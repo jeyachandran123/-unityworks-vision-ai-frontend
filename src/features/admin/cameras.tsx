@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { organizationApi } from '@shared/api/observations';
-import { camerasApi, type Camera, type ConnectionTest } from '@shared/api/persistence';
+import { camerasApi, type Camera, type CameraLifecycleResult, type ConnectionTest } from '@shared/api/persistence';
 import { PERMISSIONS } from '@app/permissions/permissions';
 import { PermissionGate, usePermissions } from '@app/permissions/guards';
 import {
@@ -44,15 +44,16 @@ export function AdminCamerasPage() {
   const q = useDebounced(search).trim().toLowerCase();
 
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
-  const sites = useQuery({
-    queryKey: ['sites', 'all'],
-    queryFn: () => organizationApi.restaurants({ limit: 200 }),
+  const zones = useQuery({
+    queryKey: ['zones', 'all'],
+    queryFn: () => organizationApi.zones({ limit: 200 }),
   });
-
-  const siteName = useMemo(() => {
-    const byId = new Map((sites.data?.restaurants ?? []).map((s) => [s.id, s.name]));
+  const zoneName = useMemo(() => {
+    const byId = new Map((zones.data?.zones ?? []).map((zone) => [zone.id, zone.name]));
+    // A camera always has a zone, but the list can render before the zones
+    // arrive: an em dash is honest for one render, a wrong name is not.
     return (id: string) => byId.get(id) ?? '—';
-  }, [sites.data]);
+  }, [zones.data]);
 
   const rows = useMemo(() => {
     let found = cameras.data?.cameras ?? [];
@@ -77,7 +78,7 @@ export function AdminCamerasPage() {
       ),
     },
     { key: 'key', header: 'Key', render: (camera) => <Badge>{camera.camera_key}</Badge> },
-    { key: 'site', header: 'Site', render: (camera) => siteName(camera.restaurant_id) },
+    { key: 'zone', header: 'Zone', render: (camera) => zoneName(camera.zone_id) },
     { key: 'channel', header: 'Channel', render: (camera) => camera.channel },
     {
       key: 'state',
@@ -274,9 +275,24 @@ function CameraSection({ camera }: { camera: Camera }) {
 function CameraOverview({ camera }: { camera: Camera }) {
   const client = useQueryClient();
 
-  const setEnabled = useMutation({
-    mutationFn: (enabled: boolean) => camerasApi.setEnabled(camera.camera_key, enabled),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ['cameras'] }),
+  // Starting is an act, not a setting: it opens a connection to a recorder and
+  // begins processing pictures of people. The result says what happened —
+  // including "this deployment has live CCTV switched off", which used to be a
+  // switch that flipped and changed nothing.
+  const [lifecycle, setLifecycle] = useState<CameraLifecycleResult | null>(null);
+  const start = useMutation({
+    mutationFn: () => camerasApi.start(camera.camera_key),
+    onSuccess: (result) => {
+      setLifecycle(result);
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+    },
+  });
+  const stop = useMutation({
+    mutationFn: () => camerasApi.stop(camera.camera_key),
+    onSuccess: (result) => {
+      setLifecycle(result);
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+    },
   });
   const setAnalysis = useMutation({
     mutationFn: (on: boolean) => camerasApi.setAnalysis(camera.camera_key, on),
@@ -292,13 +308,37 @@ function CameraOverview({ camera }: { camera: Camera }) {
       />
       <Plane>
         <div style={{ display: 'grid', gap: 'var(--space-6)', maxWidth: '38rem' }}>
-          <Toggle
-            title="Connect to this camera"
-            body="When on, Vision OS opens an RTSP session and the camera appears on the wall. When off it opens no socket and costs nothing."
-            checked={camera.enabled}
-            pending={setEnabled.isPending}
-            onChange={(next) => setEnabled.mutate(next)}
-          />
+          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <div>
+              <strong>{camera.enabled ? 'Watching' : 'Not watching'}</strong>
+              <p style={{ margin: 'var(--space-1) 0 0', color: 'var(--text-secondary)' }}>
+                {camera.enabled
+                  ? 'This camera is dialled and appears on the wall.'
+                  : 'Nothing is connected to this camera. Start it to open the stream.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              {camera.enabled ? (
+                <Button variant="secondary" disabled={stop.isPending} onClick={() => stop.mutate()}>
+                  {stop.isPending ? 'Stopping…' : 'Stop'}
+                </Button>
+              ) : (
+                <Button disabled={start.isPending} onClick={() => start.mutate()}>
+                  {start.isPending ? 'Starting…' : 'Start watching'}
+                </Button>
+              )}
+            </div>
+            {lifecycle && !lifecycle.available ? (
+              <p role="status" style={{ margin: 0, color: 'var(--state-attention, inherit)' }}>
+                {lifecycle.reason}
+              </p>
+            ) : null}
+            {lifecycle && lifecycle.available && lifecycle.reason ? (
+              <p role="status" style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                {lifecycle.reason}
+              </p>
+            ) : null}
+          </div>
           <Toggle
             title="Analyse the video with AI"
             body="When on, frames are processed and findings are produced. A camera can stream without this — a corridor is worth watching and not worth paying detection for."
@@ -312,7 +352,8 @@ function CameraOverview({ camera }: { camera: Camera }) {
               a fault.
             </p>
           ) : null}
-          {setEnabled.isError ? <Failed error={setEnabled.error} /> : null}
+          {start.isError ? <Failed error={start.error} /> : null}
+          {stop.isError ? <Failed error={stop.error} /> : null}
           {setAnalysis.isError ? <Failed error={setAnalysis.error} /> : null}
         </div>
       </Plane>
@@ -520,24 +561,17 @@ function CameraConnection({ camera }: { camera: Camera }) {
 
 function CameraPlacement({ camera }: { camera: Camera }) {
   const client = useQueryClient();
-  const [siteId, setSiteId] = useState(camera.restaurant_id);
-  const [zoneId, setZoneId] = useState(camera.zone_id ?? '');
+  const [zoneId, setZoneId] = useState(camera.zone_id);
 
-  const sites = useQuery({
-    queryKey: ['sites', 'all'],
-    queryFn: () => organizationApi.restaurants({ limit: 200 }),
-  });
   const zones = useQuery({
-    queryKey: ['zones', siteId],
-    queryFn: () => organizationApi.zones(siteId),
-    enabled: Boolean(siteId),
+    queryKey: ['zones', 'all'],
+    queryFn: () => organizationApi.zones({ limit: 200 }),
   });
 
   const move = useMutation({
     mutationFn: () =>
       camerasApi.update(camera.camera_key, {
-        restaurant_id: siteId,
-        zone_id: zoneId || null,
+        zone_id: zoneId,
       }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['cameras'] });
@@ -545,7 +579,7 @@ function CameraPlacement({ camera }: { camera: Camera }) {
     },
   });
 
-  const moved = siteId !== camera.restaurant_id || zoneId !== (camera.zone_id ?? '');
+  const moved = zoneId !== camera.zone_id;
 
   return (
     <>
@@ -565,30 +599,18 @@ function CameraPlacement({ camera }: { camera: Camera }) {
           }
         >
           <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}>
-            {sites.isLoading ? <LoadingState label="Reading sites" /> : null}
-            {sites.data ? (
+            {zones.isLoading ? <LoadingState label="Reading zones" /> : null}
+            {zones.data ? (
               <>
+                {/* One choice, not two. A camera is in a zone; there is no
+                    level above it to pick first. */}
                 <Select
-                  label="Site"
-                  value={siteId}
-                  onChange={(event) => {
-                    setSiteId(event.target.value);
-                    setZoneId('');
-                  }}
-                >
-                  {sites.data.restaurants.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.name}
-                    </option>
-                  ))}
-                </Select>
-                <Select
+                  id="camera-placement-zone"
                   label="Zone"
                   value={zoneId}
                   onChange={(event) => setZoneId(event.target.value)}
                 >
-                  <option value="">No zone</option>
-                  {(zones.data?.zones ?? []).map((zone) => (
+                  {zones.data.zones.map((zone) => (
                     <option key={zone.id} value={zone.id}>
                       {zone.name}
                     </option>

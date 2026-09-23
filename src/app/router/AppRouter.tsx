@@ -72,13 +72,13 @@ import { ReportsPage } from '@features/reports';
 // which.
 import { StaffHygienePage } from '@features/hygiene';
 import { UserDetailPage } from '@features/user-detail';
-// Administration is no longer one page. Sites, Cameras, People, Roles & Access
+// Administration is no longer one page. Zones, Cameras, People, Roles & Access
 // and the organization hub are separate surfaces, because a site and a person
 // are objects worth looking at and the stacked page had nowhere to look at
 // them. The platform console sits above all of them and answers to a different
 // principal entirely — see `@shared/api/platform`.
 import { AdminOverviewPage, RolesAndAccessPage } from '@features/admin/overview';
-import { SiteDetailPage, SitesPage } from '@features/admin/sites';
+import { ZoneDetailPage, ZonesPage } from '@features/admin/zones';
 import { AdminCameraDetailPage, AdminCamerasPage } from '@features/admin/cameras';
 import { CameraOnboardingPage } from '@features/admin/camera-onboarding';
 import { PeoplePage } from '@features/admin/people';
@@ -289,7 +289,6 @@ export function AppRouter() {
             element={
               <RequirePermission
                 permissions={[
-                  PERMISSIONS.viewSites,
                   PERMISSIONS.viewZones,
                   PERMISSIONS.viewCameras,
                   PERMISSIONS.viewUsers,
@@ -301,13 +300,13 @@ export function AppRouter() {
             <Route path="/admin" element={<AdminOverviewPage />} />
           </Route>
 
-          {/* Sites and zones read on their own permissions now, not on
+          {/* Zones read on their own permission now, not on
               `view_users`. That separation is the entire point of the
               vocabulary correction: reading the estate and reading the staff
               list are different questions. */}
-          <Route element={<RequirePermission permissions={[PERMISSIONS.viewSites]} />}>
-            <Route path="/admin/sites" element={<SitesPage />} />
-            <Route path="/admin/sites/:siteId/*" element={<SiteDetailPage />} />
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewZones]} />}>
+            <Route path="/admin/zones" element={<ZonesPage />} />
+            <Route path="/admin/zones/:zoneId/*" element={<ZoneDetailPage />} />
           </Route>
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewCameras]} />}>

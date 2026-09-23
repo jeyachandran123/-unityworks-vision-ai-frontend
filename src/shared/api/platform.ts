@@ -26,7 +26,7 @@ export interface Organization {
   /** Why. Required by the server for suspension and archival. */
   status_reason: string;
   created_at: string | null;
-  site_count: number;
+  zone_count: number;
   camera_count: number;
   user_count: number;
   /**
@@ -184,7 +184,7 @@ export interface PeopleList {
 
 export interface PlatformOverview {
   organizations: { total: number; active: number; suspended: number; archived: number };
-  estate: { sites: number; cameras: number; cameras_running: number };
+  estate: { zones: number; cameras: number; cameras_running: number };
   people: {
     users: number;
     active_users: number;
@@ -196,7 +196,7 @@ export interface PlatformOverview {
     organizations_needing_setup: Array<{
       id: string;
       name: string;
-      site_count: number;
+      zone_count: number;
       camera_count: number;
     }>;
   };

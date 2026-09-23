@@ -18,7 +18,7 @@ import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { adminIdentity, identity, installFetch, organization, renderApp } from './support';
 
-const ACME = organization({ id: 'org-acme', name: 'Acme Catering', site_count: 4, camera_count: 12 });
+const ACME = organization({ id: 'org-acme', name: 'Acme Catering', zone_count: 4, camera_count: 12 });
 
 /** One person in the platform directory, with a home organization and one membership. */
 const PERSON = {
@@ -43,7 +43,7 @@ const PERSON = {
   is_platform_operator: false,
   home_membership_missing: false,
 };
-const BORDEN = organization({ id: 'org-borden', name: 'Borden Foods', site_count: 2, camera_count: 5 });
+const BORDEN = organization({ id: 'org-borden', name: 'Borden Foods', zone_count: 2, camera_count: 5 });
 
 /** An org_admin whose session is in Acme. */
 const soloAdmin = (): ReturnType<typeof adminIdentity> => ({
@@ -235,6 +235,13 @@ describe('a platform operator', () => {
     await waitFor(() => expect(screen.getByText('organizations')).toBeInTheDocument());
     // Estate figures come from the server, not from the length of a list here.
     expect(screen.getByText('Streaming now')).toBeInTheDocument();
+
+    // And each figure carries its number. Asserting only the label let the
+    // estate count survive a wire rename reading `undefined`: the heading was
+    // still there, the tile was blank, and nothing failed.
+    const zones = document.querySelector('[data-figure="Zones"]') as HTMLElement;
+    expect(zones).not.toBeNull();
+    expect(within(zones).getByText('4')).toBeInTheDocument();
   });
 
   it('sees the organizations console inside the platform shell, not an organization', async () => {

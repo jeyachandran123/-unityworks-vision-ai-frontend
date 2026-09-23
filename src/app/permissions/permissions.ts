@@ -20,17 +20,18 @@ export const PERMISSIONS = {
   manageOrganization: 'manage_organization',
   manageUsers: 'manage_users',
   /** The user roster, and nothing else. It historically also gated reading
-      sites and zones, so holding it meant "may read every site" as a side
-      effect of "may see who works here". */
+      the estate, so holding it meant "may read every zone" as a side effect
+      of "may see who works here". */
   viewUsers: 'view_users',
 
   /* ── the physical estate ───────────────────────────────────────────
      Read and manage are separate per domain, which is what lets two people on
      the same role differ: one may edit the estate, the other may only look at
-     it. */
+     it.
 
-  viewSites: 'view_sites',
-  manageSites: 'manage_sites',
+     `view_sites` / `manage_sites` sat here until 2026-09-23. Zones replaced
+     sites, so the pair named nothing the backend still gates. */
+
   viewZones: 'view_zones',
   manageZones: 'manage_zones',
   viewLive: 'view_live',

@@ -106,7 +106,7 @@ export function PlatformDashboard() {
               gap: 'var(--space-6)',
             }}
           >
-            <Figure scale="lead" label="Sites" value={it.estate.sites} />
+            <Figure scale="lead" label="Zones" value={it.estate.zones} />
             <Figure scale="lead" label="Cameras" value={it.estate.cameras} />
             <Figure
               scale="lead"
@@ -189,8 +189,8 @@ export function PlatformDashboard() {
                     {organization.name}
                   </Link>
                   <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
-                    {organization.site_count === 0 ? 'no sites' : null}
-                    {organization.site_count === 0 && organization.camera_count === 0 ? ' · ' : null}
+                    {organization.zone_count === 0 ? 'no zones' : null}
+                    {organization.zone_count === 0 && organization.camera_count === 0 ? ' · ' : null}
                     {organization.camera_count === 0 ? 'no cameras' : null}
                   </span>
                 </li>

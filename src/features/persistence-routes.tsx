@@ -160,9 +160,12 @@ export function CamerasPage() {
   const client = useQueryClient();
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
 
+  // Starting and stopping are acts with their own routes: until they existed,
+  // flipping `enabled` changed a row and dialled nothing until the next
+  // restart.
   const toggle = useMutation({
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
-      camerasApi.setEnabled(key, enabled),
+      enabled ? camerasApi.start(key) : camerasApi.stop(key),
     onSuccess: () => client.invalidateQueries({ queryKey: ['cameras'] }),
   });
 
@@ -1531,8 +1534,7 @@ export function CameraDetailPage() {
             <div style={{ marginTop: 'var(--space-3)' }}>
               <KeyValue
                 items={[
-                  { key: 'Restaurant', value: camera.restaurant_id },
-                  { key: 'Zone', value: camera.zone_id ?? 'none recorded' },
+                  { key: 'Zone', value: camera.zone_id },
                   { key: 'Analysis', value: `${camera.analysis_fps} fps` },
                   // How the password is stored, never where or what. The
                   // dialling URL never leaves the server; what is shown is

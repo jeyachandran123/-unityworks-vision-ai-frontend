@@ -37,7 +37,7 @@ describe('role-aware navigation', () => {
   });
 
   it('a supervisor with no administration read sees no Administration link', async () => {
-    // A kitchen supervisor holds no `view_sites`, no `view_zones` and no
+    // A kitchen supervisor holds no `view_zones` and no
     // `view_users`, so there is nothing for them on the administration surface
     // at all — and the link is absent rather than present and refusing.
     installFetch({ session: supervisorIdentity() });
@@ -50,7 +50,7 @@ describe('role-aware navigation', () => {
 
   it('a manager who may read the estate reaches Administration', async () => {
     // The corrected vocabulary in one assertion. A restaurant manager holds
-    // `view_sites` and `view_zones` and no `manage_*` at all, so the area is
+    // `view_zones` and no `manage_*` at all, so the area is
     // reachable and read-only — which is the case the old gate could not
     // express, because it demanded a write permission to see anything.
     installFetch({ session: managerIdentity() });

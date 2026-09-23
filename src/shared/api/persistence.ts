@@ -28,8 +28,8 @@ export interface Camera {
   runtime_id: string;
   name: string;
   purpose: string;
-  restaurant_id: string;
-  zone_id: string | null;
+  /** Where it is. Required: a camera nobody can locate cannot be acted on. */
+  zone_id: string;
   channel: number;
   stream_type: 'main' | 'sub';
   host: string;
@@ -61,25 +61,37 @@ export interface CameraList {
 }
 
 export interface CameraDraft {
+  /** Proposed by the server (`nextKey`) rather than invented by a person. */
   camera_key: string;
   name: string;
   channel: number;
-  restaurant_id: string;
+  /** Where it is. The one placement decision, and it is required. */
+  zone_id: string;
   /**
-   * Required by the server. A camera with no address is skipped by the
-   * runtime, so one created without a host would be listed and permanently
-   * inert with nothing ever saying why.
+   * The address. Falls back to the deployment's configured DVR when omitted,
+   * which is the common case — the server knows its own CCTV.
    */
-  host: string;
-  zone_id?: string | null;
+  host?: string;
   rtsp_port?: number;
   stream_type?: 'main' | 'sub';
   username?: string;
-  /** `env:NAME` or `file:/path`. `literal:` is refused by the server. */
-  credential_ref?: string;
   analysis_fps?: number;
   analysis_enabled?: boolean;
   purpose?: string;
+}
+
+/**
+ * What starting or stopping a camera did.
+ *
+ * `available: false` is a configuration fact, not an error — live CCTV
+ * switched off for the deployment, or a camera with no address. The page shows
+ * `reason` instead of a control that does nothing.
+ */
+export interface CameraLifecycleResult {
+  camera_key: string;
+  streaming: boolean;
+  available: boolean;
+  reason: string;
 }
 
 export interface ConnectionTest {
@@ -99,8 +111,19 @@ export const camerasApi = {
   create: (draft: CameraDraft) => api.post<Camera>('/cameras', draft),
   update: (key: string, changes: Partial<CameraDraft>) =>
     api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, changes),
-  setEnabled: (key: string, enabled: boolean) =>
-    api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, { enabled }),
+  /**
+   * Dial this camera now.
+   *
+   * Until 2026-09-23 the only thing that ever opened a session was process
+   * boot, so a camera added through the product sat in the database connected
+   * to nothing until somebody restarted the backend.
+   */
+  start: (key: string) =>
+    api.post<CameraLifecycleResult>(`/cameras/${encodeURIComponent(key)}/start`),
+  stop: (key: string) =>
+    api.post<CameraLifecycleResult>(`/cameras/${encodeURIComponent(key)}/stop`),
+  /** The identifier the next camera should take, so nobody invents one. */
+  nextKey: () => api.get<{ camera_key: string }>('/cameras/next-key'),
   setAnalysis: (key: string, analysisEnabled: boolean) =>
     api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, {
       analysis_enabled: analysisEnabled,

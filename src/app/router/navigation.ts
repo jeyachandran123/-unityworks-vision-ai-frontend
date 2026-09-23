@@ -96,7 +96,7 @@ export interface NavSection {
  *
  * Operations is "what is happening now". Compliance is "the record, and its
  * defence". Intelligence is "the business question". Estate is "the cameras and
- * sites themselves". Engineering is "the system itself". A person works inside
+ * places themselves". Engineering is "the system itself". A person works inside
  * one of these at a time, which is the test a section has to pass to exist.
  *
  * None of them is the *Platform Control Plane*. That is a separate shell, a
@@ -290,13 +290,12 @@ export const PRODUCT_NAV: NavSection[] = [
         // legitimately read the estate — which is exactly the account the
         // read/manage split exists to serve.
         permissions: [
-          PERMISSIONS.viewSites,
           PERMISSIONS.viewZones,
           PERMISSIONS.viewUsers,
           PERMISSIONS.manageOrganization,
         ],
         icon: NavIcons.administration,
-        hint: 'Sites, zones, cameras, people and access',
+        hint: 'Zones, cameras, people and access',
       },
       {
         id: 'patron-id',

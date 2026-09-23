@@ -26,9 +26,12 @@ export const API_PATHS = [
   "/api/v1/auth/organizations/{organization_id}/select",
   "/api/v1/auth/refresh",
   "/api/v1/cameras",
+  "/api/v1/cameras/next-key",
   "/api/v1/cameras/test-connection",
   "/api/v1/cameras/{camera_key}",
   "/api/v1/cameras/{camera_key}/frames",
+  "/api/v1/cameras/{camera_key}/start",
+  "/api/v1/cameras/{camera_key}/stop",
   "/api/v1/devtools/capabilities",
   "/api/v1/devtools/compliance",
   "/api/v1/devtools/evidence/{blob_ref}",
@@ -73,8 +76,6 @@ export const API_PATHS = [
   "/api/v1/reports/types",
   "/api/v1/reports/{report_id}",
   "/api/v1/reports/{report_id}/export",
-  "/api/v1/restaurants",
-  "/api/v1/restaurants/{restaurant_id}",
   "/api/v1/status",
   "/api/v1/users",
   "/api/v1/wall/cameras",
@@ -169,6 +170,9 @@ export type ListCamerasApiV1CamerasGetResponse = Record<string, unknown>;
 /** `POST /api/v1/cameras` */
 export type CreateCameraApiV1CamerasPostResponse = Record<string, unknown>;
 
+/** `GET /api/v1/cameras/next-key` */
+export type NextCameraKeyApiV1CamerasNextKeyGetResponse = Record<string, unknown>;
+
 /** `POST /api/v1/cameras/test-connection` */
 export type TestCameraConnectionApiV1CamerasTestConnectionPostResponse = Record<string, unknown>;
 
@@ -180,6 +184,12 @@ export type UpdateCameraApiV1CamerasCameraKeyPatchResponse = Record<string, unkn
 
 /** `GET /api/v1/cameras/{camera_key}/frames` */
 export type ListFramesApiV1CamerasCameraKeyFramesGetResponse = Record<string, unknown>;
+
+/** `POST /api/v1/cameras/{camera_key}/start` */
+export type StartCameraApiV1CamerasCameraKeyStartPostResponse = Record<string, unknown>;
+
+/** `POST /api/v1/cameras/{camera_key}/stop` */
+export type StopCameraApiV1CamerasCameraKeyStopPostResponse = Record<string, unknown>;
 
 /** `GET /api/v1/devtools/capabilities` */
 export type CapabilitiesApiV1DevtoolsCapabilitiesGetResponse = Record<string, unknown>;
@@ -325,18 +335,6 @@ export type GenerateReportApiV1ReportsReportIdGetResponse = Record<string, unkno
 /** `GET /api/v1/reports/{report_id}/export` */
 export type ExportReportApiV1ReportsReportIdExportGetResponse = unknown;
 
-/** `GET /api/v1/restaurants` */
-export type ListRestaurantsApiV1RestaurantsGetResponse = Record<string, unknown>;
-
-/** `POST /api/v1/restaurants` */
-export type CreateRestaurantApiV1RestaurantsPostResponse = Record<string, unknown>;
-
-/** `GET /api/v1/restaurants/{restaurant_id}` */
-export type GetRestaurantApiV1RestaurantsRestaurantIdGetResponse = Record<string, unknown>;
-
-/** `PATCH /api/v1/restaurants/{restaurant_id}` */
-export type UpdateRestaurantApiV1RestaurantsRestaurantIdPatchResponse = Record<string, unknown>;
-
 /** `GET /api/v1/status` */
 export type StatusApiV1StatusGetResponse = Record<string, unknown>;
 
@@ -360,6 +358,12 @@ export type ListZonesApiV1ZonesGetResponse = Record<string, unknown>;
 
 /** `POST /api/v1/zones` */
 export type CreateZoneApiV1ZonesPostResponse = Record<string, unknown>;
+
+/** `DELETE /api/v1/zones/{zone_id}` */
+export type DeleteZoneApiV1ZonesZoneIdDeleteResponse = Record<string, unknown>;
+
+/** `GET /api/v1/zones/{zone_id}` */
+export type GetZoneApiV1ZonesZoneIdGetResponse = Record<string, unknown>;
 
 /** `PATCH /api/v1/zones/{zone_id}` */
 export type UpdateZoneApiV1ZonesZoneIdPatchResponse = Record<string, unknown>;

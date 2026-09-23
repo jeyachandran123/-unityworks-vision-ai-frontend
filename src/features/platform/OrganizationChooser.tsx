@@ -367,7 +367,7 @@ function OrganizationCard({
           margin: 'var(--space-5) 0 0',
         }}
       >
-        <Count label="Sites" value={organization.site_count} />
+        <Count label="Zones" value={organization.zone_count} />
         <Count label="Cameras" value={organization.camera_count} />
       </dl>
 
@@ -495,7 +495,7 @@ function toSummary(organization: Organization): OrganizationSummary {
     name: organization.name,
     slug: organization.slug,
     status: organization.status,
-    site_count: organization.site_count,
+    zone_count: organization.zone_count,
     camera_count: organization.camera_count,
   };
 }
