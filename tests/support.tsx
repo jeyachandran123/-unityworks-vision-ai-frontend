@@ -949,6 +949,16 @@ export interface StubOptions {
   zones?: unknown;
   /** What `GET /cameras/next-key` proposes for a new camera. */
   nextCameraKey?: string;
+  /**
+   * `GET /recorders`. Defaults to one active recorder, which is what every
+   * deployment has after the recorders migration; pass an empty list to test
+   * the page a brand-new organization sees.
+   */
+  recorders?: unknown;
+  /** `GET /recorder-brands`. */
+  recorderBrands?: unknown;
+  /** What both connection-test routes answer. Defaults to a success. */
+  recorderTest?: unknown;
   /** Overrides /users (the old, read-only `GET /users` route). */
   users?: unknown;
   /**
@@ -1652,6 +1662,101 @@ export function stubFetch(options: StubOptions = {}) {
       );
     }
 
+    if (url.includes('/recorder-brands')) {
+      return jsonResponse(
+        options.recorderBrands ?? {
+          brands: [
+            { key: 'axis', label: 'Axis', default_port: 554 },
+            { key: 'dahua', label: 'Dahua / Amcrest', default_port: 554 },
+            { key: 'hikvision', label: 'Hikvision', default_port: 554 },
+          ],
+          custom: 'custom',
+        },
+      );
+    }
+
+    if (url.includes('/recorders')) {
+      const list = (options.recorders ?? {
+        recorders: [recorderFixture()],
+        count: 1,
+        total: 1,
+        limit: 25,
+        offset: 0,
+      }) as { recorders?: Array<Record<string, unknown>> };
+      const rows = list.recorders ?? [];
+
+      if (/\/recorders(\/[^/?]+)?\/test/.test(url) && method === 'POST') {
+        return jsonResponse(
+          options.recorderTest ?? {
+            ok: true,
+            outcome: 'connected',
+            message: 'Recorder connected successfully.',
+            hint: '',
+            channel: 1,
+            elapsed_ms: 820,
+            resolution: '1920 × 1080',
+          },
+        );
+      }
+
+      const match = /\/recorders\/([^/?]+)(?:\/([a-z]+))?/.exec(url);
+      const id = match?.[1];
+      const action = match?.[2];
+      const found = id ? rows.find((row) => String(row['id']) === id) : undefined;
+
+      if (id && !found) return envelope('NOT_FOUND', 404);
+
+      if (found && action === 'credential' && method === 'PUT') {
+        return jsonResponse({ ...found, credential_configured: true, credential_scheme: 'recorder' });
+      }
+      if (found && (action === 'activate' || action === 'deactivate') && method === 'POST') {
+        return jsonResponse({ ...found, is_active: action === 'activate' });
+      }
+      if (found && method === 'DELETE') {
+        if (Number(found['camera_count'] ?? 0) > 0) {
+          return jsonResponse(
+            { code: 'CONFLICT', message: `'${String(found['name'])}' still has cameras. Deactivate it instead.` },
+            409,
+          );
+        }
+        return jsonResponse({ recorder_id: id, deleted: true });
+      }
+      if (found && method === 'PATCH') {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return jsonResponse({ ...found, ...body });
+      }
+      if (found) {
+        return jsonResponse({ cameras: [], ...found });
+      }
+
+      if (method === 'POST') {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const cameras = Array.isArray(body.cameras) ? body.cameras : [];
+        // The password goes in and is never echoed back, exactly as the server
+        // behaves — so a component that tried to show it would show nothing.
+        const { password: _password, cameras: _cameras, ...connection } = body;
+        return jsonResponse(
+          recorderFixture({
+            ...connection,
+            id: 'rec-new',
+            camera_count: cameras.length,
+            cameras: cameras.map((camera: Record<string, unknown>, index: number) => ({
+              camera_key: `cam-${String(index + 20)}`,
+              runtime_id: `org-test:cam-${String(index + 20)}`,
+              name: camera['name'],
+              channel: camera['channel'],
+              stream_type: camera['stream_type'] ?? 'sub',
+              zone_id: camera['zone_id'],
+              recorder_id: 'rec-new',
+              enabled: false,
+              running: false,
+            })),
+          }),
+        );
+      }
+      return jsonResponse(list);
+    }
+
     if (url.includes('/cameras/next-key')) {
       return jsonResponse({ camera_key: String(options.nextCameraKey ?? 'cam-17') });
     }
@@ -1730,4 +1835,31 @@ export function renderApp(ui: ReactElement, route = '/'): RenderResult {
       </ToastProvider>
     </QueryClientProvider>,
   );
+}
+
+/**
+ * A recorder as the server sends one. No field that could hold a password —
+ * the server has none to send — so a component cannot render one by accident.
+ */
+export function recorderFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'rec-1',
+    name: 'Gayathri DVR',
+    host: '192.168.1.20',
+    rtsp_port: 554,
+    username: 'admin',
+    brand: 'hikvision',
+    brand_label: 'Hikvision',
+    path_template: null,
+    stream_main: null,
+    stream_sub: null,
+    is_active: true,
+    credential_configured: true,
+    credential_scheme: 'recorder',
+    camera_count: 0,
+    cameras_on: 0,
+    created_at: '2026-09-24T00:00:00Z',
+    updated_at: '2026-09-24T00:00:00Z',
+    ...overrides,
+  };
 }

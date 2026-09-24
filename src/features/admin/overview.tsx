@@ -26,6 +26,7 @@ import { Link } from 'react-router-dom';
 
 import { organizationApi } from '@shared/api/observations';
 import { camerasApi } from '@shared/api/persistence';
+import { recordersApi } from '@shared/api/recorders';
 import { adminUsersApi } from '@shared/api/user-administration';
 import { PERMISSIONS, ROLES, roleLabel, type Permission } from '@app/permissions/permissions';
 import { usePermissions } from '@app/permissions/guards';
@@ -49,6 +50,11 @@ export function AdminOverviewPage() {
     queryFn: camerasApi.list,
     enabled: has(PERMISSIONS.viewCameras),
   });
+  const recorders = useQuery({
+    queryKey: ['recorders', 'overview'],
+    queryFn: () => recordersApi.list({ limit: 1 }),
+    enabled: has(PERMISSIONS.viewCameras),
+  });
   const people = useQuery({
     queryKey: ['admin-users', 'overview'],
     queryFn: () => adminUsersApi.list({ limit: 1 }),
@@ -62,6 +68,13 @@ export function AdminOverviewPage() {
       body: 'The places this organization operates, and the zones inside them.',
       permission: PERMISSIONS.viewZones,
       count: zones.data?.total,
+    },
+    {
+      to: '/admin/recorders',
+      label: 'Recorders',
+      body: 'The DVRs and NVRs your cameras plug into, and how to sign in to them.',
+      permission: PERMISSIONS.viewCameras,
+      count: recorders.data?.total,
     },
     {
       to: '/admin/cameras',

@@ -280,12 +280,15 @@ describe('adding a camera', () => {
     renderApp(<AppRouter />, '/admin/cameras/new');
 
     await screen.findByRole('heading', { name: 'Add a camera' });
-    // Reached step two, where the old form asked about it.
     await userEvent.selectOptions(await screen.findByLabelText(/^zone$/i), 'zone-1');
     await userEvent.type(screen.getByLabelText(/^name$/i), 'Prep line');
-    await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
 
-    expect(await screen.findByLabelText(/^address$/i)).toBeInTheDocument();
+    // The camera is placed on a recorder, which already knows how to reach it.
+    expect(screen.getByLabelText(/^recorder$/i)).toBeInTheDocument();
+    // So there is no address to type, no password, and nowhere to say where
+    // one is kept — the question the old form asked about the server's own
+    // configuration, as though it were a property of the camera.
+    expect(screen.queryByLabelText(/address|hostname/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/where the password is kept/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/credential/i)).not.toBeInTheDocument();
     expect(document.querySelector('input[type="password"]')).toBeNull();

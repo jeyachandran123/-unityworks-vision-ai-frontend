@@ -30,19 +30,23 @@ export interface Camera {
   purpose: string;
   /** Where it is. Required: a camera nobody can locate cannot be acted on. */
   zone_id: string;
+  /** Which input on its recorder. */
   channel: number;
   stream_type: 'main' | 'sub';
-  host: string;
-  rtsp_port: number;
-  username: string;
   /**
-   * Whether this camera can authenticate. The reference itself is no longer
-   * returned by the server at all: `literal:` made that field a channel that
-   * could carry the secret, and a field whose safety depends on every writer
-   * having picked the right scheme is not a safe field to send.
+   * The recorder (DVR / NVR) this camera is a channel of. How to reach the
+   * camera — address, account, password — is the recorder's, so a camera
+   * carries none of it and a page never offers to edit it here.
    */
+  recorder_id: string;
+  recorder_name: string;
+  /** The recorder's brand, as a person reads it: "Hikvision". */
+  recorder_brand: string;
+  /** A deactivated recorder starts none of its cameras. */
+  recorder_active: boolean;
+  /** Whether the recorder can sign in. Never the password or where it lives. */
   credential_configured: boolean;
-  /** `env` or `file` — how the secret is stored, never where or what. */
+  /** `recorder`, `env` or `file` — how the recorder's password is kept. */
   credential_scheme: string;
   analysis_fps: number;
   enabled: boolean;
@@ -64,17 +68,13 @@ export interface CameraDraft {
   /** Proposed by the server (`nextKey`) rather than invented by a person. */
   camera_key: string;
   name: string;
+  /** The recorder it is plugged into. Required, and from this organization. */
+  recorder_id: string;
+  /** Which input on that recorder. */
   channel: number;
   /** Where it is. The one placement decision, and it is required. */
   zone_id: string;
-  /**
-   * The address. Falls back to the deployment's configured DVR when omitted,
-   * which is the common case — the server knows its own CCTV.
-   */
-  host?: string;
-  rtsp_port?: number;
   stream_type?: 'main' | 'sub';
-  username?: string;
   analysis_fps?: number;
   analysis_enabled?: boolean;
   purpose?: string;
@@ -94,15 +94,25 @@ export interface CameraLifecycleResult {
   reason: string;
 }
 
+/**
+ * The result of testing a saved camera's stream.
+ *
+ * A real test: its recorder's stored password is used server-side and a picture
+ * is decoded. `message` and `hint` are written for the person looking at the
+ * screen; neither ever carries a URL, a password or the decoder's own words.
+ */
 export interface ConnectionTest {
-  reachable: boolean;
+  ok: boolean;
   outcome: string;
-  detail: string;
+  message: string;
+  hint: string;
+  channel: number;
   elapsed_ms: number;
-  /** What the test does and does not prove. Shown verbatim; see below. */
-  proves: string;
-  host: string;
-  rtsp_port: number;
+  /** "1920 × 1080" when a picture arrived. */
+  resolution: string | null;
+  /** Kept for older readers: whether a device answered at all. */
+  reachable: boolean;
+  detail: string;
 }
 
 export const camerasApi = {
@@ -135,13 +145,10 @@ export const camerasApi = {
       `/cameras/${encodeURIComponent(key)}`,
     ),
   /**
-   * Is anything listening at this address?
-   *
-   * Pass `camera_key` for a saved camera (the address comes from the database
-   * and the caller cannot choose it), or `host`/`rtsp_port` for the onboarding
-   * wizard, which needs to check before the row exists.
+   * Will this camera stream? Opens it through its recorder with the stored
+   * password and reports which thing is wrong if it does not.
    */
-  testConnection: (probe: { camera_key?: string; host?: string; rtsp_port?: number }) =>
+  testConnection: (probe: { camera_key: string }) =>
     api.post<ConnectionTest>('/cameras/test-connection', probe),
 };
 

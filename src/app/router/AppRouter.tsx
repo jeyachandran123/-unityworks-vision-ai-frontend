@@ -81,6 +81,8 @@ import { AdminOverviewPage, RolesAndAccessPage } from '@features/admin/overview'
 import { ZoneDetailPage, ZonesPage } from '@features/admin/zones';
 import { AdminCameraDetailPage, AdminCamerasPage } from '@features/admin/cameras';
 import { CameraOnboardingPage } from '@features/admin/camera-onboarding';
+import { RecorderDetailPage, RecordersPage } from '@features/admin/recorders';
+import { AddRecorderPage } from '@features/admin/recorder-wizard';
 import { PeoplePage } from '@features/admin/people';
 import { OrganizationDetailPage, OrganizationsPage } from '@features/admin/organizations';
 // The seven modules with a schema, a permission and no data source. Each page
@@ -307,6 +309,16 @@ export function AppRouter() {
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewZones]} />}>
             <Route path="/admin/zones" element={<ZonesPage />} />
             <Route path="/admin/zones/:zoneId/*" element={<ZoneDetailPage />} />
+          </Route>
+
+          {/* Recorders — the DVRs and NVRs cameras plug into. Read on the
+              camera permission, because a recorder is camera infrastructure. */}
+          <Route element={<RequirePermission permissions={[PERMISSIONS.viewCameras]} />}>
+            <Route path="/admin/recorders" element={<RecordersPage />} />
+            <Route path="/admin/recorders/:recorderId" element={<RecorderDetailPage />} />
+          </Route>
+          <Route element={<RequirePermission permissions={[PERMISSIONS.manageCameras]} />}>
+            <Route path="/admin/recorders/new" element={<AddRecorderPage />} />
           </Route>
 
           <Route element={<RequirePermission permissions={[PERMISSIONS.viewCameras]} />}>

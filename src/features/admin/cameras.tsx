@@ -18,6 +18,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { organizationApi } from '@shared/api/observations';
 import { camerasApi, type Camera, type CameraLifecycleResult, type ConnectionTest } from '@shared/api/persistence';
+import { recordersApi } from '@shared/api/recorders';
 import { PERMISSIONS } from '@app/permissions/permissions';
 import { PermissionGate, usePermissions } from '@app/permissions/guards';
 import {
@@ -33,6 +34,7 @@ import {
 } from '@shared/ui/primitives';
 import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
+import { CredentialState, RecorderStatus, STREAM_LABEL, TestResult } from './recorder-parts';
 import { DangerConfirm, Failed, ObjectTabs, SearchField, useDebounced, when } from './shared';
 
 /* ── the list ─────────────────────────────────────────────────────────────── */
@@ -79,6 +81,16 @@ export function AdminCamerasPage() {
     },
     { key: 'key', header: 'Key', render: (camera) => <Badge>{camera.camera_key}</Badge> },
     { key: 'zone', header: 'Zone', render: (camera) => zoneName(camera.zone_id) },
+    // A channel number means nothing without the box it is a channel of.
+    {
+      key: 'recorder',
+      header: 'Recorder',
+      render: (camera) => (
+        <Link to={`/admin/recorders/${encodeURIComponent(camera.recorder_id)}`}>
+          {camera.recorder_name || '—'}
+        </Link>
+      ),
+    },
     { key: 'channel', header: 'Channel', render: (camera) => camera.channel },
     {
       key: 'state',
@@ -393,16 +405,35 @@ function CameraOverview({ camera }: { camera: Camera }) {
   );
 }
 
+/**
+ * How this camera is reached — which is its recorder's business.
+ *
+ * The address, the account and the password belong to the recorder (the DVR
+ * or NVR) this camera is plugged into, and are edited there, once, for every
+ * camera on it. This section says which recorder that is and lets a camera be
+ * moved to another, or to another channel or stream. It never asks where a
+ * password is kept: the old version of this page did, and it put the server's
+ * own configuration in front of somebody who only wanted a camera to work.
+ */
 function CameraConnection({ camera }: { camera: Camera }) {
   const client = useQueryClient();
-  const [host, setHost] = useState(camera.host);
-  const [port, setPort] = useState(String(camera.rtsp_port));
-  const [username, setUsername] = useState(camera.username);
-  const [scheme, setScheme] = useState<'env' | 'file' | 'none'>(
-    camera.credential_scheme === 'file' ? 'file' : camera.credential_configured ? 'env' : 'none',
-  );
-  const [credentialName, setCredentialName] = useState('');
+  const { has } = usePermissions();
+  const canManage = has(PERMISSIONS.manageCameras);
+  const recorders = useQuery({
+    queryKey: ['recorders', 'for-camera'],
+    queryFn: () => recordersApi.list({ limit: 200 }),
+    enabled: canManage,
+  });
+  const [recorderId, setRecorderId] = useState(camera.recorder_id);
+  const [channel, setChannel] = useState(String(camera.channel));
+  const [stream, setStream] = useState<'main' | 'sub'>(camera.stream_type);
   const [test, setTest] = useState<ConnectionTest | null>(null);
+
+  const channelNumber = Number(channel);
+  const channelProblem =
+    !Number.isInteger(channelNumber) || channelNumber < 1 ? 'Channel numbers start at 1' : undefined;
+  const changed =
+    recorderId !== camera.recorder_id || channelNumber !== camera.channel || stream !== camera.stream_type;
 
   const probe = useMutation({
     mutationFn: () => camerasApi.testConnection({ camera_key: camera.camera_key }),
@@ -412,19 +443,14 @@ function CameraConnection({ camera }: { camera: Camera }) {
   const save = useMutation({
     mutationFn: () =>
       camerasApi.update(camera.camera_key, {
-        host: host.trim(),
-        rtsp_port: Number(port) || 554,
-        username: username.trim(),
-        // Only sent when a new one was actually typed. Sending an unchanged
-        // pointer back would be harmless, but sending an *empty* one would
-        // silently clear the camera's credential.
-        ...(credentialName.trim() && scheme !== 'none'
-          ? { credential_ref: `${scheme}:${credentialName.trim()}` }
-          : {}),
+        recorder_id: recorderId,
+        channel: channelNumber,
+        stream_type: stream,
       }),
     onSuccess: () => {
-      setCredentialName('');
+      setTest(null);
       void client.invalidateQueries({ queryKey: ['cameras'] });
+      void client.invalidateQueries({ queryKey: ['recorders'] });
     },
   });
 
@@ -433,127 +459,118 @@ function CameraConnection({ camera }: { camera: Camera }) {
       <SectionRule
         lead
         label="Connection"
-        detail="Where this camera is and how to authenticate to it."
+        detail="This camera is one channel on a recorder. The recorder holds the address and the password."
       />
       <Plane>
-        <PermissionGate
-          permission={PERMISSIONS.manageCameras}
-          fallback={
-            <Facts
-              rows={[
-                ['Address', `${camera.host}:${camera.rtsp_port}`],
-                ['Username', camera.username || 'None'],
-                [
-                  'Password',
-                  camera.credential_configured
-                    ? `Configured (${camera.credential_scheme})`
-                    : 'None',
-                ],
-              ]}
-            />
-          }
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              save.mutate();
-            }}
-            style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}
+        <div style={{ display: 'grid', gap: 'var(--space-5)', maxWidth: '36rem' }}>
+          <Facts
+            rows={[
+              [
+                'Recorder',
+                <span key="recorder" style={{ display: 'inline-flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                  <Link to={`/admin/recorders/${encodeURIComponent(camera.recorder_id)}`}>
+                    {camera.recorder_name || 'Open recorder'}
+                  </Link>
+                  {camera.recorder_brand ? (
+                    <span style={{ color: 'var(--ink-tertiary)' }}>{camera.recorder_brand}</span>
+                  ) : null}
+                </span>,
+              ],
+              ['Recorder status', <RecorderStatus key="status" active={camera.recorder_active} />],
+              ['Password', <CredentialState key="password" recorder={camera} />],
+            ]}
+          />
+
+          {!camera.recorder_active ? (
+            <p style={{ margin: 0 }} role="status">
+              Its recorder is deactivated, so this camera will not start until the recorder is
+              activated.
+            </p>
+          ) : null}
+
+          <PermissionGate
+            permission={PERMISSIONS.manageCameras}
+            fallback={
+              <Facts
+                rows={[
+                  ['Channel', String(camera.channel)],
+                  ['Stream', STREAM_LABEL[camera.stream_type]],
+                ]}
+              />
+            }
           >
-            <Input label="Host" value={host} onChange={(e) => setHost(e.target.value)} />
-            <Input
-              label="RTSP port"
-              type="number"
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-            />
-            <Input
-              label="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-
-            <fieldset
-              style={{
-                border: '1px solid var(--line-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-4)',
-                display: 'grid',
-                gap: 'var(--space-4)',
-                margin: 0,
+            <form
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!channelProblem && changed) save.mutate();
               }}
+              style={{ display: 'grid', gap: 'var(--space-4)' }}
             >
-              <legend style={{ padding: '0 var(--space-2)', fontSize: 'var(--text-sm)' }}>
-                Password
-              </legend>
-              <p
-                style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
-              >
-                {camera.credential_configured
-                  ? `A password is configured, kept in ${
-                      camera.credential_scheme === 'file' ? 'a file' : 'an environment variable'
-                    } on the server. Vision OS never shows which one, and never shows the value.`
-                  : 'No password is configured for this camera.'}
-              </p>
               <Select
-                label="Where the password is kept"
-                value={scheme}
-                onChange={(e) => setScheme(e.target.value as typeof scheme)}
+                id="camera-recorder"
+                label="Recorder"
+                value={recorderId}
+                hint="Move this camera only if it has been plugged into a different recorder."
+                onChange={(event) => setRecorderId(event.target.value)}
               >
-                <option value="env">An environment variable on the server</option>
-                <option value="file">A file on the server</option>
-                <option value="none">No password</option>
+                {(recorders.data?.recorders ?? []).map((recorder) => (
+                  <option key={recorder.id} value={recorder.id}>
+                    {recorder.name} — {recorder.brand_label}
+                    {recorder.is_active ? '' : ' (inactive)'}
+                  </option>
+                ))}
+                {!recorders.data ? (
+                  <option value={camera.recorder_id}>{camera.recorder_name}</option>
+                ) : null}
               </Select>
-              {scheme !== 'none' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '9rem minmax(0, 1fr)', gap: 'var(--space-3)' }}>
                 <Input
-                  label={scheme === 'env' ? 'New variable name' : 'New file path'}
-                  hint="Leave empty to keep the current one. The name or path, never the password itself."
-                  value={credentialName}
-                  placeholder={scheme === 'env' ? 'CCTV_PASSWORD' : '/run/secrets/dvr'}
-                  onChange={(e) => setCredentialName(e.target.value)}
+                  id="camera-channel"
+                  label="Channel"
+                  value={channel}
+                  inputMode="numeric"
+                  error={channelProblem}
+                  onChange={(event) => setChannel(event.target.value)}
                 />
-              ) : null}
-            </fieldset>
-
-            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-              <Button type="submit" disabled={save.isPending}>
-                {save.isPending ? 'Saving…' : 'Save connection'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={probe.isPending}
-                onClick={() => probe.mutate()}
-              >
-                {probe.isPending ? 'Testing…' : 'Test connection'}
-              </Button>
-            </div>
-
-            {save.isError ? <Failed error={save.error} /> : null}
-            {probe.isError ? <Failed error={probe.error} /> : null}
-            {test ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-4)',
-                  border: '1px solid var(--line-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                }}
-              >
-                <StatusBadge tone={test.reachable ? 'online' : 'offline'}>
-                  {test.reachable ? 'Reachable' : 'Not reachable'}
-                </StatusBadge>
-                <p style={{ margin: 0 }}>{test.detail}</p>
-                <p
-                  style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}
+                <Select
+                  id="camera-stream"
+                  label="Stream"
+                  value={stream}
+                  onChange={(event) => setStream(event.target.value === 'main' ? 'main' : 'sub')}
                 >
-                  {test.proves}
-                </p>
+                  <option value="sub">{STREAM_LABEL.sub}</option>
+                  <option value="main">{STREAM_LABEL.main}</option>
+                </Select>
               </div>
-            ) : null}
-          </form>
-        </PermissionGate>
+              <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}>
+                A change takes effect the next time the camera connects. To change the recorder’s
+                address or password, open the recorder.
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={!changed || Boolean(channelProblem)}
+                  loading={save.isPending}
+                >
+                  Save
+                </Button>
+                <Button type="button" loading={probe.isPending} onClick={() => probe.mutate()}>
+                  {probe.isPending ? 'Testing…' : 'Test stream'}
+                </Button>
+              </div>
+              {save.isError ? <Failed error={save.error} /> : null}
+              {probe.isError ? <Failed error={probe.error} /> : null}
+              {probe.isPending ? (
+                <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }} role="status">
+                  Signing in to the recorder and waiting for a picture from channel {camera.channel}.
+                </p>
+              ) : null}
+              {test && !probe.isPending ? <TestResult result={test} /> : null}
+            </form>
+          </PermissionGate>
+        </div>
       </Plane>
     </>
   );

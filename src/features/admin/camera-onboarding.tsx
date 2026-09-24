@@ -1,88 +1,83 @@
 /**
- * Adding a camera — two steps, because only two things are genuinely unknown.
+ * Adding one camera to a recorder that already exists.
  *
- * The form this replaces had five steps, and three of them asked the server
- * things it already knew: the DVR's address, its port, its username, and
- * "where the password is kept". A person adding the ninth camera on the same
- * recorder answered the same four questions nine times, and any one of them
- * typed wrong produced a camera that saved, listed, and never connected.
+ * Adding a whole site — a new DVR and its cameras — is the recorder flow, at
+ * `/admin/recorders/new`. This page is for the later, smaller job: one more
+ * channel on a box that is already set up.
  *
- * What is actually unknown when somebody adds a camera:
+ * Two questions, because only two things are unknown:
  *
- *   1. **Where it is and what to call it.** The zone, and a name.
- *   2. **How to reach it** — and only where it differs from the deployment's
- *      own DVR, which is prefilled. The channel is the usual difference.
+ *   1. **Where it comes from** — which recorder, which channel, which stream.
+ *      The recorder's address, account and password are already known, so they
+ *      are shown for context and never asked for.
+ *   2. **Where it is** — the zone, a name, and why it is watched.
  *
  * ### The password is never asked for
  *
- * It is the deployment's, resolved from the server's environment at connect
- * time. The old form offered a choice of "where the password is kept", which
- * is a question about the server's configuration wearing the clothes of a
- * question about this camera.
+ * It belongs to the recorder, and it was typed once when the recorder was
+ * added. The test on this page signs in with that stored password.
  *
  * ### The identifier is proposed, not invented
  *
- * `camera_key` is what the pipeline partitions on — it names observation files
- * on disk and appears in every runtime identity. Asking somebody to invent one
- * invites a collision with a camera they cannot see, so the server proposes
- * the next free one.
+ * `camera_key` is what the pipeline partitions on, so the server proposes the
+ * next free one rather than asking somebody to guess one that does not collide.
  *
- * ### It is created switched off, and the next step is on the camera's page
+ * ### It is created switched off
  *
  * Adding a camera and beginning to process video of people are two decisions.
- * The camera page has one primary action — Start watching — and it reports
- * what happened rather than leaving somebody to wonder.
+ * The camera's own page has one primary action — Start watching.
  */
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { isApiError } from '@shared/api/errors';
 import { organizationApi } from '@shared/api/observations';
-import { camerasApi, type ConnectionTest } from '@shared/api/persistence';
-import { Button, Input, LoadingState, Select, StatusBadge } from '@shared/ui/primitives';
+import { camerasApi } from '@shared/api/persistence';
+import { type RecorderTestResult, recordersApi } from '@shared/api/recorders';
+import { Button, Input, LoadingState, Select } from '@shared/ui/primitives';
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
+import { CredentialState, friendly, RecorderStatus, STREAM_LABEL, TestResult } from './recorder-parts';
 import { Failed } from './shared';
 
 interface Draft {
+  recorderId: string;
+  channel: string;
+  streamType: 'main' | 'sub';
   zoneId: string;
   name: string;
   cameraKey: string;
-  channel: string;
-  host: string;
-  rtspPort: string;
-  streamType: 'main' | 'sub';
-  username: string;
   purpose: string;
 }
 
-const EMPTY: Draft = {
-  zoneId: '',
-  name: '',
-  cameraKey: '',
-  channel: '1',
-  host: '',
-  rtspPort: '',
-  streamType: 'main',
-  username: '',
-  purpose: '',
-};
+const NOTE = { margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' } as const;
 
 export function CameraOnboardingPage() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [draft, setDraft] = useState<Draft>({ ...EMPTY, zoneId: params.get('zone') ?? '' });
-  const [step, setStep] = useState<1 | 2>(1);
-  const [probe, setProbe] = useState<ConnectionTest | null>(null);
+  const [draft, setDraft] = useState<Draft>({
+    recorderId: params.get('recorder') ?? '',
+    channel: '1',
+    streamType: 'sub',
+    zoneId: params.get('zone') ?? '',
+    name: '',
+    cameraKey: '',
+    purpose: '',
+  });
+  const [attempted, setAttempted] = useState(false);
+  const [tested, setTested] = useState<RecorderTestResult | null>(null);
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
   const zones = useQuery({
     queryKey: ['zones', 'for-camera'],
     queryFn: () => organizationApi.zones({ limit: 200 }),
+  });
+  const recorders = useQuery({
+    queryKey: ['recorders', 'for-camera'],
+    queryFn: () => recordersApi.list({ limit: 200 }),
   });
 
   // Proposed by the server, and only used while the person has not typed their
@@ -91,53 +86,68 @@ export function CameraOnboardingPage() {
   useEffect(() => {
     const suggestion = proposed.data?.camera_key;
     if (!suggestion) return;
-    // Only fills the gap: a key somebody typed is theirs to keep.
     setDraft((current) => (current.cameraKey ? current : { ...current, cameraKey: suggestion }));
   }, [proposed.data]);
 
+  // With exactly one recorder there is nothing to choose.
+  useEffect(() => {
+    const list = recorders.data?.recorders ?? [];
+    const only = list.length === 1 ? list[0] : undefined;
+    if (!only) return;
+    setDraft((current) => (current.recorderId ? current : { ...current, recorderId: only.id }));
+  }, [recorders.data]);
+
+  const available = recorders.data?.recorders ?? [];
+
+  const recorder = available.find((candidate) => candidate.id === draft.recorderId);
+  const activeZones = (zones.data?.zones ?? []).filter((zone) => zone.is_active);
+  const channel = Number(draft.channel);
+
+  const problems = {
+    recorder: draft.recorderId ? undefined : 'Choose the recorder this camera is plugged into',
+    channel: Number.isInteger(channel) && channel >= 1 ? undefined : 'Channel numbers start at 1',
+    zone: draft.zoneId ? undefined : 'Choose where this camera is',
+    name: draft.name.trim() ? undefined : 'Give this camera a name',
+    cameraKey: draft.cameraKey.trim() ? undefined : 'An identifier is needed',
+  };
+  const valid = Object.values(problems).every((problem) => !problem);
+
   const test = useMutation({
-    mutationFn: () =>
-      camerasApi.testConnection({
-        host: draft.host.trim() || undefined,
-        rtsp_port: Number(draft.rtspPort) || undefined,
-      }),
-    onSuccess: setProbe,
+    mutationFn: () => recordersApi.test(draft.recorderId, channel),
+    onSuccess: setTested,
   });
 
   const create = useMutation({
     mutationFn: () =>
       camerasApi.create({
+        recorder_id: draft.recorderId,
+        channel,
+        stream_type: draft.streamType,
         zone_id: draft.zoneId,
         camera_key: draft.cameraKey.trim(),
         name: draft.name.trim(),
-        channel: Number(draft.channel) || 1,
-        // Sent only when it differs from the deployment's own configuration;
-        // the server fills the rest.
-        host: draft.host.trim() || undefined,
-        rtsp_port: Number(draft.rtspPort) || undefined,
-        stream_type: draft.streamType,
-        username: draft.username.trim() || undefined,
         purpose: draft.purpose.trim() || undefined,
       }),
     onSuccess: (camera) => {
       void client.invalidateQueries({ queryKey: ['cameras'] });
+      void client.invalidateQueries({ queryKey: ['recorders'] });
       void client.invalidateQueries({ queryKey: ['zones'] });
       navigate(`/admin/cameras/${encodeURIComponent(camera.camera_key)}?added=1`);
     },
   });
 
-  if (zones.isLoading) return <LoadingState label="Reading zones" />;
+  if (zones.isLoading || recorders.isLoading) return <LoadingState label="Getting ready" />;
   if (zones.isError) return <Failed error={zones.error} />;
+  if (recorders.isError) return <Failed error={recorders.error} />;
 
-  const available = zones.data?.zones ?? [];
-  const placed = Boolean(draft.zoneId) && Boolean(draft.name.trim()) && Boolean(draft.cameraKey.trim());
+  const shown = (problem: string | undefined) => (attempted ? problem : undefined);
 
   return (
     <>
       <PageIntro
         eyebrow="Cameras"
         title="Add a camera"
-        standfirst="Two steps. It is created switched off — you start it from its own page once it is in."
+        standfirst="One more channel on a recorder you have already added. It is created switched off — you start it from its own page."
         actions={
           <Button variant="ghost" onClick={() => navigate('/admin/cameras')}>
             Cancel
@@ -149,6 +159,19 @@ export function CameraOnboardingPage() {
         <Region order={2}>
           <Plane>
             <p style={{ marginTop: 0 }}>
+              There are no recorders yet. A camera is a channel on a recorder — the DVR or NVR it is
+              plugged into.
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              <Link to="/admin/recorders/new">Add a recorder</Link> — you can add its cameras in the
+              same step.
+            </p>
+          </Plane>
+        </Region>
+      ) : activeZones.length === 0 ? (
+        <Region order={2}>
+          <Plane>
+            <p style={{ marginTop: 0 }}>
               There are no zones yet, and a camera is placed in one — the kitchen, the dine hall.
             </p>
             <p style={{ marginBottom: 0 }}>
@@ -157,15 +180,109 @@ export function CameraOnboardingPage() {
           </Plane>
         </Region>
       ) : (
-        <>
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            setAttempted(true);
+            if (valid) create.mutate();
+          }}
+        >
           <Region order={2}>
             <SectionRule
               lead
-              label="1 · Where it is"
-              detail="The zone it watches, and what people will call it."
+              label="1 · Where it comes from"
+              detail="The recorder it is plugged into, and which of its channels."
             />
             <Plane>
-              <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}>
+              <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
+                <Select
+                  id="camera-recorder"
+                  label="Recorder"
+                  value={draft.recorderId}
+                  onChange={(event) => {
+                    set({ recorderId: event.target.value });
+                    setTested(null);
+                  }}
+                >
+                  <option value="">Choose…</option>
+                  {available.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} — {candidate.brand_label}
+                      {candidate.is_active ? '' : ' (inactive)'}
+                    </option>
+                  ))}
+                </Select>
+                {shown(problems.recorder) ? <FieldError>{problems.recorder ?? ''}</FieldError> : null}
+
+                {recorder ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 'var(--space-2) var(--space-4)',
+                      fontSize: 'var(--text-sm)',
+                      color: 'var(--ink-secondary)',
+                    }}
+                  >
+                    <span>
+                      {recorder.host}:{recorder.rtsp_port}
+                    </span>
+                    <span>
+                      Password: <CredentialState recorder={recorder} />
+                    </span>
+                    <RecorderStatus active={recorder.is_active} />
+                  </div>
+                ) : null}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '9rem minmax(0, 1fr)', gap: 'var(--space-3)' }}>
+                  <Input
+                    id="camera-channel"
+                    label="Channel"
+                    value={draft.channel}
+                    inputMode="numeric"
+                    hint="Which input on the recorder."
+                    error={shown(problems.channel)}
+                    onChange={(event) => {
+                      set({ channel: event.target.value });
+                      setTested(null);
+                    }}
+                  />
+                  <Select
+                    id="camera-stream"
+                    label="Stream"
+                    value={draft.streamType}
+                    onChange={(event) => set({ streamType: event.target.value === 'main' ? 'main' : 'sub' })}
+                  >
+                    <option value="sub">{STREAM_LABEL.sub}</option>
+                    <option value="main">{STREAM_LABEL.main}</option>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Button
+                    disabled={!draft.recorderId || Boolean(problems.channel)}
+                    loading={test.isPending}
+                    onClick={() => test.mutate()}
+                  >
+                    {test.isPending ? 'Testing…' : 'Test this channel'}
+                  </Button>
+                  <span style={NOTE}>Signs in with the recorder’s saved password.</span>
+                </div>
+                {tested && !test.isPending ? <TestResult result={tested} /> : null}
+                {test.isError && !test.isPending ? (
+                  <p role="alert" style={{ ...NOTE, color: 'var(--severity-critical)' }}>
+                    {friendly(test.error, 'The test could not be run. Try again in a moment.')}
+                  </p>
+                ) : null}
+              </div>
+            </Plane>
+          </Region>
+
+          <Region order={3}>
+            <SectionRule label="2 · Where it is" detail="The zone it watches, and what people will call it." />
+            <Plane>
+              <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
                 <Select
                   id="camera-zone"
                   label="Zone"
@@ -173,12 +290,13 @@ export function CameraOnboardingPage() {
                   onChange={(event) => set({ zoneId: event.target.value })}
                 >
                   <option value="">Choose…</option>
-                  {available.map((zone) => (
+                  {activeZones.map((zone) => (
                     <option key={zone.id} value={zone.id}>
                       {zone.name}
                     </option>
                   ))}
                 </Select>
+                {shown(problems.zone) ? <FieldError>{problems.zone ?? ''}</FieldError> : null}
 
                 <Input
                   id="camera-name"
@@ -186,6 +304,7 @@ export function CameraOnboardingPage() {
                   value={draft.name}
                   placeholder="Prep line"
                   hint="What the people who work there would call this view."
+                  error={shown(problems.name)}
                   onChange={(event) => set({ name: event.target.value })}
                 />
 
@@ -193,123 +312,44 @@ export function CameraOnboardingPage() {
                   id="camera-key"
                   label="Identifier"
                   value={draft.cameraKey}
-                  hint="Proposed for you. It names this camera's records on disk and cannot be changed later."
+                  hint="Proposed for you. It names this camera's records and cannot be changed later."
+                  error={shown(problems.cameraKey)}
                   onChange={(event) => set({ cameraKey: event.target.value })}
                 />
 
-                {step === 1 ? (
-                  <div>
-                    <Button disabled={!placed} onClick={() => setStep(2)}>
-                      Next
-                    </Button>
-                  </div>
+                <Input
+                  id="camera-purpose"
+                  label="Why it is watched (optional)"
+                  value={draft.purpose}
+                  placeholder="Hand-washing compliance at the prep line"
+                  hint="Recorded because retention and lawful basis depend on purpose."
+                  onChange={(event) => set({ purpose: event.target.value })}
+                />
+
+                {create.isError ? (
+                  <p role="alert" style={{ ...NOTE, color: 'var(--severity-critical)' }}>
+                    {friendly(create.error, 'The camera could not be added.')}
+                  </p>
                 ) : null}
+
+                <div>
+                  <Button variant="primary" type="submit" loading={create.isPending}>
+                    {create.isPending ? 'Adding…' : 'Add camera'}
+                  </Button>
+                </div>
               </div>
             </Plane>
           </Region>
-
-          {step === 2 ? (
-            <Region order={3}>
-              <SectionRule
-                label="2 · How to reach it"
-                detail="Already filled in from this deployment's recorder. Usually only the channel differs."
-              />
-              <Plane>
-                <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}>
-                  <Input
-                    id="camera-channel"
-                    label="Channel"
-                    value={draft.channel}
-                    hint="Which input on the recorder this camera is plugged into."
-                    onChange={(event) => set({ channel: event.target.value })}
-                  />
-
-                  <Input
-                    id="camera-host"
-                    label="Address"
-                    value={draft.host}
-                    placeholder="This deployment's recorder"
-                    hint="Leave blank unless this camera is on a different recorder."
-                    onChange={(event) => set({ host: event.target.value })}
-                  />
-
-                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                    <Input
-                      id="camera-port"
-                      label="Port"
-                      value={draft.rtspPort}
-                      placeholder="554"
-                      onChange={(event) => set({ rtspPort: event.target.value })}
-                    />
-                    <Select
-                      id="camera-stream"
-                      label="Stream"
-                      value={draft.streamType}
-                      onChange={(event) =>
-                        set({ streamType: event.target.value === 'sub' ? 'sub' : 'main' })
-                      }
-                    >
-                      <option value="main">Main — full quality</option>
-                      <option value="sub">Sub — lighter, lower quality</option>
-                    </Select>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Button
-                      variant="secondary"
-                      disabled={test.isPending}
-                      onClick={() => test.mutate()}
-                    >
-                      {test.isPending ? 'Testing…' : 'Test connection'}
-                    </Button>
-                    {probe ? (
-                      <StatusBadge tone={probe.reachable ? 'online' : 'offline'}>
-                        {probe.reachable ? 'Answered' : 'No answer'}
-                      </StatusBadge>
-                    ) : null}
-                  </div>
-                  {probe ? (
-                    <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>{probe.detail}</p>
-                  ) : null}
-
-                  {/* Said plainly, because the old form asked about it as though
-                      it were a property of this camera. */}
-                  <p style={{ margin: 0, color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
-                    The password comes from this server's own configuration. It is never typed
-                    here and never sent to your browser.
-                  </p>
-
-                  <Input
-                    id="camera-purpose"
-                    label="Why it is watched (optional)"
-                    value={draft.purpose}
-                    placeholder="Hand-washing compliance at the prep line"
-                    hint="Recorded because retention and lawful basis depend on purpose."
-                    onChange={(event) => set({ purpose: event.target.value })}
-                  />
-
-                  <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                    <Button variant="ghost" onClick={() => setStep(1)}>
-                      Back
-                    </Button>
-                    <Button disabled={!placed || create.isPending} onClick={() => create.mutate()}>
-                      {create.isPending ? 'Adding…' : 'Add camera'}
-                    </Button>
-                  </div>
-
-                  {create.isError ? (
-                    <p role="alert" style={{ margin: 0, color: 'var(--severity-critical, inherit)' }}>
-                      {isApiError(create.error)
-                        ? create.error.friendlyMessage
-                        : 'The camera could not be added.'}
-                    </p>
-                  ) : null}
-                </div>
-              </Plane>
-            </Region>
-          ) : null}
-        </>
+        </form>
       )}
     </>
+  );
+}
+
+function FieldError({ children }: { children: string }) {
+  return (
+    <span role="alert" style={{ color: 'var(--severity-critical)', fontSize: 'var(--text-xs)' }}>
+      {children}
+    </span>
   );
 }

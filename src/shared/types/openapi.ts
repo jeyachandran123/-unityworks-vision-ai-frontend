@@ -73,6 +73,14 @@ export const API_PATHS = [
   "/api/v1/platform/people/{user_id}",
   "/api/v1/platform/roles",
   "/api/v1/pos-connectors",
+  "/api/v1/recorder-brands",
+  "/api/v1/recorders",
+  "/api/v1/recorders/test",
+  "/api/v1/recorders/{recorder_id}",
+  "/api/v1/recorders/{recorder_id}/activate",
+  "/api/v1/recorders/{recorder_id}/credential",
+  "/api/v1/recorders/{recorder_id}/deactivate",
+  "/api/v1/recorders/{recorder_id}/test",
   "/api/v1/reports/types",
   "/api/v1/reports/{report_id}",
   "/api/v1/reports/{report_id}/export",
@@ -325,6 +333,39 @@ export type RolePolicyApiV1PlatformRolesGetResponse = Record<string, unknown>;
 
 /** `GET /api/v1/pos-connectors` */
 export type ListPosConnectorsApiV1PosConnectorsGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/recorder-brands` */
+export type ListRecorderBrandsApiV1RecorderBrandsGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/recorders` */
+export type ListRecordersApiV1RecordersGetResponse = Record<string, unknown>;
+
+/** `POST /api/v1/recorders` */
+export type CreateRecorderApiV1RecordersPostResponse = Record<string, unknown>;
+
+/** `POST /api/v1/recorders/test` */
+export type TestNewRecorderApiV1RecordersTestPostResponse = Record<string, unknown>;
+
+/** `DELETE /api/v1/recorders/{recorder_id}` */
+export type DeleteRecorderApiV1RecordersRecorderIdDeleteResponse = Record<string, unknown>;
+
+/** `GET /api/v1/recorders/{recorder_id}` */
+export type GetRecorderApiV1RecordersRecorderIdGetResponse = Record<string, unknown>;
+
+/** `PATCH /api/v1/recorders/{recorder_id}` */
+export type UpdateRecorderApiV1RecordersRecorderIdPatchResponse = Record<string, unknown>;
+
+/** `POST /api/v1/recorders/{recorder_id}/activate` */
+export type ActivateRecorderApiV1RecordersRecorderIdActivatePostResponse = Record<string, unknown>;
+
+/** `PUT /api/v1/recorders/{recorder_id}/credential` */
+export type SetRecorderCredentialApiV1RecordersRecorderIdCredentialPutResponse = Record<string, unknown>;
+
+/** `POST /api/v1/recorders/{recorder_id}/deactivate` */
+export type DeactivateRecorderApiV1RecordersRecorderIdDeactivatePostResponse = Record<string, unknown>;
+
+/** `POST /api/v1/recorders/{recorder_id}/test` */
+export type TestSavedRecorderApiV1RecordersRecorderIdTestPostResponse = Record<string, unknown>;
 
 /** `GET /api/v1/reports/types` */
 export type ListReportTypesApiV1ReportsTypesGetResponse = Record<string, unknown>;
