@@ -1686,13 +1686,24 @@ export function stubFetch(options: StubOptions = {}) {
       const rows = list.recorders ?? [];
 
       if (/\/recorders(\/[^/?]+)?\/test/.test(url) && method === 'POST') {
+        // Says back what was tested, as the server does: the address the body
+        // chose with `via`, or the one the recorder connects with.
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const saved = rows.find((row) => url.includes(`/recorders/${String(row['id'])}/`));
+        const via = body.via ?? body.connect_via ?? saved?.['connect_via'];
+        const address =
+          via === 'hostname'
+            ? (body.hostname ?? saved?.['hostname'])
+            : (body.ip_address || saved?.['ip_address'] || body.hostname || saved?.['hostname']);
         return jsonResponse(
           options.recorderTest ?? {
             ok: true,
             outcome: 'connected',
             message: 'Recorder connected successfully.',
             hint: '',
-            channel: 1,
+            address: address ?? '',
+            port: body.rtsp_port ?? saved?.['rtsp_port'] ?? 554,
+            channel: body.channel ?? 1,
             elapsed_ms: 820,
             resolution: '1920 × 1080',
           },
@@ -1735,9 +1746,12 @@ export function stubFetch(options: StubOptions = {}) {
         // The password goes in and is never echoed back, exactly as the server
         // behaves — so a component that tried to show it would show nothing.
         const { password: _password, cameras: _cameras, ...connection } = body;
+        const via = connection.connect_via ?? (connection.ip_address ? 'ip_address' : 'hostname');
         return jsonResponse(
           recorderFixture({
             ...connection,
+            connect_via: via,
+            address: via === 'hostname' ? connection.hostname : connection.ip_address,
             id: 'rec-new',
             camera_count: cameras.length,
             cameras: cameras.map((camera: Record<string, unknown>, index: number) => ({
@@ -1845,7 +1859,10 @@ export function recorderFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: 'rec-1',
     name: 'Gayathri DVR',
-    host: '192.168.1.20',
+    ip_address: '192.168.1.20',
+    hostname: '',
+    connect_via: 'ip_address',
+    address: '192.168.1.20',
     rtsp_port: 554,
     username: 'admin',
     brand: 'hikvision',

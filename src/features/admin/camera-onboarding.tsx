@@ -1,16 +1,19 @@
 /**
- * Adding one camera to a recorder that already exists.
+ * Adding one camera to this organization.
  *
- * Adding a whole site — a new DVR and its cameras — is the recorder flow, at
- * `/admin/recorders/new`. This page is for the later, smaller job: one more
- * channel on a box that is already set up.
+ * A camera is a channel on a recorder, so the first question is which
+ * recorder — and there are exactly two answers:
  *
- * Two questions, because only two things are unknown:
+ *   1. **One this organization already has.** Every recorder it has added is
+ *      listed with its name, brand, addresses and how many cameras it already
+ *      carries. Choosing one reuses everything saved about it — address, port,
+ *      account, password — and none of it is asked for again.
+ *   2. **A new one.** That is the recorder flow at `/admin/recorders/new`,
+ *      which asks for the address and password once and can add this camera
+ *      in the same step.
  *
- *   1. **Where it comes from** — which recorder, which channel, which stream.
- *      The recorder's address, account and password are already known, so they
- *      are shown for context and never asked for.
- *   2. **Where it is** — the zone, a name, and why it is watched.
+ * Then the channel on that recorder (checked against the channels its other
+ * cameras already use), and where the camera is.
  *
  * ### The password is never asked for
  *
@@ -28,22 +31,31 @@
  * The camera's own page has one primary action — Start watching.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { organizationApi } from '@shared/api/observations';
 import { camerasApi } from '@shared/api/persistence';
-import { type RecorderTestResult, recordersApi } from '@shared/api/recorders';
+import { type Recorder, type RecorderTestResult, recordersApi } from '@shared/api/recorders';
 import { Button, Input, LoadingState, Select } from '@shared/ui/primitives';
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
-import { CredentialState, friendly, RecorderStatus, STREAM_LABEL, TestResult } from './recorder-parts';
+import {
+  CredentialState,
+  friendly,
+  RecorderStatus,
+  STREAM_LABEL,
+  TestResult,
+  useOrganizationName,
+} from './recorder-parts';
 import { Failed } from './shared';
 
 interface Draft {
   recorderId: string;
   channel: string;
+  /** Whether the person typed a channel, so a recorder change stops proposing one. */
+  channelTouched: boolean;
   streamType: 'main' | 'sub';
   zoneId: string;
   name: string;
@@ -56,10 +68,12 @@ const NOTE = { margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-s
 export function CameraOnboardingPage() {
   const client = useQueryClient();
   const navigate = useNavigate();
+  const organization = useOrganizationName();
   const [params] = useSearchParams();
   const [draft, setDraft] = useState<Draft>({
     recorderId: params.get('recorder') ?? '',
     channel: '1',
+    channelTouched: false,
     streamType: 'sub',
     zoneId: params.get('zone') ?? '',
     name: '',
@@ -79,6 +93,13 @@ export function CameraOnboardingPage() {
     queryKey: ['recorders', 'for-camera'],
     queryFn: () => recordersApi.list({ limit: 200 }),
   });
+  // The chosen recorder's cameras, so a channel already in use is caught here
+  // rather than by the server after Add is pressed.
+  const chosen = useQuery({
+    queryKey: ['recorders', 'one', draft.recorderId],
+    queryFn: () => recordersApi.get(draft.recorderId),
+    enabled: Boolean(draft.recorderId),
+  });
 
   // Proposed by the server, and only used while the person has not typed their
   // own: a key they chose is theirs to keep.
@@ -97,15 +118,32 @@ export function CameraOnboardingPage() {
     setDraft((current) => (current.recorderId ? current : { ...current, recorderId: only.id }));
   }, [recorders.data]);
 
-  const available = recorders.data?.recorders ?? [];
+  const usedChannels = new Map((chosen.data?.cameras ?? []).map((camera) => [camera.channel, camera.name]));
 
+  // Propose the first free channel on the chosen recorder, until one is typed.
+  useEffect(() => {
+    const cameras = chosen.data?.cameras;
+    if (!cameras) return;
+    const used = new Set(cameras.map((camera) => camera.channel));
+    let free = 1;
+    while (used.has(free)) free += 1;
+    setDraft((current) => (current.channelTouched ? current : { ...current, channel: String(free) }));
+  }, [chosen.data]);
+
+  const available = recorders.data?.recorders ?? [];
   const recorder = available.find((candidate) => candidate.id === draft.recorderId);
   const activeZones = (zones.data?.zones ?? []).filter((zone) => zone.is_active);
   const channel = Number(draft.channel);
+  const takenBy = usedChannels.get(channel);
 
   const problems = {
     recorder: draft.recorderId ? undefined : 'Choose the recorder this camera is plugged into',
-    channel: Number.isInteger(channel) && channel >= 1 ? undefined : 'Channel numbers start at 1',
+    channel:
+      !Number.isInteger(channel) || channel < 1
+        ? 'Channel numbers start at 1'
+        : takenBy
+          ? `Channel ${channel} on this recorder is already used by “${takenBy}”`
+          : undefined,
     zone: draft.zoneId ? undefined : 'Choose where this camera is',
     name: draft.name.trim() ? undefined : 'Give this camera a name',
     cameraKey: draft.cameraKey.trim() ? undefined : 'An identifier is needed',
@@ -145,9 +183,9 @@ export function CameraOnboardingPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Cameras"
+        eyebrow={organization ? `Cameras · ${organization}` : 'Cameras'}
         title="Add a camera"
-        standfirst="One more channel on a recorder you have already added. It is created switched off — you start it from its own page."
+        standfirst="A camera is one channel on a recorder. Choose the recorder, then the channel and where the camera is. It is created switched off — you start it from its own page."
         actions={
           <Button variant="ghost" onClick={() => navigate('/admin/cameras')}>
             Cancel
@@ -159,12 +197,12 @@ export function CameraOnboardingPage() {
         <Region order={2}>
           <Plane>
             <p style={{ marginTop: 0 }}>
-              There are no recorders yet. A camera is a channel on a recorder — the DVR or NVR it is
-              plugged into.
+              {organization ? `${organization} has` : 'This organization has'} no recorders yet. A
+              camera is a channel on a recorder — the DVR or NVR it is plugged into.
             </p>
             <p style={{ marginBottom: 0 }}>
-              <Link to="/admin/recorders/new">Add a recorder</Link> — you can add its cameras in the
-              same step.
+              <Link to="/admin/recorders/new">Add a recorder</Link> — you enter its address and
+              password once, and can add its cameras in the same step.
             </p>
           </Plane>
         </Region>
@@ -191,89 +229,78 @@ export function CameraOnboardingPage() {
           <Region order={2}>
             <SectionRule
               lead
-              label="1 · Where it comes from"
-              detail="The recorder it is plugged into, and which of its channels."
+              label="1 · Which recorder"
+              detail="Choosing one reuses its saved connection and password — you will not be asked for them again."
             />
             <Plane>
-              <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
-                <Select
-                  id="camera-recorder"
-                  label="Recorder"
-                  value={draft.recorderId}
-                  onChange={(event) => {
-                    set({ recorderId: event.target.value });
+              <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <RecorderChoice
+                  recorders={available}
+                  selected={draft.recorderId}
+                  onSelect={(id) => {
+                    set({ recorderId: id, channelTouched: false });
                     setTested(null);
                   }}
-                >
-                  <option value="">Choose…</option>
-                  {available.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.name} — {candidate.brand_label}
-                      {candidate.is_active ? '' : ' (inactive)'}
-                    </option>
-                  ))}
-                </Select>
+                />
                 {shown(problems.recorder) ? <FieldError>{problems.recorder ?? ''}</FieldError> : null}
 
-                {recorder ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 'var(--space-2) var(--space-4)',
-                      fontSize: 'var(--text-sm)',
-                      color: 'var(--ink-secondary)',
-                    }}
-                  >
-                    <span>
-                      {recorder.host}:{recorder.rtsp_port}
-                    </span>
-                    <span>
-                      Password: <CredentialState recorder={recorder} />
-                    </span>
-                    <RecorderStatus active={recorder.is_active} />
-                  </div>
+                {recorder && !recorder.is_active ? (
+                  <p style={NOTE} role="status">
+                    {recorder.name} is deactivated. The camera can be added now, and starts only once
+                    the recorder is activated again.
+                  </p>
+                ) : null}
+                {recorder && recorder.credential_scheme !== 'recorder' ? (
+                  <p style={NOTE} role="status">
+                    {recorder.name}’s password is not saved here yet.{' '}
+                    <Link to={`/admin/recorders/${encodeURIComponent(recorder.id)}`}>Set it on the recorder’s page</Link>{' '}
+                    so its cameras can sign in.
+                  </p>
                 ) : null}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '9rem minmax(0, 1fr)', gap: 'var(--space-3)' }}>
-                  <Input
-                    id="camera-channel"
-                    label="Channel"
-                    value={draft.channel}
-                    inputMode="numeric"
-                    hint="Which input on the recorder."
-                    error={shown(problems.channel)}
-                    onChange={(event) => {
-                      set({ channel: event.target.value });
-                      setTested(null);
-                    }}
-                  />
-                  <Select
-                    id="camera-stream"
-                    label="Stream"
-                    value={draft.streamType}
-                    onChange={(event) => set({ streamType: event.target.value === 'main' ? 'main' : 'sub' })}
-                  >
-                    <option value="sub">{STREAM_LABEL.sub}</option>
-                    <option value="main">{STREAM_LABEL.main}</option>
-                  </Select>
-                </div>
+                {recorder ? (
+                  <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '11rem minmax(0, 1fr)', gap: 'var(--space-3)' }}>
+                      <Input
+                        id="camera-channel"
+                        label="Channel"
+                        value={draft.channel}
+                        inputMode="numeric"
+                        hint="Which input on the recorder."
+                        error={problems.channel && (attempted || takenBy) ? problems.channel : undefined}
+                        onChange={(event) => {
+                          set({ channel: event.target.value, channelTouched: true });
+                          setTested(null);
+                        }}
+                      />
+                      <Select
+                        id="camera-stream"
+                        label="Stream"
+                        value={draft.streamType}
+                        onChange={(event) => set({ streamType: event.target.value === 'main' ? 'main' : 'sub' })}
+                      >
+                        <option value="sub">{STREAM_LABEL.sub}</option>
+                        <option value="main">{STREAM_LABEL.main}</option>
+                      </Select>
+                    </div>
 
-                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Button
-                    disabled={!draft.recorderId || Boolean(problems.channel)}
-                    loading={test.isPending}
-                    onClick={() => test.mutate()}
-                  >
-                    {test.isPending ? 'Testing…' : 'Test this channel'}
-                  </Button>
-                  <span style={NOTE}>Signs in with the recorder’s saved password.</span>
-                </div>
-                {tested && !test.isPending ? <TestResult result={tested} /> : null}
-                {test.isError && !test.isPending ? (
-                  <p role="alert" style={{ ...NOTE, color: 'var(--severity-critical)' }}>
-                    {friendly(test.error, 'The test could not be run. Try again in a moment.')}
-                  </p>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Button
+                        disabled={!draft.recorderId || Boolean(problems.channel && !takenBy)}
+                        loading={test.isPending}
+                        onClick={() => test.mutate()}
+                      >
+                        {test.isPending ? 'Testing…' : 'Test this channel'}
+                      </Button>
+                      <span style={NOTE}>Signs in with the recorder’s saved password.</span>
+                    </div>
+                    {tested && !test.isPending ? <TestResult result={tested} /> : null}
+                    {test.isError && !test.isPending ? (
+                      <p role="alert" style={{ ...NOTE, color: 'var(--severity-critical)' }}>
+                        {friendly(test.error, 'The test could not be run. Try again in a moment.')}
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </Plane>
@@ -343,6 +370,110 @@ export function CameraOnboardingPage() {
         </form>
       )}
     </>
+  );
+}
+
+/**
+ * The organization's recorders, one card each, plus "add a new one".
+ *
+ * A single-choice group: each card is a radio in a group labelled "Recorder".
+ * Its accessible name is the recorder's name; what it shows besides — brand,
+ * addresses, cameras, whether it is active — describes it.
+ */
+function RecorderChoice({
+  recorders,
+  selected,
+  onSelect,
+}: {
+  recorders: ReadonlyArray<Recorder>;
+  selected: string;
+  onSelect: (id: string) => void;
+}) {
+  const base = useId();
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Recorder"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(15rem, 1fr))',
+        gap: 'var(--space-3)',
+      }}
+    >
+      {recorders.map((recorder) => {
+        const checked = recorder.id === selected;
+        const nameId = `${base}-${recorder.id}-name`;
+        const detailId = `${base}-${recorder.id}-detail`;
+        return (
+          <button
+            key={recorder.id}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            aria-labelledby={nameId}
+            aria-describedby={detailId}
+            onClick={() => onSelect(recorder.id)}
+            style={{
+              textAlign: 'left',
+              display: 'grid',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-3) var(--space-4)',
+              borderRadius: 'var(--radius-sm)',
+              border: `${checked ? 2 : 1}px solid ${checked ? 'var(--accent)' : 'var(--line-default)'}`,
+              background: checked ? 'var(--surface-sunken)' : 'transparent',
+              color: 'var(--ink-primary)',
+              cursor: 'pointer',
+              font: 'inherit',
+            }}
+          >
+            <span style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', alignItems: 'baseline' }}>
+              <strong id={nameId}>{recorder.name}</strong>
+              <RecorderStatus active={recorder.is_active} />
+            </span>
+            <span id={detailId} style={{ display: 'grid', gap: '0.15rem', fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)' }}>
+              <span>{recorder.brand_label}</span>
+              {recorder.ip_address ? (
+                <span>
+                  IP <span style={{ fontFamily: 'var(--font-mono)' }}>{recorder.ip_address}</span>
+                  {recorder.connect_via === 'ip_address' && recorder.hostname ? ' · in use' : ''}
+                </span>
+              ) : null}
+              {recorder.hostname ? (
+                <span>
+                  Domain <span style={{ fontFamily: 'var(--font-mono)' }}>{recorder.hostname}</span>
+                  {recorder.connect_via === 'hostname' && recorder.ip_address ? ' · in use' : ''}
+                </span>
+              ) : null}
+              <span>
+                {recorder.camera_count === 0
+                  ? 'No cameras yet'
+                  : `${recorder.camera_count} camera${recorder.camera_count === 1 ? '' : 's'}`}{' '}
+                · Password: <CredentialState recorder={recorder} />
+              </span>
+            </span>
+          </button>
+        );
+      })}
+      <Link
+        to="/admin/recorders/new"
+        style={{
+          display: 'grid',
+          alignContent: 'center',
+          gap: 'var(--space-1)',
+          padding: 'var(--space-3) var(--space-4)',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px dashed var(--line-strong)',
+          textDecoration: 'none',
+          color: 'var(--ink-primary)',
+        }}
+      >
+        <strong>+ Add a new recorder</strong>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)' }}>
+          A DVR or NVR not listed here. You enter its address and password once, and can add its
+          cameras in the same step.
+        </span>
+      </Link>
+    </div>
   );
 }
 

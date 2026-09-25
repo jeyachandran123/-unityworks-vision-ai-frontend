@@ -6,9 +6,9 @@
  *
  * ### What a person should be able to tell at a glance
  *
- * Which boxes there are, what make each is, where it is, whether it is in use,
- * whether it can sign in, and how many of its cameras are switched on. The list
- * answers all of that without opening anything.
+ * Which organization this is, which boxes it has, what make each is, where it
+ * is, whether it is in use, whether it can sign in, and how many of its cameras
+ * are switched on. The list answers all of that without opening anything.
  *
  * ### The password
  *
@@ -32,6 +32,7 @@ import { PermissionGate, usePermissions } from '@app/permissions/guards';
 import { organizationApi } from '@shared/api/observations';
 import { camerasApi } from '@shared/api/persistence';
 import {
+  type ConnectVia,
   type Recorder,
   type RecorderCamera,
   type RecorderDetail,
@@ -54,18 +55,23 @@ import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 import { PAGE_SIZE, PagedTable } from '@shared/ui/table';
 
 import {
-  addressProblem,
+  type AddressDraft,
+  AddressFields,
+  addressFields,
+  addressProblems,
   BrandSelect,
   CredentialState,
   friendly,
   PasswordField,
-  portProblem,
+  RecorderAddress,
   RecorderStatus,
   STREAM_LABEL,
   STREAM_SHORT,
   TestResult,
   type TestOutcome,
   useBrands,
+  useOrganizationName,
+  VIA_LABEL,
 } from './recorder-parts';
 import { DangerConfirm, Failed, when } from './shared';
 
@@ -76,6 +82,7 @@ const ACTIONS = { display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alig
 
 export function RecordersPage() {
   const navigate = useNavigate();
+  const organization = useOrganizationName();
   const [offset, setOffset] = useState(0);
   const recorders = useQuery({
     queryKey: ['recorders', offset],
@@ -98,11 +105,7 @@ export function RecordersPage() {
     {
       key: 'address',
       header: 'Address',
-      render: (recorder) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-          {recorder.host || '—'}:{recorder.rtsp_port}
-        </span>
-      ),
+      render: (recorder) => <RecorderAddress recorder={recorder} />,
     },
     {
       key: 'cameras',
@@ -131,9 +134,9 @@ export function RecordersPage() {
   return (
     <>
       <PageIntro
-        eyebrow="CCTV"
+        eyebrow={organization ? `CCTV · ${organization}` : 'CCTV'}
         title="Recorders"
-        standfirst="A recorder is the DVR or NVR your cameras are plugged into. Add it once with the details you use to sign in to it, then choose which of its cameras to watch."
+        standfirst={`A recorder is the DVR or NVR your cameras are plugged into. Add it once with the details you use to sign in to it, then choose which of its cameras to watch.${organization ? ` These are ${organization}’s recorders; no other organization can see or use them.` : ''}`}
         actions={add}
       />
       <Region order={2}>
@@ -148,7 +151,7 @@ export function RecordersPage() {
           empty={
             <EmptyState
               title="No recorders yet"
-              body="Add the DVR or NVR your cameras plug into. You will need its IP address and the username and password you use to sign in to it."
+              body="Add the DVR or NVR your cameras plug into. You will need its IP address or domain, and the username and password you use to sign in to it."
               action={add}
             />
           }
@@ -175,6 +178,7 @@ export function RecorderDetailPage() {
 function RecorderView({ recorder }: { recorder: RecorderDetail }) {
   const client = useQueryClient();
   const toast = useToast();
+  const organization = useOrganizationName();
   const { has } = usePermissions();
   const canManage = has(PERMISSIONS.manageCameras);
   const [editing, setEditing] = useState(false);
@@ -202,9 +206,9 @@ function RecorderView({ recorder }: { recorder: RecorderDetail }) {
   return (
     <>
       <PageIntro
-        eyebrow="CCTV · Recorder"
+        eyebrow={organization ? `CCTV · ${organization} · Recorder` : 'CCTV · Recorder'}
         title={recorder.name}
-        standfirst={`${recorder.brand_label} · ${recorder.host || 'no address'} : ${recorder.rtsp_port}`}
+        standfirst={`${recorder.brand_label} · ${recorder.address || 'no address'} : ${recorder.rtsp_port}`}
         meta={<RecorderStatus active={recorder.is_active} />}
         actions={
           canManage ? (
@@ -247,8 +251,15 @@ function RecorderView({ recorder }: { recorder: RecorderDetail }) {
               <KeyValue
                 items={[
                   { key: 'Brand', value: recorder.brand_label },
-                  { key: 'Address', value: recorder.host || '—' },
-                  { key: 'Port', value: String(recorder.rtsp_port) },
+                  { key: 'IP address', value: recorder.ip_address || 'Not set' },
+                  { key: 'Domain / hostname', value: recorder.hostname || 'Not set' },
+                  {
+                    key: 'Connects using',
+                    value: recorder.address
+                      ? `${VIA_LABEL[recorder.connect_via]} — ${recorder.address}`
+                      : 'No address yet',
+                  },
+                  { key: 'Video (RTSP) port', value: String(recorder.rtsp_port) },
                   { key: 'Username', value: recorder.username || '—' },
                   {
                     key: 'Password',
@@ -267,9 +278,10 @@ function RecorderView({ recorder }: { recorder: RecorderDetail }) {
                 ]}
               />
               {recorder.credential_scheme !== 'recorder' && recorder.credential_configured ? (
-                <p style={NOTE}>
-                  This recorder’s password is kept by the server’s own configuration. Setting one here
-                  moves it into this application, encrypted.
+                <p style={{ ...NOTE, color: 'var(--ink-primary)' }} role="status">
+                  <strong>This recorder’s password still comes from the server’s own settings.</strong>{' '}
+                  Its cameras keep working for now, but a recorder’s password belongs to the recorder:
+                  use Change password to store it here, encrypted, for this organization only.
                 </p>
               ) : null}
             </div>
@@ -312,25 +324,27 @@ function EditConnection({
   const toast = useToast();
   const [name, setName] = useState(recorder.name);
   const [brand, setBrand] = useState(recorder.brand);
-  const [host, setHost] = useState(recorder.host);
-  const [port, setPort] = useState(String(recorder.rtsp_port));
+  const [address, setAddress] = useState<AddressDraft>({
+    ipAddress: recorder.ip_address,
+    hostname: recorder.hostname,
+    connectVia: recorder.connect_via,
+    port: String(recorder.rtsp_port),
+  });
   const [username, setUsername] = useState(recorder.username);
   const [pathTemplate, setPathTemplate] = useState(recorder.path_template ?? '');
   const [streamMain, setStreamMain] = useState(String(recorder.stream_main ?? 0));
   const [streamSub, setStreamSub] = useState(String(recorder.stream_sub ?? 1));
   const custom = brand === (brands.data?.custom ?? 'custom');
 
-  const hostProblem = host.trim() ? addressProblem(host) : 'Enter the IP address or hostname';
-  const port_problem = portProblem(port);
-  const invalid = !name.trim() || !brand || Boolean(hostProblem) || Boolean(port_problem);
+  const problems = addressProblems(address);
+  const invalid = !name.trim() || !brand || Object.values(problems).some(Boolean);
 
   const save = useMutation({
     mutationFn: () =>
       recordersApi.update(recorder.id, {
         name: name.trim(),
         brand,
-        host: host.trim(),
-        rtsp_port: Number(port),
+        ...addressFields(address),
         username: username.trim(),
         ...(custom
           ? {
@@ -358,24 +372,13 @@ function EditConnection({
     >
       <Input id="edit-recorder-name" label="Recorder name" value={name} onChange={(e) => setName(e.target.value)} />
       <BrandSelect id="edit-recorder-brand" value={brand} onChange={(next) => setBrand(next)} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 8rem', gap: 'var(--space-3)' }}>
-        <Input
-          id="edit-recorder-host"
-          label="IP address or hostname"
-          value={host}
-          spellCheck={false}
-          error={hostProblem}
-          onChange={(e) => setHost(e.target.value)}
-        />
-        <Input
-          id="edit-recorder-port"
-          label="Port"
-          value={port}
-          inputMode="numeric"
-          error={port_problem}
-          onChange={(e) => setPort(e.target.value)}
-        />
-      </div>
+      <AddressFields
+        idPrefix="edit-recorder"
+        value={address}
+        problems={problems}
+        showRequired
+        onChange={(patch) => setAddress((current) => ({ ...current, ...patch }))}
+      />
       <Input
         id="edit-recorder-username"
         label="Username"
@@ -517,10 +520,13 @@ function ChangePassword({
 function TestPanel({ recorder }: { recorder: RecorderDetail }) {
   const channels = [...new Set(recorder.cameras.map((camera) => camera.channel))].sort((a, b) => a - b);
   const [channel, setChannel] = useState(String(channels[0] ?? 1));
+  const [via, setVia] = useState<ConnectVia>(recorder.connect_via);
   const [result, setResult] = useState<RecorderTestResult | null>(null);
+  const both = Boolean(recorder.ip_address && recorder.hostname);
 
   const test = useMutation({
-    mutationFn: () => recordersApi.test(recorder.id, Number(channel) || 1),
+    mutationFn: () =>
+      recordersApi.test(recorder.id, Number(channel) || 1, both && via !== recorder.connect_via ? via : undefined),
     onSuccess: setResult,
   });
 
@@ -528,15 +534,36 @@ function TestPanel({ recorder }: { recorder: RecorderDetail }) {
     <Region order={3}>
       <SectionRule
         label="Test connection"
-        detail="Signs in with the saved password and asks one channel for a picture."
+        detail="Signs in with the saved password and asks one channel for a picture. Nothing is changed."
       />
       <Plane>
         <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '40rem' }}>
+          {both ? (
+            <Select
+              id="recorder-test-via"
+              label="Test using"
+              value={via}
+              hint="Testing the other address first is the safe way to switch to it."
+              onChange={(event) => {
+                setVia(event.target.value === 'hostname' ? 'hostname' : 'ip_address');
+                setResult(null);
+              }}
+            >
+              <option value="ip_address">
+                {VIA_LABEL.ip_address} — {recorder.ip_address}
+                {recorder.connect_via === 'ip_address' ? ' (in use)' : ''}
+              </option>
+              <option value="hostname">
+                {VIA_LABEL.hostname} — {recorder.hostname}
+                {recorder.connect_via === 'hostname' ? ' (in use)' : ''}
+              </option>
+            </Select>
+          ) : null}
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div style={{ width: '9rem' }}>
+            <div style={{ width: '11rem' }}>
               <Input
                 id="recorder-test-channel"
-                label="Channel"
+                label="Channel to test with"
                 value={channel}
                 inputMode="numeric"
                 onChange={(event) => {

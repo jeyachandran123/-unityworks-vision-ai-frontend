@@ -10,8 +10,14 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
+import { useAuth } from '@app/auth/AuthProvider';
 import { isApiError } from '@shared/api/errors';
-import { type Recorder, type RecorderTestResult, recordersApi } from '@shared/api/recorders';
+import {
+  type ConnectVia,
+  type Recorder,
+  type RecorderTestResult,
+  recordersApi,
+} from '@shared/api/recorders';
 import { Input, Select, StatusBadge } from '@shared/ui/primitives';
 
 /* ── words ────────────────────────────────────────────────────────────────── */
@@ -28,32 +34,263 @@ export function friendly(error: unknown, fallback: string): string {
   return isApiError(error) ? error.friendlyMessage : fallback;
 }
 
+/** The organization being configured, by the name its people know it by. */
+export function useOrganizationName(): string {
+  const { activeOrganization, user } = useAuth();
+  return activeOrganization?.name ?? user?.tenant_id ?? '';
+}
+
+/* ── addresses ────────────────────────────────────────────────────────────── */
+
+export const VIA_LABEL: Record<ConnectVia, string> = {
+  ip_address: 'IP address',
+  hostname: 'Domain / hostname',
+};
+
+/** What a typed address must never contain, whichever field it is in. */
+function urlProblem(value: string): string | undefined {
+  if (/^[a-z]+:\/\//i.test(value)) return 'Enter just the address — leave out rtsp://';
+  if (value.includes('/')) return 'Enter just the address — leave out any path';
+  if (value.includes(':')) return 'Enter the port in the port box, not here';
+  if (value.includes('@')) return 'Enter just the address — the username goes on the next step';
+  if (/\s/.test(value)) return 'An address has no spaces';
+  return undefined;
+}
+
 /**
- * The shape an address must have, checked while typing.
+ * The shape an IP address must have, checked while typing.
  *
- * The same rule the server enforces: just the address, no `rtsp://`, port or
- * path. Checked here too so the person learns it on the field they are typing
- * in, not after pressing Save three steps later.
+ * The same rules the server enforces, so the person learns them on the field
+ * they are typing in rather than after pressing Save three steps later.
  */
-export function addressProblem(value: string): string | undefined {
-  const host = value.trim();
-  if (!host) return undefined;
-  if (/^[a-z]+:\/\//i.test(host)) return 'Enter just the address — leave out rtsp://';
-  if (host.includes('/')) return 'Enter just the address — leave out any path';
-  if (host.includes(':')) return 'Enter the port in the Port box, not here';
-  if (host.includes('@')) return 'Enter just the address — the username goes on the next step';
-  if (/\s/.test(host)) return 'An address has no spaces';
-  if (!/^[A-Za-z0-9.-]+$/.test(host)) return 'Use letters, numbers, dots and hyphens only';
+export function ipProblem(value: string): string | undefined {
+  const ip = value.trim();
+  if (!ip) return undefined;
+  const url = urlProblem(ip);
+  if (url) return url;
+  if (/[a-z]/i.test(ip)) return 'That looks like a domain — enter it under Domain / hostname';
+  const parts = ip.split('.');
+  const valid =
+    parts.length === 4 &&
+    parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+  return valid ? undefined : 'An IP address is four numbers from 0 to 255, such as 192.168.1.20';
+}
+
+export function hostnameProblem(value: string): string | undefined {
+  const name = value.trim();
+  if (!name) return undefined;
+  const url = urlProblem(name);
+  if (url) return url;
+  if (/^[\d.]+$/.test(name)) return 'That is an IP address — enter it under IP address';
+  if (!/^[A-Za-z0-9.-]+$/.test(name)) return 'Use letters, numbers, dots and hyphens only';
   return undefined;
 }
 
 export function portProblem(value: string): string | undefined {
-  if (!value.trim()) return 'Enter the port — usually 554';
+  if (!value.trim()) return 'Enter the video port — usually 554';
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     return 'A port is a whole number between 1 and 65535 — usually 554';
   }
   return undefined;
+}
+
+/** A recorder's addresses as a form holds them. */
+export interface AddressDraft {
+  ipAddress: string;
+  hostname: string;
+  /** Only meaningful when both addresses are filled in. */
+  connectVia: ConnectVia | '';
+  port: string;
+}
+
+/** Which address will be dialled: the only one there is, or the one chosen. */
+export function chosenVia(draft: AddressDraft): ConnectVia | undefined {
+  const ip = draft.ipAddress.trim();
+  const name = draft.hostname.trim();
+  if (ip && name) return draft.connectVia || undefined;
+  if (ip) return 'ip_address';
+  if (name) return 'hostname';
+  return undefined;
+}
+
+export function addressProblems(draft: AddressDraft): Record<string, string | undefined> {
+  const ip = draft.ipAddress.trim();
+  const name = draft.hostname.trim();
+  return {
+    ipAddress: ipProblem(ip),
+    hostname: hostnameProblem(name),
+    either: ip || name ? undefined : 'Enter the recorder’s IP address, its domain, or both',
+    connectVia:
+      ip && name && !draft.connectVia ? 'Choose which address this server should connect with' : undefined,
+    port: portProblem(draft.port),
+  };
+}
+
+/** The fields the API takes, from a form's draft. */
+export function addressFields(draft: AddressDraft) {
+  const via = chosenVia(draft);
+  return {
+    ip_address: draft.ipAddress.trim(),
+    hostname: draft.hostname.trim(),
+    rtsp_port: Number(draft.port),
+    ...(via ? { connect_via: via } : {}),
+  };
+}
+
+/**
+ * IP address, domain, which of them to use, and the video port.
+ *
+ * Both addresses are optional on their own and at least one is needed. The
+ * choice of which to dial appears only once there are two to choose between,
+ * with each option showing the value it would use — nobody picks "Domain"
+ * without seeing which domain.
+ */
+export function AddressFields({
+  idPrefix,
+  value,
+  onChange,
+  problems,
+  showRequired,
+}: {
+  idPrefix: string;
+  value: AddressDraft;
+  onChange: (patch: Partial<AddressDraft>) => void;
+  problems: Record<string, string | undefined>;
+  /** Whether "missing" problems show yet — only after a first attempt to continue. */
+  showRequired: boolean;
+}) {
+  const ip = value.ipAddress.trim();
+  const name = value.hostname.trim();
+  // A format problem shows while typing; a missing value only once the person
+  // has tried to go on.
+  const shown = (problem: string | undefined, typed: boolean) =>
+    problem && (showRequired || typed) ? problem : undefined;
+
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(13rem, 1fr))',
+          gap: 'var(--space-3)',
+        }}
+      >
+        <Input
+          id={`${idPrefix}-ip`}
+          label="IP address"
+          value={value.ipAddress}
+          placeholder="192.168.1.20"
+          inputMode="decimal"
+          autoComplete="off"
+          spellCheck={false}
+          hint="On the site’s own network."
+          error={shown(problems['ipAddress'], Boolean(ip))}
+          onChange={(event) => onChange({ ipAddress: event.target.value })}
+        />
+        <Input
+          id={`${idPrefix}-hostname`}
+          label="Domain / hostname"
+          value={value.hostname}
+          placeholder="site.example.com"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
+          hint="Reaches it from anywhere — often a dynamic-DNS name."
+          error={shown(problems['hostname'], Boolean(name))}
+          onChange={(event) => onChange({ hostname: event.target.value })}
+        />
+      </div>
+      {showRequired && problems['either'] ? <FieldError>{problems['either']}</FieldError> : null}
+
+      {ip && name ? (
+        <fieldset
+          style={{
+            border: '1px solid var(--line-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            padding: 'var(--space-3) var(--space-4)',
+            margin: 0,
+            display: 'grid',
+            gap: 'var(--space-2)',
+          }}
+        >
+          <legend style={{ padding: '0 var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}>
+            This server connects using
+          </legend>
+          {(['ip_address', 'hostname'] as const).map((via) => (
+            <label
+              key={via}
+              style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'baseline', fontSize: 'var(--text-sm)' }}
+            >
+              <input
+                type="radio"
+                name={`${idPrefix}-connect-via`}
+                value={via}
+                checked={value.connectVia === via}
+                onChange={() => onChange({ connectVia: via })}
+              />
+              <span>
+                {VIA_LABEL[via]}{' '}
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink-secondary)' }}>
+                  {via === 'ip_address' ? ip : name}
+                </span>
+              </span>
+            </label>
+          ))}
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
+            Use the IP address when this server is on the same network as the recorder, and the
+            domain when it is somewhere else. Both are kept; you can switch later.
+          </span>
+          {showRequired && problems['connectVia'] ? <FieldError>{problems['connectVia']}</FieldError> : null}
+        </fieldset>
+      ) : null}
+
+      <div style={{ maxWidth: '16rem' }}>
+        <Input
+          id={`${idPrefix}-port`}
+          label="Video (RTSP) port"
+          value={value.port}
+          inputMode="numeric"
+          hint="Usually 554. Not always the port the recorder’s phone app or web page uses."
+          error={shown(problems['port'], Boolean(value.port.trim()))}
+          onChange={(event) => onChange({ port: event.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where a recorder is, as one line and an aside: the address it is dialled
+ * at, then the other one it also has.
+ */
+export function RecorderAddress({
+  recorder,
+}: {
+  recorder: Pick<Recorder, 'ip_address' | 'hostname' | 'connect_via' | 'address' | 'rtsp_port'>;
+}) {
+  const other =
+    recorder.connect_via === 'hostname'
+      ? recorder.ip_address && `also IP ${recorder.ip_address}`
+      : recorder.hostname && `also ${recorder.hostname}`;
+  return (
+    <span style={{ display: 'grid', gap: '0.1rem' }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+        {recorder.address || '—'}:{recorder.rtsp_port}
+      </span>
+      {other ? (
+        <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>{other}</span>
+      ) : null}
+    </span>
+  );
+}
+
+export function FieldError({ children }: { children: string }) {
+  return (
+    <span role="alert" style={{ color: 'var(--severity-critical)', fontSize: 'var(--text-xs)' }}>
+      {children}
+    </span>
+  );
 }
 
 /* ── state, shown the same way everywhere ─────────────────────────────────── */
@@ -80,7 +317,9 @@ export function CredentialState({ recorder }: { recorder: Pick<Recorder, 'creden
   if (recorder.credential_scheme === 'recorder') {
     return <span>Saved securely</span>;
   }
-  return <span>Managed by the server</span>;
+  // Still read from the server's own configuration: a migrated recorder whose
+  // password has not been moved into the application yet.
+  return <StatusBadge tone="degraded">Needs to be set here</StatusBadge>;
 }
 
 /* ── the brand dropdown ───────────────────────────────────────────────────── */
@@ -183,7 +422,8 @@ export function PasswordField({
 export type TestOutcome = Pick<
   RecorderTestResult,
   'ok' | 'message' | 'hint' | 'channel' | 'elapsed_ms' | 'resolution'
->;
+> &
+  Partial<Pick<RecorderTestResult, 'address' | 'port'>>;
 
 export function TestResult({ result }: { result: TestOutcome }) {
   const tone = result.ok ? 'var(--health-online)' : 'var(--severity-critical)';
@@ -214,6 +454,15 @@ export function TestResult({ result }: { result: TestOutcome }) {
           {result.hint}
         </span>
       )}
+      {result.address ? (
+        <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>
+          Tested{' '}
+          <span style={{ fontFamily: 'var(--font-mono)' }}>
+            {result.address}:{result.port}
+          </span>
+          , channel {result.channel}.
+        </span>
+      ) : null}
     </div>
   );
 }

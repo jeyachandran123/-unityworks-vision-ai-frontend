@@ -4,9 +4,11 @@
  * Five steps, each asking one kind of question, in the order a person setting
  * up a site actually knows the answers:
  *
- *   1. **Recorder** — what it is called, what brand it is, where it is.
+ *   1. **Recorder** — what it is called, what brand it is, where it is: its IP
+ *      address, its domain, or both, and which of them this server uses.
  *   2. **Sign in** — the username and password used on the recorder itself.
- *   3. **Test** — does it answer, with a picture, on a channel.
+ *   3. **Test** — does it answer, with a picture, on one channel. The channel
+ *      is only something to test with; it does not become a camera.
  *   4. **Cameras** — which of its channels to watch, and where each one is.
  *   5. **Review** — everything at once, then one Save.
  *
@@ -22,6 +24,12 @@
  * transaction. Half a site — the recorder saved, the fourth camera refused —
  * would leave somebody working out which half.
  *
+ * ### Whose recorder it is
+ *
+ * The organization being configured is named at the top, and the recorder is
+ * saved to it alone. The same screen serves every organization; only the
+ * values differ.
+ *
  * ### The password is never shown
  *
  * It is typed into a masked field with no reveal control, sent once, sealed by
@@ -36,6 +44,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { organizationApi } from '@shared/api/observations';
 import { camerasApi } from '@shared/api/persistence';
 import {
+  type ConnectVia,
   type RecorderCameraDraft,
   type RecorderTestResult,
   recordersApi,
@@ -44,16 +53,20 @@ import { Button, Input, KeyValue, LoadingState, Select, useToast } from '@shared
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
 import {
-  addressProblem,
+  AddressFields,
+  addressFields,
+  addressProblems,
   BrandSelect,
+  chosenVia,
   friendly,
   PasswordField,
-  portProblem,
   STREAM_LABEL,
   STREAM_SHORT,
   Steps,
   TestResult,
   useBrands,
+  useOrganizationName,
+  VIA_LABEL,
 } from './recorder-parts';
 
 const STEPS = ['Recorder', 'Sign in', 'Test', 'Cameras', 'Review'] as const;
@@ -66,7 +79,10 @@ interface CameraRow extends RecorderCameraDraft {
 interface Draft {
   name: string;
   brand: string;
-  host: string;
+  ipAddress: string;
+  hostname: string;
+  /** Which address this server dials, when there are two. */
+  connectVia: ConnectVia | '';
   port: string;
   /** Whether the person has typed a port, so a brand change stops overwriting it. */
   portTouched: boolean;
@@ -76,6 +92,8 @@ interface Draft {
   username: string;
   password: string;
   testChannel: string;
+  /** Which address the test uses, when there are two. Defaults to `connectVia`. */
+  testVia: ConnectVia | '';
   cameras: CameraRow[];
   startNow: boolean;
 }
@@ -83,7 +101,9 @@ interface Draft {
 const EMPTY: Draft = {
   name: '',
   brand: '',
-  host: '',
+  ipAddress: '',
+  hostname: '',
+  connectVia: '',
   port: '554',
   portTouched: false,
   pathTemplate: '',
@@ -92,6 +112,7 @@ const EMPTY: Draft = {
   username: '',
   password: '',
   testChannel: '1',
+  testVia: '',
   cameras: [],
   startNow: false,
 };
@@ -112,6 +133,7 @@ export function AddRecorderPage() {
   const client = useQueryClient();
   const toast = useToast();
   const brands = useBrands();
+  const organization = useOrganizationName();
   const zones = useQuery({
     queryKey: ['zones', 'for-recorder'],
     queryFn: () => organizationApi.zones({ limit: 200 }),
@@ -136,8 +158,7 @@ export function AddRecorderPage() {
     const recorder: Record<string, string | undefined> = {
       name: draft.name.trim() ? undefined : 'Give the recorder a name, such as “Kitchen DVR”',
       brand: draft.brand ? undefined : 'Choose the brand, or “Other” if it is not listed',
-      host: draft.host.trim() ? addressProblem(draft.host) : 'Enter the IP address or hostname',
-      port: portProblem(draft.port),
+      ...addressProblems(draft),
     };
     if (custom) {
       recorder.pathTemplate = !draft.pathTemplate.trim()
@@ -191,8 +212,7 @@ export function AddRecorderPage() {
   /* ── talking to the server ──────────────────────────────────────────────── */
 
   const connection = () => ({
-    host: draft.host.trim(),
-    rtsp_port: Number(draft.port),
+    ...addressFields(draft),
     username: draft.username.trim(),
     brand: draft.brand,
     ...(custom
@@ -204,12 +224,21 @@ export function AddRecorderPage() {
       : {}),
   });
 
+  // With two addresses, either can be tested before settling on one.
+  const bothAddresses = Boolean(draft.ipAddress.trim() && draft.hostname.trim());
+  const testVia: ConnectVia | undefined = bothAddresses
+    ? draft.testVia || chosenVia(draft)
+    : chosenVia(draft);
+  const testAddress =
+    testVia === 'hostname' ? draft.hostname.trim() : testVia === 'ip_address' ? draft.ipAddress.trim() : '';
+
   const test = useMutation({
     mutationFn: () =>
       recordersApi.testNew({
         ...connection(),
         password: draft.password,
         channel: Number(draft.testChannel) || 1,
+        ...(bothAddresses && testVia ? { via: testVia } : {}),
       }),
     onSuccess: setTested,
   });
@@ -285,9 +314,9 @@ export function AddRecorderPage() {
   return (
     <>
       <PageIntro
-        eyebrow="CCTV · Recorders"
+        eyebrow={organization ? `CCTV · ${organization}` : 'CCTV · Recorders'}
         title="Add a recorder"
-        standfirst="A recorder is the DVR or NVR your cameras are plugged into. Tell us how to reach it, check it answers, then choose which of its cameras to watch."
+        standfirst={`A recorder is the DVR or NVR your cameras are plugged into. Tell us how to reach it, check it answers, then choose which of its cameras to watch.${organization ? ` It is saved for ${organization} only.` : ''}`}
         actions={
           <Button variant="ghost" onClick={() => navigate('/admin/recorders')}>
             Cancel
@@ -338,35 +367,17 @@ export function AddRecorderPage() {
                   {shown(0) && problems.recorder.brand ? (
                     <FieldError>{problems.recorder.brand}</FieldError>
                   ) : null}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 8rem', gap: 'var(--space-3)' }}>
-                    <Input
-                      id="recorder-host"
-                      label="IP address or hostname"
-                      value={draft.host}
-                      placeholder="192.168.1.20"
-                      inputMode="url"
-                      autoComplete="off"
-                      spellCheck={false}
-                      // A format problem shows while typing; "required" only once
-                      // the person has tried to continue.
-                      error={
-                        shown(0) || addressProblem(draft.host) ? problems.recorder.host : undefined
-                      }
-                      onChange={(event) => set({ host: event.target.value })}
-                    />
-                    <Input
-                      id="recorder-port"
-                      label="Port"
-                      value={draft.port}
-                      inputMode="numeric"
-                      error={shown(0) ? problems.recorder.port : undefined}
-                      onChange={(event) => set({ port: event.target.value, portTouched: true })}
-                    />
-                  </div>
-                  <p style={NOTE}>
-                    The address you would type to reach the recorder from this server’s network. The
-                    port is almost always 554.
-                  </p>
+                  <AddressFields
+                    idPrefix="recorder"
+                    value={draft}
+                    problems={problems.recorder}
+                    showRequired={shown(0)}
+                    onChange={(patch) => {
+                      set({ ...patch, ...(patch.port !== undefined ? { portTouched: true } : {}) });
+                      // A result for another address says nothing about this one.
+                      setTested(null);
+                    }}
+                  />
 
                   {custom ? (
                     <fieldset
@@ -482,13 +493,37 @@ export function AddRecorderPage() {
               />
               <Plane>
                 <div style={FIELD_COLUMN}>
+                  <p style={NOTE}>
+                    The test uses one channel only to check that the recorder answers and accepts the
+                    username and password. <strong>It does not add a camera</strong> — you choose which
+                    cameras to watch in the next step.
+                  </p>
+                  {bothAddresses ? (
+                    <Select
+                      id="recorder-test-via"
+                      label="Test using"
+                      value={testVia ?? ''}
+                      onChange={(event) => {
+                        set({ testVia: event.target.value === 'hostname' ? 'hostname' : 'ip_address' });
+                        setTested(null);
+                      }}
+                    >
+                      <option value="ip_address">
+                        {VIA_LABEL.ip_address} — {draft.ipAddress.trim()}
+                      </option>
+                      <option value="hostname">
+                        {VIA_LABEL.hostname} — {draft.hostname.trim()}
+                      </option>
+                    </Select>
+                  ) : null}
                   <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                    <div style={{ width: '9rem' }}>
+                    <div style={{ width: '11rem' }}>
                       <Input
                         id="recorder-test-channel"
-                        label="Channel to try"
+                        label="Channel to test with"
                         value={draft.testChannel}
                         inputMode="numeric"
+                        hint="Any channel with a camera plugged in."
                         onChange={(event) => {
                           set({ testChannel: event.target.value });
                           setTested(null);
@@ -498,6 +533,7 @@ export function AddRecorderPage() {
                     <Button
                       variant="primary"
                       loading={test.isPending}
+                      disabled={!testAddress}
                       onClick={() => test.mutate()}
                     >
                       {test.isPending ? 'Testing…' : 'Test connection'}
@@ -505,7 +541,7 @@ export function AddRecorderPage() {
                   </div>
                   {test.isPending ? (
                     <p style={NOTE} role="status">
-                      Signing in to {draft.host.trim()} and waiting for a picture. This can take up to
+                      Signing in to {testAddress} and waiting for a picture. This can take up to
                       twenty seconds.
                     </p>
                   ) : null}
@@ -665,15 +701,27 @@ export function AddRecorderPage() {
                 <div style={{ display: 'grid', gap: 'var(--space-5)', maxWidth: '44rem' }}>
                   <KeyValue
                     items={[
+                      ...(organization ? [{ key: 'Organization', value: organization }] : []),
                       { key: 'Recorder', value: draft.name.trim() },
                       { key: 'Brand', value: brandLabel },
-                      { key: 'Address', value: `${draft.host.trim()} : ${draft.port}` },
+                      { key: 'IP address', value: draft.ipAddress.trim() || 'Not set' },
+                      { key: 'Domain / hostname', value: draft.hostname.trim() || 'Not set' },
+                      {
+                        key: 'Connects using',
+                        value: (() => {
+                          const via = chosenVia(draft);
+                          if (!via) return '—';
+                          const value = via === 'hostname' ? draft.hostname.trim() : draft.ipAddress.trim();
+                          return `${VIA_LABEL[via]} — ${value}`;
+                        })(),
+                      },
+                      { key: 'Video (RTSP) port', value: draft.port },
                       { key: 'Username', value: draft.username.trim() },
                       { key: 'Password', value: 'Will be saved securely' },
                       {
                         key: 'Connection',
                         value: tested?.ok
-                          ? `Tested — channel ${tested.channel} answered`
+                          ? `Tested — channel ${tested.channel} answered at ${tested.address}`
                           : tested
                             ? `Last test failed: ${tested.message}`
                             : 'Not tested',

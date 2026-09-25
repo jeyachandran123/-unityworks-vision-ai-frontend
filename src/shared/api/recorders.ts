@@ -1,9 +1,15 @@
 /**
  * Recorders — the DVRs and NVRs cameras plug into.
  *
- * A recorder owns how to reach its cameras: the address, the port, the account
+ * A recorder owns how to reach its cameras: its addresses, the port, the account
  * and its password, and which brand it is (which decides the stream URL). A
  * camera is one channel on a recorder.
+ *
+ * ### Two addresses, one dialled
+ *
+ * A recorder may have an IP address (on the site's own network), a domain
+ * (from anywhere), or both. `connect_via` says which one the server dials, and
+ * `address` is that one, worked out by the server.
  *
  * ### The password only travels one way
  *
@@ -30,10 +36,20 @@ export interface RecorderBrandList {
   custom: string;
 }
 
+/** Which of a recorder's two addresses the server dials. */
+export type ConnectVia = 'ip_address' | 'hostname';
+
 export interface Recorder {
   id: string;
   name: string;
-  host: string;
+  /** IPv4, usually on the site's own network. Empty when there is none. */
+  ip_address: string;
+  /** A domain name such as `site.freemyip.com`. Empty when there is none. */
+  hostname: string;
+  connect_via: ConnectVia;
+  /** The address the server dials: whichever `connect_via` names. */
+  address: string;
+  /** The recorder's video (RTSP) port. */
   rtsp_port: number;
   username: string;
   /** A brand key, or the custom key. */
@@ -84,7 +100,10 @@ export interface RecorderCameraDraft {
 
 export interface RecorderConnection {
   name: string;
-  host: string;
+  ip_address: string;
+  hostname: string;
+  /** Required when both addresses are given; otherwise the one there is. */
+  connect_via?: ConnectVia;
   rtsp_port: number;
   username: string;
   brand: string;
@@ -117,10 +136,14 @@ export interface RecorderTestResult {
     | 'unreachable'
     | 'refused'
     | 'address_not_found'
+    | 'not_rtsp'
     | 'decoder_unavailable'
     | 'credential_unavailable';
   message: string;
   hint: string;
+  /** What was tested, so the page can say "192.168.1.20 : 554". */
+  address: string;
+  port: number;
   channel: number;
   elapsed_ms: number;
   resolution: string | null;
@@ -155,15 +178,19 @@ export const recordersApi = {
   deactivate: (id: string) => api.post<RecorderActivation>(`${path(id)}/deactivate`),
   /** Refused by the server while it holds cameras. */
   remove: (id: string) => api.del<{ recorder_id: string; deleted: boolean }>(path(id)),
-  /** Test a recorder that has not been saved yet, with the password just typed. */
+  /**
+   * Test a recorder that has not been saved yet, with the password just typed.
+   * `via` tests one address of two; without it, the one it would connect with.
+   */
   testNew: (
     connection: Omit<RecorderConnection, 'name'> & {
       password: string;
       channel: number;
       stream_type?: 'main' | 'sub';
+      via?: ConnectVia;
     },
   ) => api.post<RecorderTestResult>('/recorders/test', connection),
-  /** Test a saved recorder with its stored password. */
-  test: (id: string, channel: number) =>
-    api.post<RecorderTestResult>(`${path(id)}/test`, { channel }),
+  /** Test a saved recorder with its stored password, optionally on its other address. */
+  test: (id: string, channel: number, via?: ConnectVia) =>
+    api.post<RecorderTestResult>(`${path(id)}/test`, via ? { channel, via } : { channel }),
 };

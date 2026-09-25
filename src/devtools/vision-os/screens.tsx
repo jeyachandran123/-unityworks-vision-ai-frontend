@@ -659,7 +659,7 @@ export function SourcesScreen() {
                 detail="received a genuine frame"
                 tone={view.runtime.streaming ? 'accent' : 'default'}
               />
-              <StatCard label="Cameras configured" value={view.cameras_configured.length} detail="named in CCTV_CHANNELS" />
+              <StatCard label="Live cameras" value={view.cameras_configured.length} detail="dialled from this organization's recorders" />
             </div>
 
             {view.sessions.length === 0 ? (
