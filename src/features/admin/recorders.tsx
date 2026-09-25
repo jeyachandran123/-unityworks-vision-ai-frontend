@@ -61,6 +61,8 @@ import {
   addressProblems,
   BrandSelect,
   CredentialState,
+  DEFAULT_WALL_FPS,
+  FrameRateSelect,
   friendly,
   PasswordField,
   RecorderAddress,
@@ -759,6 +761,7 @@ function AddCameraRow({
   const [name, setName] = useState('');
   const [zoneId, setZoneId] = useState(zones.length === 1 ? (zones[0]?.id ?? '') : '');
   const [stream, setStream] = useState<'main' | 'sub'>('sub');
+  const [wallFps, setWallFps] = useState(DEFAULT_WALL_FPS);
   const [attempted, setAttempted] = useState(false);
 
   const channelNumber = Number(channel);
@@ -780,6 +783,7 @@ function AddCameraRow({
         name: name.trim(),
         zone_id: zoneId,
         stream_type: stream,
+        wall_fps: wallFps,
       }),
     onSuccess: (camera) => {
       onSaved();
@@ -839,6 +843,7 @@ function AddCameraRow({
           <option value="sub">{STREAM_LABEL.sub}</option>
           <option value="main">{STREAM_LABEL.main}</option>
         </Select>
+        <FrameRateSelect id="new-camera-fps" value={wallFps} onChange={setWallFps} />
       </div>
       {attempted && !zoneId ? (
         <span role="alert" style={{ color: 'var(--severity-critical)', fontSize: 'var(--text-xs)' }}>

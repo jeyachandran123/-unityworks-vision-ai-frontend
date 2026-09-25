@@ -10,6 +10,13 @@
  *
  * So: tabs for the three, and a danger zone for the fourth, behind a typed
  * confirmation and its own permission.
+ *
+ * ### Editing from the list
+ *
+ * Each row has an Edit button that opens that camera's details — name, zone,
+ * recorder, channel, stream, Live Wall frame rate and purpose — in a dialog, so
+ * a camera can be corrected without leaving the list. Only what changed is
+ * sent, and a change to what a switched-on camera dials reconnects it at once.
  */
 
 import { useMemo, useState } from 'react';
@@ -29,18 +36,30 @@ import {
   EmptyState,
   Input,
   LoadingState,
+  Modal,
   Select,
   StatusBadge,
+  useToast,
 } from '@shared/ui/primitives';
 import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
-import { CredentialState, RecorderStatus, STREAM_LABEL, TestResult } from './recorder-parts';
+import {
+  CredentialState,
+  DEFAULT_WALL_FPS,
+  FrameRateSelect,
+  friendly,
+  RecorderStatus,
+  STREAM_LABEL,
+  TestResult,
+} from './recorder-parts';
 import { DangerConfirm, Failed, ObjectTabs, SearchField, useDebounced, when } from './shared';
 
 /* ── the list ─────────────────────────────────────────────────────────────── */
 
 export function AdminCamerasPage() {
   const { has } = usePermissions();
+  const canManage = has(PERMISSIONS.manageCameras);
+  const [editing, setEditing] = useState<Camera | null>(null);
   const [search, setSearch] = useState('');
   const [showing, setShowing] = useState<'all' | 'on' | 'off'>('all');
   const q = useDebounced(search).trim().toLowerCase();
@@ -106,6 +125,27 @@ export function AdminCamerasPage() {
       header: 'Analysed',
       render: (camera) => (camera.analysis_enabled ? 'Yes' : 'No'),
     },
+    {
+      key: 'wall_fps',
+      header: 'Live Wall',
+      numeric: true,
+      // A server that does not send the rate is a rate nobody knows: a dash,
+      // never "undefined fps" and never a guessed default.
+      render: (camera) => (typeof camera.wall_fps === 'number' ? `${camera.wall_fps} fps` : '—'),
+    },
+    ...(canManage
+      ? [
+          {
+            key: 'edit',
+            header: 'Edit',
+            render: (camera: Camera) => (
+              <Button size="sm" aria-label={`Edit ${camera.name}`} onClick={() => setEditing(camera)}>
+                Edit
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const total = cameras.data?.cameras.length ?? 0;
@@ -211,7 +251,203 @@ export function AdminCamerasPage() {
           ) : null}
         </Plane>
       </Region>
+
+      {editing ? <EditCamera camera={editing} onClose={() => setEditing(null)} /> : null}
     </>
+  );
+}
+
+/* ── editing one camera from the list ─────────────────────────────────────── */
+
+interface EditDraft {
+  name: string;
+  zoneId: string;
+  recorderId: string;
+  channel: string;
+  streamType: 'main' | 'sub';
+  wallFps: number;
+  purpose: string;
+}
+
+/**
+ * One camera's details, editable in place.
+ *
+ * Opened fresh for each camera, so the fields always start from what is
+ * saved. Only changed fields are sent: an edit to the name must not also
+ * re-send a channel and look, in the audit trail, like a move.
+ */
+function EditCamera({ camera, onClose }: { camera: Camera; onClose: () => void }) {
+  const client = useQueryClient();
+  const toast = useToast();
+  const zones = useQuery({
+    queryKey: ['zones', 'all'],
+    queryFn: () => organizationApi.zones({ limit: 200 }),
+  });
+  const recorders = useQuery({
+    queryKey: ['recorders', 'for-camera'],
+    queryFn: () => recordersApi.list({ limit: 200 }),
+  });
+  const [draft, setDraft] = useState<EditDraft>({
+    name: camera.name,
+    zoneId: camera.zone_id,
+    recorderId: camera.recorder_id,
+    channel: String(camera.channel),
+    streamType: camera.stream_type,
+    wallFps: typeof camera.wall_fps === 'number' ? camera.wall_fps : DEFAULT_WALL_FPS,
+    purpose: camera.purpose,
+  });
+  const set = (patch: Partial<EditDraft>) => setDraft((current) => ({ ...current, ...patch }));
+
+  const channel = Number(draft.channel);
+  const problems = {
+    name: draft.name.trim() ? undefined : 'Give this camera a name',
+    channel: Number.isInteger(channel) && channel >= 1 ? undefined : 'Channel numbers start at 1',
+    zone: draft.zoneId ? undefined : 'Choose where this camera is',
+  };
+  const valid = Object.values(problems).every((problem) => !problem);
+
+  const changes = {
+    ...(draft.name.trim() !== camera.name ? { name: draft.name.trim() } : {}),
+    ...(draft.zoneId !== camera.zone_id ? { zone_id: draft.zoneId } : {}),
+    ...(draft.recorderId !== camera.recorder_id ? { recorder_id: draft.recorderId } : {}),
+    ...(channel !== camera.channel ? { channel } : {}),
+    ...(draft.streamType !== camera.stream_type ? { stream_type: draft.streamType } : {}),
+    ...(draft.wallFps !== (camera.wall_fps ?? DEFAULT_WALL_FPS) ? { wall_fps: draft.wallFps } : {}),
+    ...(draft.purpose.trim() !== camera.purpose ? { purpose: draft.purpose.trim() } : {}),
+  };
+  const changed = Object.keys(changes).length > 0;
+  const redials = 'channel' in changes || 'stream_type' in changes || 'recorder_id' in changes;
+
+  const save = useMutation({
+    mutationFn: () => camerasApi.update(camera.camera_key, changes),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      void client.invalidateQueries({ queryKey: ['recorders'] });
+      void client.invalidateQueries({ queryKey: ['wall'] });
+      const name = result.name || draft.name.trim();
+      toast(
+        result.reconnected
+          ? `${name} saved and reconnected on channel ${result.channel}.`
+          : `${name} saved.`,
+      );
+      onClose();
+    },
+  });
+
+  const activeZones = (zones.data?.zones ?? []).filter(
+    (zone) => zone.is_active || zone.id === camera.zone_id,
+  );
+  const recorderList = recorders.data?.recorders ?? [];
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit ${camera.name}`}
+      footer={
+        <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!changed || !valid}
+            loading={save.isPending}
+            onClick={() => save.mutate()}
+          >
+            Save changes
+          </Button>
+        </div>
+      }
+    >
+      <form
+        noValidate
+        aria-label={`Edit ${camera.name}`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (changed && valid) save.mutate();
+        }}
+        style={{ display: 'grid', gap: 'var(--space-4)' }}
+      >
+        <Input
+          id="edit-camera-name"
+          label="Name"
+          value={draft.name}
+          error={problems.name}
+          onChange={(event) => set({ name: event.target.value })}
+        />
+        <Select
+          id="edit-camera-zone"
+          label="Zone"
+          value={draft.zoneId}
+          onChange={(event) => set({ zoneId: event.target.value })}
+        >
+          {activeZones.map((zone) => (
+            <option key={zone.id} value={zone.id}>
+              {zone.name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="edit-camera-recorder"
+          label="Recorder"
+          value={draft.recorderId}
+          onChange={(event) => set({ recorderId: event.target.value })}
+        >
+          {recorderList.length === 0 ? (
+            <option value={camera.recorder_id}>{camera.recorder_name}</option>
+          ) : null}
+          {recorderList.map((recorder) => (
+            <option key={recorder.id} value={recorder.id}>
+              {recorder.name}
+              {recorder.is_active ? '' : ' (inactive)'}
+            </option>
+          ))}
+        </Select>
+        <div style={{ display: 'grid', gridTemplateColumns: '9rem minmax(0, 1fr)', gap: 'var(--space-3)' }}>
+          <Input
+            id="edit-camera-channel"
+            label="Channel"
+            value={draft.channel}
+            inputMode="numeric"
+            error={problems.channel}
+            onChange={(event) => set({ channel: event.target.value })}
+          />
+          <Select
+            id="edit-camera-stream"
+            label="Stream"
+            value={draft.streamType}
+            onChange={(event) => set({ streamType: event.target.value === 'main' ? 'main' : 'sub' })}
+          >
+            <option value="sub">{STREAM_LABEL.sub}</option>
+            <option value="main">{STREAM_LABEL.main}</option>
+          </Select>
+        </div>
+        <FrameRateSelect
+          id="edit-camera-fps"
+          value={draft.wallFps}
+          onChange={(wallFps) => set({ wallFps })}
+        />
+        <Input
+          id="edit-camera-purpose"
+          label="Why it is watched (optional)"
+          value={draft.purpose}
+          onChange={(event) => set({ purpose: event.target.value })}
+        />
+        {redials && camera.enabled ? (
+          <p role="status" style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}>
+            This camera is on, so saving reconnects it to the new channel or stream straight away.
+          </p>
+        ) : null}
+        {save.isError ? (
+          <p role="alert" style={{ margin: 0, color: 'var(--severity-critical)', fontSize: 'var(--text-sm)' }}>
+            {friendly(save.error, 'The camera could not be saved. Nothing was changed.')}
+          </p>
+        ) : null}
+        {/* Enter submits without the footer's button having focus. */}
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Modal>
   );
 }
 

@@ -29,6 +29,54 @@ export const STREAM_LABEL: Record<'main' | 'sub', string> = {
 
 export const STREAM_SHORT: Record<'main' | 'sub', string> = { sub: 'Sub', main: 'Main' };
 
+/** The Live Wall rate a camera gets unless somebody chooses another. */
+export const DEFAULT_WALL_FPS = 4;
+
+/** The rates offered. Plain numbers somebody can compare, 1 to 25. */
+const WALL_FPS_CHOICES = [1, 2, 4, 6, 8, 10, 12, 15, 20, 25] as const;
+
+function fpsWord(fps: number): string {
+  if (fps === DEFAULT_WALL_FPS) return ' — standard';
+  if (fps <= 2) return ' — lightest';
+  if (fps >= 15) return ' — smooth';
+  return '';
+}
+
+/**
+ * How smoothly a camera plays on the Live Wall.
+ *
+ * Each camera's own setting. A value set some other way that is not in the
+ * list is still offered, so opening an edit never silently changes it.
+ */
+export function FrameRateSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: number;
+  onChange: (fps: number) => void;
+}) {
+  const choices: number[] = [...WALL_FPS_CHOICES];
+  if (!choices.includes(value)) choices.push(value);
+  choices.sort((a, b) => a - b);
+  return (
+    <Select
+      id={id}
+      label="Live Wall frame rate"
+      value={String(value)}
+      hint="How smoothly it plays on the Live Wall. Higher uses more network and server power, and the camera’s own stream is the limit."
+      onChange={(event) => onChange(Number(event.target.value))}
+    >
+      {choices.map((fps) => (
+        <option key={fps} value={String(fps)}>
+          {fps} fps{fpsWord(fps)}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 /** A server error, in the words the server chose for a person. */
 export function friendly(error: unknown, fallback: string): string {
   return isApiError(error) ? error.friendlyMessage : fallback;

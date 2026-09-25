@@ -95,6 +95,8 @@ export interface RecorderCameraDraft {
   name: string;
   zone_id: string;
   stream_type: 'main' | 'sub';
+  /** The Live Wall frame rate. The server uses 4 when it is left out. */
+  wall_fps?: number;
   purpose?: string;
 }
 

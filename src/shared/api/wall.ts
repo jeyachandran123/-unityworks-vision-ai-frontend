@@ -49,6 +49,10 @@ export interface WallCamera {
   first_frame_latency_s: number | null;
   last_error: string;
   purpose: string;
+  /** This camera's own Live Wall frame rate. Absent from an older server. */
+  wall_fps?: number;
+  /** Frames a second actually arriving from the camera — the ceiling. */
+  source_fps?: number;
 }
 
 export interface WallSummary {

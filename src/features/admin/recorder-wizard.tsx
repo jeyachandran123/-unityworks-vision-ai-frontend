@@ -58,6 +58,8 @@ import {
   addressProblems,
   BrandSelect,
   chosenVia,
+  DEFAULT_WALL_FPS,
+  FrameRateSelect,
   friendly,
   PasswordField,
   STREAM_LABEL,
@@ -295,6 +297,7 @@ export function AddRecorderPage() {
           // One zone means nothing to choose.
           zone_id: activeZones.length === 1 ? (activeZones[0]?.id ?? '') : '',
           stream_type: 'sub',
+          wall_fps: DEFAULT_WALL_FPS,
         },
       ],
     });
@@ -656,6 +659,11 @@ export function AddRecorderPage() {
                               <option value="sub">{STREAM_LABEL.sub}</option>
                               <option value="main">{STREAM_LABEL.main}</option>
                             </Select>
+                            <FrameRateSelect
+                              id={`camera-${camera.key}-fps`}
+                              value={camera.wall_fps ?? DEFAULT_WALL_FPS}
+                              onChange={(wall_fps) => editCamera(camera.key, { wall_fps })}
+                            />
                             <div style={{ paddingTop: '1.6rem' }}>
                               <Button
                                 variant="ghost"
@@ -747,6 +755,7 @@ export function AddRecorderPage() {
                           <th scope="col">Camera</th>
                           <th scope="col">Zone</th>
                           <th scope="col">Stream</th>
+                          <th scope="col">Live Wall</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -760,6 +769,9 @@ export function AddRecorderPage() {
                               <td>{camera.name.trim()}</td>
                               <td>{activeZones.find((zone) => zone.id === camera.zone_id)?.name ?? '—'}</td>
                               <td>{STREAM_SHORT[camera.stream_type]}</td>
+                              <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {camera.wall_fps ?? DEFAULT_WALL_FPS} fps
+                              </td>
                             </tr>
                           ))}
                       </tbody>

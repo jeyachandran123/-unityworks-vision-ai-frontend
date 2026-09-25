@@ -649,7 +649,8 @@ export function CameraWallPage() {
             <CameraTile
               key={camera.camera_id}
               camera={camera}
-              fps={data.default_wall_fps}
+              // Each camera's own rate, chosen when it was added or edited.
+              fps={camera.wall_fps ?? data.default_wall_fps}
               selected={selected?.camera_id === camera.camera_id}
               onOpen={setOpen}
             />
@@ -714,7 +715,8 @@ export function CameraWallPage() {
       {selected ? (
         <CameraDetail
           camera={selected}
-          fps={data.default_detail_fps}
+          // Never slower than the camera's own tile rate.
+          fps={Math.max(selected.wall_fps ?? 0, data.default_detail_fps)}
           onClose={() => setOpen(null)}
         />
       ) : null}

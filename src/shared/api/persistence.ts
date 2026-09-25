@@ -49,6 +49,11 @@ export interface Camera {
   /** `recorder`, `env` or `file` — how the recorder's password is kept. */
   credential_scheme: string;
   analysis_fps: number;
+  /**
+   * How many frames a second the Live Wall shows of this camera — its own
+   * setting, 1 to 25. The camera's stream is the ceiling.
+   */
+  wall_fps: number;
   enabled: boolean;
   /** Whether the video is processed by AI, as distinct from whether it streams. */
   analysis_enabled: boolean;
@@ -76,8 +81,18 @@ export interface CameraDraft {
   zone_id: string;
   stream_type?: 'main' | 'sub';
   analysis_fps?: number;
+  /** The Live Wall frame rate. The server uses 4 when it is left out. */
+  wall_fps?: number;
   analysis_enabled?: boolean;
   purpose?: string;
+}
+
+/**
+ * A saved edit. `reconnected` is true when the edit changed what a switched-on
+ * camera dials — its channel, stream or recorder — and the server re-dialled it.
+ */
+export interface CameraUpdateResult extends Camera {
+  reconnected?: boolean;
 }
 
 /**
@@ -119,7 +134,7 @@ export const camerasApi = {
   list: () => api.get<CameraList>('/cameras'),
   /** Creates it **disabled**. Enabling is a separate call, deliberately. */
   create: (draft: CameraDraft) => api.post<Camera>('/cameras', draft),
-  update: (key: string, changes: Partial<CameraDraft>) =>
+  update: (key: string, changes: Partial<CameraDraft>): Promise<CameraUpdateResult> =>
     api.patch<Camera>(`/cameras/${encodeURIComponent(key)}`, changes),
   /**
    * Dial this camera now.

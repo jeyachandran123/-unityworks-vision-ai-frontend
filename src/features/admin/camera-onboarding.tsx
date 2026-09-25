@@ -43,6 +43,8 @@ import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
 import {
   CredentialState,
+  DEFAULT_WALL_FPS,
+  FrameRateSelect,
   friendly,
   RecorderStatus,
   STREAM_LABEL,
@@ -57,6 +59,8 @@ interface Draft {
   /** Whether the person typed a channel, so a recorder change stops proposing one. */
   channelTouched: boolean;
   streamType: 'main' | 'sub';
+  /** The Live Wall frame rate. */
+  wallFps: number;
   zoneId: string;
   name: string;
   cameraKey: string;
@@ -75,6 +79,7 @@ export function CameraOnboardingPage() {
     channel: '1',
     channelTouched: false,
     streamType: 'sub',
+    wallFps: DEFAULT_WALL_FPS,
     zoneId: params.get('zone') ?? '',
     name: '',
     cameraKey: '',
@@ -161,6 +166,7 @@ export function CameraOnboardingPage() {
         recorder_id: draft.recorderId,
         channel,
         stream_type: draft.streamType,
+        wall_fps: draft.wallFps,
         zone_id: draft.zoneId,
         camera_key: draft.cameraKey.trim(),
         name: draft.name.trim(),
@@ -283,6 +289,12 @@ export function CameraOnboardingPage() {
                         <option value="main">{STREAM_LABEL.main}</option>
                       </Select>
                     </div>
+
+                    <FrameRateSelect
+                      id="camera-wall-fps"
+                      value={draft.wallFps}
+                      onChange={(wallFps) => set({ wallFps })}
+                    />
 
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
                       <Button
