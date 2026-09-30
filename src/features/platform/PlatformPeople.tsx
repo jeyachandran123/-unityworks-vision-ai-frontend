@@ -1,21 +1,16 @@
 /**
  * People — everyone on the platform, and what they may enter.
  *
- * ### This is not the organization's user administration, and must not become it
+ * ### Membership here; access in the matrix
  *
- * `/admin/people` inside an organization answers "who works here, and what may
- * they do here". It creates accounts, assigns roles, sets camera scope, and it
- * is gated on `MANAGE_USERS` held *in that organization* by somebody who works
- * there.
- *
- * This page answers a different question that nothing else can: "who exists
- * across the platform, and which customers can they reach". It administers
- * **membership** — the entry ticket — and nothing else. Roles stay where they
- * belong, granted inside the organization they apply to, by somebody
- * accountable there.
- *
- * Keeping that line is what stops the control plane becoming a back door into
- * every customer's user administration.
+ * This page answers "who exists across the platform, and which customers can
+ * they reach", and it administers **membership** — the entry ticket. What a
+ * person may do inside each organization is set on the access matrix
+ * (`/platform/people/:id/access`, `PersonAccess.tsx`), which writes the same
+ * role and override rows an Organization Admin writes from `/admin/users/:id`
+ * and audits every change into the organization it changes. That is not a back
+ * door: the Platform Admin can already enter any organization with every
+ * permission and do the same from inside it.
  *
  * ### Home organization and memberships are always shown separately
  *
@@ -51,7 +46,7 @@ import {
   Select,
   StatusBadge,
 } from '@shared/ui/primitives';
-import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { GoTo, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
 /* ── the directory ────────────────────────────────────────────────────────── */
 
@@ -150,6 +145,11 @@ export function PlatformPeoplePage() {
         eyebrow="Platform"
         title="People"
         standfirst="Everyone on the platform. Membership is what lets somebody enter an organization; roles decide what they can do once inside."
+        actions={
+          <Link to="/platform/people/new" style={{ textDecoration: 'none' }}>
+            <GoTo>New person</GoTo>
+          </Link>
+        }
       />
 
       <Region order={2}>
@@ -271,7 +271,19 @@ export function PlatformPersonPage() {
             {it.is_platform_operator ? <Badge>Platform operator</Badge> : null}
           </span>
         }
-        actions={<Link to="/platform/people">All people</Link>}
+        actions={
+          <span style={{ display: 'inline-flex', gap: 'var(--space-4)' }}>
+            {it.is_platform_operator ? null : (
+              <Link
+                to={`/platform/people/${encodeURIComponent(it.id)}/access`}
+                style={{ textDecoration: 'none' }}
+              >
+                <GoTo>Edit access</GoTo>
+              </Link>
+            )}
+            <Link to="/platform/people">All people</Link>
+          </span>
+        }
       />
 
       {failure ? (
@@ -295,7 +307,7 @@ export function PlatformPersonPage() {
         <SectionRule
           lead
           label="organizations they may enter"
-          detail="Membership is the entry ticket. Roles are granted inside each organization, by somebody accountable there."
+          detail="Membership is the entry ticket. What they may do inside each one is set under Edit access."
         />
         <Plane>
           {it.home_membership_missing ? (

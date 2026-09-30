@@ -178,6 +178,9 @@ export function AccessMatrix({
               key={d.organizationId}
               type="button"
               aria-pressed={selected}
+              // The dot's meaning in words, so colour is never the only signal.
+              aria-label={`${d.name}, ${TONE_WORD[tone]}${archived ? ', archived' : ''}`}
+              title={TONE_WORD[tone]}
               disabled={archived}
               onClick={() => setSelectedId(d.organizationId)}
               style={{
@@ -188,10 +191,6 @@ export function AccessMatrix({
             >
               <span aria-hidden="true" style={{ ...dot, ...TONE_DOT[tone] }} />
               {d.name}
-              <span className="sr-only">
-                , {TONE_WORD[tone]}
-                {archived ? ', archived' : ''}
-              </span>
             </button>
           );
         })}
@@ -300,12 +299,12 @@ export function AccessMatrix({
               key={s.id}
               type="button"
               aria-pressed={s.id === section.id}
+              aria-label={any ? `${s.label}, has ticks` : s.label}
               onClick={() => setSectionId(s.id)}
               style={{ ...pill(s.id === section.id), borderRadius: '999px' }}
             >
               {s.label}
               {any ? <span aria-hidden="true" style={{ ...dot, ...TONE_DOT.granted }} /> : null}
-              {any ? <span className="sr-only">, has ticks</span> : null}
             </button>
           );
         })}

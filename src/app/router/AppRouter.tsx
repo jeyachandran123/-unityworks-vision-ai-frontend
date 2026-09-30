@@ -55,6 +55,7 @@ import { OrganizationChooser } from '@features/platform/OrganizationChooser';
 import { PlatformShell } from '@shared/layout/PlatformShell';
 import { PlatformDashboard } from '@features/platform/PlatformDashboard';
 import { PlatformPeoplePage, PlatformPersonPage } from '@features/platform/PlatformPeople';
+import { EditPersonAccessPage, NewPersonPage } from '@features/platform/PersonAccess';
 import {
   PlatformAuditPage,
   PlatformFleetPage,
@@ -152,6 +153,8 @@ export function AppRouter() {
               element={<OrganizationDetailPage />}
             />
             <Route path="/platform/people" element={<PlatformPeoplePage />} />
+            <Route path="/platform/people/new" element={<NewPersonPage />} />
+            <Route path="/platform/people/:userId/access" element={<EditPersonAccessPage />} />
             <Route path="/platform/people/:userId" element={<PlatformPersonPage />} />
             <Route path="/platform/operators" element={<PlatformOperatorsPage />} />
             <Route path="/platform/roles" element={<PlatformRolesPage />} />
