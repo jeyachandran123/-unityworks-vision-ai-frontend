@@ -71,6 +71,7 @@ export const API_PATHS = [
   "/api/v1/platform/overview",
   "/api/v1/platform/people",
   "/api/v1/platform/people/{user_id}",
+  "/api/v1/platform/people/{user_id}/access",
   "/api/v1/platform/roles",
   "/api/v1/pos-connectors",
   "/api/v1/recorder-brands",
@@ -325,8 +326,17 @@ export type OverviewApiV1PlatformOverviewGetResponse = Record<string, unknown>;
 /** `GET /api/v1/platform/people` */
 export type ListPeopleApiV1PlatformPeopleGetResponse = Record<string, unknown>;
 
+/** `POST /api/v1/platform/people` */
+export type CreatePersonApiV1PlatformPeoplePostResponse = Record<string, unknown>;
+
 /** `GET /api/v1/platform/people/{user_id}` */
 export type GetPersonApiV1PlatformPeopleUserIdGetResponse = Record<string, unknown>;
+
+/** `GET /api/v1/platform/people/{user_id}/access` */
+export type PersonAccessApiV1PlatformPeopleUserIdAccessGetResponse = Record<string, unknown>;
+
+/** `PUT /api/v1/platform/people/{user_id}/access` */
+export type SetPersonAccessApiV1PlatformPeopleUserIdAccessPutResponse = Record<string, unknown>;
 
 /** `GET /api/v1/platform/roles` */
 export type RolePolicyApiV1PlatformRolesGetResponse = Record<string, unknown>;

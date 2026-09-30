@@ -900,6 +900,29 @@ type StubPerson = Record<string, unknown> & {
   memberships: StubMembership[];
 };
 
+/** One organization in a person's access, as the platform stub stores it. */
+export interface StubOrganizationAccess {
+  organization_id: string;
+  organization_name: string;
+  status: string;
+  is_member: boolean;
+  is_home: boolean;
+  role: string | null;
+  roles: string[];
+  permissions: string[];
+  effective: string[];
+  camera_scope: { breadth: string; camera_keys: string[]; site_ids: string[] };
+}
+
+export interface StubPersonAccess {
+  user_id: string;
+  email: string;
+  display_name: string;
+  is_platform_operator: boolean;
+  home_organization_id: string | null;
+  organizations: StubOrganizationAccess[];
+}
+
 export interface StubOptions {
   /**
    * The organizations `GET /auth/organizations` reports, and that the login
@@ -935,6 +958,16 @@ export interface StubOptions {
    * observable behaviour the real backend gives.
    */
   platformPeople?: Array<Record<string, unknown>>;
+  /** `GET /platform/roles`. Defaults to a one-role policy. */
+  platformRoles?: unknown;
+  /**
+   * `GET /platform/people/{id}/access`, keyed by user id — and the store
+   * `PUT …/access` and `POST /platform/people` mutate, so a refetch after a
+   * save reflects it.
+   */
+  platformAccess?: Record<string, StubPersonAccess>;
+  /** Every body sent to `PUT …/access` and `POST /platform/people`, in order. */
+  accessWrites?: Array<{ method: string; url: string; body: unknown }>;
   /** Overrides the camera block on /status. */
   cameras?: unknown;
   /** Overrides the live_runtime block on /status. */
@@ -1044,6 +1077,15 @@ export function stubFetch(options: StubOptions = {}) {
     ...(person as StubPerson),
     memberships: [...(((person as StubPerson).memberships ?? []) as StubMembership[])],
   }));
+  // Cloned per organization row so a save in one test never leaks into the
+  // next through a shared fixture.
+  const accessState: Record<string, StubPersonAccess> = {};
+  for (const [id, access] of Object.entries(options.platformAccess ?? {})) {
+    accessState[id] = {
+      ...access,
+      organizations: access.organizations.map((row) => ({ ...row, permissions: [...row.permissions] })),
+    };
+  }
 
   // Mutable per-call state for the Stage 5/7 admin surface. Seeded once from
   // `options.adminUsers`/`options.adminUserPermissions`; every mutation below
@@ -1270,6 +1312,94 @@ export function stubFetch(options: StubOptions = {}) {
       );
     }
 
+    const accessRoute = /\/platform\/people\/([^/?]+)\/access$/.exec(url);
+    if (accessRoute) {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const found = accessState[decodeURIComponent(accessRoute[1] ?? '')];
+      if (!found) return envelope('NOT_FOUND', 404);
+      if (method === 'PUT') {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        options.accessWrites?.push({ method, url, body });
+        for (const change of (body.organizations ?? []) as Array<Record<string, unknown>>) {
+          const row = found.organizations.find((o) => o.organization_id === change['organization_id']);
+          if (!row) continue;
+          const role = (change['role'] as string | null) ?? null;
+          const permissions = [...((change['permissions'] as string[]) ?? [])];
+          row.is_member = true;
+          row.role = role;
+          row.roles = role ? [role] : [];
+          row.permissions = permissions;
+          row.effective = permissions;
+          if (typeof change['camera_breadth'] === 'string') {
+            row.camera_scope = { breadth: change['camera_breadth'], camera_keys: [], site_ids: [] };
+          }
+        }
+      }
+      return jsonResponse(found);
+    }
+
+    if (/\/platform\/people$/.test(url) && method === 'POST') {
+      if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      options.accessWrites?.push({ method, url, body });
+      if (String(body.password ?? '').length < 12) return envelope('VALIDATION_FAILED', 422);
+      if (peopleState.some((p) => p.email === body.email)) return envelope('CONFLICT', 409);
+      const id = `user-${String(body.email)}`;
+      const homeId = String(body.home_organization_id);
+      const changes = (body.organizations ?? []) as Array<Record<string, unknown>>;
+      const nameOf = (orgId: string) => platformList.find((o) => o.id === orgId)?.name ?? orgId;
+      const memberOf = new Set([homeId, ...changes.map((c) => String(c['organization_id']))]);
+      peopleState.push({
+        id,
+        email: String(body.email),
+        display_name: String(body.display_name ?? ''),
+        is_active: true,
+        home_organization_id: homeId,
+        home_organization_name: nameOf(homeId),
+        organization_count: memberOf.size,
+        last_login_at: null,
+        is_platform_operator: false,
+        home_membership_missing: false,
+        memberships: [...memberOf].map((orgId) => ({
+          organization_id: orgId,
+          organization_name: nameOf(orgId),
+          roles: [],
+          is_home: orgId === homeId,
+          granted_at: null,
+          granted_by: 'operator@example.com',
+        })),
+      });
+      const created: StubPersonAccess = {
+        user_id: id,
+        email: String(body.email),
+        display_name: String(body.display_name ?? ''),
+        is_platform_operator: false,
+        home_organization_id: homeId,
+        organizations: platformList.map((o) => {
+          const change = changes.find((c) => c['organization_id'] === o.id);
+          const permissions = [...((change?.['permissions'] as string[] | undefined) ?? [])];
+          return {
+            organization_id: o.id,
+            organization_name: o.name,
+            status: o.status,
+            is_member: memberOf.has(o.id),
+            is_home: o.id === homeId,
+            role: (change?.['role'] as string | null | undefined) ?? null,
+            roles: [],
+            permissions,
+            effective: permissions,
+            camera_scope: {
+              breadth: (change?.['camera_breadth'] as string | undefined) ?? 'none',
+              camera_keys: [],
+              site_ids: [],
+            },
+          };
+        }),
+      };
+      accessState[id] = created;
+      return jsonResponse(created);
+    }
+
     const person = /\/platform\/people\/([^/?]+)/.exec(url);
     if (person && method === 'GET') {
       if (!operator) return envelope('OUT_OF_SCOPE', 403);
@@ -1300,6 +1430,7 @@ export function stubFetch(options: StubOptions = {}) {
 
     if (url.includes('/platform/roles')) {
       if (!operator) return envelope('OUT_OF_SCOPE', 403);
+      if (options.platformRoles !== undefined) return jsonResponse(options.platformRoles);
       return jsonResponse({
         roles: [{ role: 'org_admin', permissions: ['view_live'], permission_count: 1, is_platform_role: false }],
         permissions: ['view_live'],

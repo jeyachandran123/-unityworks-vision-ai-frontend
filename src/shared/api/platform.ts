@@ -266,6 +266,64 @@ export interface MembershipRemoval {
   left_without_access: boolean;
 }
 
+/* ── the access matrix ────────────────────────────────────────────────────── */
+
+export type CameraBreadth = 'none' | 'listed' | 'all_in_tenant';
+
+/**
+ * What one person may do in one organization, as the access matrix reads it.
+ *
+ * `permissions` is what the grid shows — `(role ∪ grants) − revokes`.
+ * `effective` is what the person actually has on their next request; the two
+ * differ only in a suspended organization, whose writes wait for it to be
+ * restored. For an organization the person is not in, both are empty.
+ */
+export interface OrganizationAccess {
+  organization_id: string;
+  organization_name: string;
+  status: OrganizationStatus;
+  is_member: boolean;
+  is_home: boolean;
+  /** The template role the grid starts from. `null` when none is held. */
+  role: string | null;
+  /** Every role held there — more than one only for older accounts. */
+  roles: string[];
+  permissions: string[];
+  effective: string[];
+  camera_scope: { breadth: CameraBreadth; camera_keys: string[]; site_ids: string[] };
+}
+
+export interface PersonAccess {
+  user_id: string;
+  email: string;
+  display_name: string;
+  is_platform_operator: boolean;
+  home_organization_id: string | null;
+  /** Every organization on the platform, sorted by name. */
+  organizations: OrganizationAccess[];
+}
+
+/**
+ * One organization's worth of a change. The server makes the person's access
+ * there exactly `permissions`, recorded against `role` as the template.
+ * `camera_breadth` is omitted to leave camera access as it is — which is how a
+ * list of specific cameras, chosen inside the organization, survives.
+ */
+export interface OrganizationAccessChange {
+  organization_id: string;
+  role: string | null;
+  permissions: string[];
+  camera_breadth?: 'none' | 'all_in_tenant';
+}
+
+export interface NewPerson {
+  email: string;
+  display_name: string;
+  password: string;
+  home_organization_id: string;
+  organizations: OrganizationAccessChange[];
+}
+
 export const platformAdminApi = {
   overview: () => api.get<PlatformOverview>('/platform/overview'),
 
@@ -313,6 +371,23 @@ export const platformAdminApi = {
   operators: () => api.get<OperatorList>('/platform/operators'),
 
   roles: () => api.get<RolePolicy>('/platform/roles'),
+
+  /** A person's access in every organization — the access matrix's read. */
+  personAccess: (userId: string) =>
+    api.get<PersonAccess>(`/platform/people/${encodeURIComponent(userId)}/access`),
+
+  /**
+   * Set a person's access in the organizations named. One transaction: one
+   * refused organization refuses them all. Joins an organization the person is
+   * not in when its change asks for anything.
+   */
+  setPersonAccess: (userId: string, organizations: OrganizationAccessChange[]) =>
+    api.put<PersonAccess>(`/platform/people/${encodeURIComponent(userId)}/access`, {
+      organizations,
+    }),
+
+  /** Create a person and their access in one step. A refusal creates nothing. */
+  createPerson: (draft: NewPerson) => api.post<PersonAccess>('/platform/people', draft),
 };
 
 /** What each status means, in the words the console should use. */
