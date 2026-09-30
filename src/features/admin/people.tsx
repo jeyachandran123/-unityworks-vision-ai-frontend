@@ -1,17 +1,18 @@
 /**
  * People — who works here, and what they can reach.
  *
- * ### Creating an account is a guided flow because it has two halves
+ * ### Adding somebody is the access matrix
  *
- * An account's reach is *roles* and *camera scope*, and the second was
- * invisible in every previous screen. That was not cosmetic: accounts were
- * being created with no camera grant at all, which reads as "no cameras" — so
- * they signed in, held every permission their role carried, and could see
- * nothing. Nothing anywhere reported it.
+ * Account Details → Permissions → Review & Submit (`person-access.tsx`): the
+ * same grid the platform console uses, pinned to this organization, offering
+ * only what the administrator may give.
  *
- * So camera access is a step of its own with no default. Both candidate
- * defaults are wrong — "none" recreates the unusable account, "all" creates an
- * over-privileged one — which is exactly why the administrator has to say.
+ * An account's reach is *permissions* and *camera scope*, and the second was
+ * once invisible in every screen. That was not cosmetic: accounts were being
+ * created with no camera grant at all, which reads as "no cameras" — so they
+ * signed in, held every permission their role carried, and could see nothing.
+ * So camera access sits beside the ticks, is always sent, and the review step
+ * names it before anything is created.
  *
  * ### The generated password is shown once
  *
@@ -21,7 +22,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import {
@@ -29,7 +30,6 @@ import {
   type AdminUser,
   type ScopeBreadth,
 } from '@shared/api/user-administration';
-import { camerasApi } from '@shared/api/persistence';
 import { PERMISSIONS, ROLES, roleLabel } from '@app/permissions/permissions';
 import { PermissionGate, usePermissions } from '@app/permissions/guards';
 import {
@@ -38,23 +38,16 @@ import {
   type Column,
   DataTable,
   EmptyState,
-  Input,
   LoadingState,
   Select,
   StatusBadge,
 } from '@shared/ui/primitives';
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
+import { AddPersonFlow } from './person-access';
 import { Failed, Pager, SearchField, useDebounced, when } from './shared';
 
 const PAGE = 25;
-
-/** What a camera scope means, in words. Used wherever one is shown or chosen. */
-export const SCOPE_MEANING: Record<ScopeBreadth, string> = {
-  none: 'No cameras. This account can sign in and use everything its role allows that does not involve video.',
-  listed: 'Only the cameras named below.',
-  all_in_tenant: 'Every camera in this organization, including ones added later.',
-};
 
 export function PeoplePage() {
   const { has } = usePermissions();
@@ -146,7 +139,7 @@ export function PeoplePage() {
               shown exactly once and is never fetched again, so unmounting the
               flow the moment the account exists would destroy the only copy
               anyone will ever see. The person closes it when they have it. */}
-          <AddPerson
+          <AddPersonFlow
             onCreated={() => void client.invalidateQueries({ queryKey: ['admin-users'] })}
             onClose={() => setAdding(false)}
           />
@@ -261,380 +254,4 @@ export function ScopeSummary({
     );
   }
   return <span style={{ color: 'var(--text-muted)' }}>None</span>;
-}
-
-/* ── adding somebody ──────────────────────────────────────────────────────── */
-
-const ADD_STEPS = ['Identity', 'Role', 'Cameras', 'Review'] as const;
-type AddStep = (typeof ADD_STEPS)[number];
-
-function AddPerson({
-  onCreated,
-  onClose,
-}: {
-  onCreated: () => void;
-  onClose: () => void;
-}) {
-  const [step, setStep] = useState<AddStep>('Identity');
-  const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [roles, setRoles] = useState<string[]>([]);
-  const [breadth, setBreadth] = useState<ScopeBreadth>('none');
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [created, setCreated] = useState<AdminUser | null>(null);
-
-  const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
-
-  const create = useMutation({
-    mutationFn: () =>
-      adminUsersApi.create({
-        email: email.trim(),
-        display_name: displayName.trim() || undefined,
-        roles,
-        camera_scope:
-          breadth === 'listed' ? { breadth, camera_keys: chosen } : { breadth },
-        password: password.trim() || undefined,
-      }),
-    onSuccess: (user) => {
-      setCreated(user);
-      onCreated();
-    },
-  });
-
-  if (created) {
-    return (
-      <>
-        <SectionRule lead label="Account created" />
-        <Plane>
-          <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
-            <p style={{ margin: 0 }}>
-              <strong>{created.display_name || created.email}</strong> can now sign in.
-            </p>
-            {created.generated_password ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-4)',
-                  border: '1px solid var(--line-default)',
-                  borderRadius: 'var(--radius-md)',
-                }}
-              >
-                <strong>Their password — shown once</strong>
-                <code style={{ fontSize: 'var(--text-lg)', wordBreak: 'break-all' }}>
-                  {created.generated_password}
-                </code>
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                  This is the only time it is shown. It is not stored anywhere this screen can
-                  reach, and leaving the page loses it. Give it to them over something other than
-                  email.
-                </span>
-              </div>
-            ) : null}
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <Link to={`/admin/people/${encodeURIComponent(created.id)}`}>
-                <Button variant="secondary">Open their profile</Button>
-              </Link>
-              <Button variant="ghost" onClick={() => setCreated(null)}>
-                Add another
-              </Button>
-              <Button variant="ghost" onClick={onClose}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </Plane>
-      </>
-    );
-  }
-
-  const index = ADD_STEPS.indexOf(step);
-  const canAdvance =
-    step === 'Identity'
-      ? email.includes('@')
-      : step === 'Cameras'
-        ? breadth !== 'listed' || chosen.length > 0
-        : true;
-
-  return (
-    <>
-      <SectionRule
-        lead
-        label="Add a person"
-        detail="Four steps. An account that exists but cannot reach anything is worse than no account."
-      />
-      <Plane>
-        <ol
-          aria-label="Progress"
-          style={{
-            display: 'flex',
-            gap: 'var(--space-5)',
-            listStyle: 'none',
-            margin: '0 0 var(--space-6)',
-            padding: 0,
-            flexWrap: 'wrap',
-          }}
-        >
-          {ADD_STEPS.map((name, position) => (
-            <li
-              key={name}
-              aria-current={position === index ? 'step' : undefined}
-              style={{
-                display: 'flex',
-                gap: 'var(--space-2)',
-                fontSize: 'var(--text-sm)',
-                color: position > index ? 'var(--text-muted)' : 'var(--text-primary)',
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  color: position === index ? 'var(--accent)' : 'var(--text-muted)',
-                }}
-              >
-                {position + 1}
-              </span>
-              {name}
-            </li>
-          ))}
-        </ol>
-
-        {step === 'Identity' ? (
-          <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}>
-            <Input
-              label="Email"
-              type="email"
-              hint="How they sign in. Unique within this organization."
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoFocus
-            />
-            <Input
-              label="Name"
-              hint="Optional. Shown instead of the email wherever there is room."
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-            <Input
-              label="Password"
-              type="password"
-              hint="Leave empty and one will be generated and shown to you once."
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-        ) : null}
-
-        {step === 'Role' ? (
-          <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-              A role is a starting point, not a cage. Two people on the same role can differ —
-              add or remove individual permissions from their profile afterwards.
-            </p>
-            {Object.values(ROLES).map((value) => (
-              <label
-                key={value}
-                style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}
-              >
-                <input
-                  type="checkbox"
-                  checked={roles.includes(value)}
-                  onChange={(event) =>
-                    setRoles((current) =>
-                      event.target.checked
-                        ? [...current, value]
-                        : current.filter((held) => held !== value),
-                    )
-                  }
-                />
-                {roleLabel(value)}
-              </label>
-            ))}
-            {roles.length === 0 ? (
-              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                No role selected. The account will exist and be able to sign in, and will reach
-                nothing until a role or an individual permission is granted.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 'Cameras' ? (
-          <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-              Separate from roles, and it has no default on purpose. A permission to view live
-              video reaches nothing without this, and this reaches nothing without that
-              permission.
-            </p>
-            {(['none', 'listed', 'all_in_tenant'] as const).map((option) => (
-              <label
-                key={option}
-                style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}
-              >
-                <input
-                  type="radio"
-                  name="breadth"
-                  checked={breadth === option}
-                  onChange={() => setBreadth(option)}
-                  style={{ marginTop: '0.3rem' }}
-                />
-                <span>
-                  <strong style={{ display: 'block' }}>
-                    {option === 'none'
-                      ? 'No cameras'
-                      : option === 'listed'
-                        ? 'Specific cameras'
-                        : 'All cameras'}
-                  </strong>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                    {SCOPE_MEANING[option]}
-                  </span>
-                </span>
-              </label>
-            ))}
-
-            {breadth === 'listed' ? (
-              <CameraPicker
-                cameras={cameras.data?.cameras ?? []}
-                chosen={chosen}
-                onChange={setChosen}
-              />
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 'Review' ? (
-          <dl
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)',
-              gap: 'var(--space-3) var(--space-6)',
-              margin: 0,
-              maxWidth: '34rem',
-            }}
-          >
-            {[
-              ['Email', email.trim()],
-              ['Name', displayName.trim() || '—'],
-              ['Password', password.trim() ? 'Set by you' : 'Generated, shown once'],
-              ['Roles', roles.length ? roles.map(roleLabel).join(', ') : 'None'],
-              [
-                'Cameras',
-                breadth === 'listed' ? `${chosen.length} named` : SCOPE_MEANING[breadth],
-              ],
-            ].map(([term, value]) => (
-              <div key={term} style={{ display: 'contents' }}>
-                <dt style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{term}</dt>
-                <dd style={{ margin: 0 }}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-
-        <div
-          style={{
-            display: 'flex',
-            gap: 'var(--space-3)',
-            marginTop: 'var(--space-6)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <Button
-            variant="ghost"
-            disabled={index === 0}
-            onClick={() => setStep(ADD_STEPS[index - 1] ?? 'Identity')}
-          >
-            Back
-          </Button>
-          {step === 'Review' ? (
-            <Button disabled={create.isPending} onClick={() => create.mutate()}>
-              {create.isPending ? 'Creating…' : 'Create account'}
-            </Button>
-          ) : (
-            <Button
-              disabled={!canAdvance}
-              onClick={() => setStep(ADD_STEPS[index + 1] ?? 'Review')}
-            >
-              Continue
-            </Button>
-          )}
-        </div>
-
-        {create.isError ? (
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Failed error={create.error} />
-          </div>
-        ) : null}
-      </Plane>
-    </>
-  );
-}
-
-/**
- * Picking cameras by name, grouped by nothing clever.
- *
- * Deliberately the camera's own name and key rather than an id: an
- * administrator choosing who may watch the kitchen line knows it as "Kitchen
- * line", and a UUID would make this step unusable in exactly the way the old
- * forms were.
- */
-export function CameraPicker({
-  cameras,
-  chosen,
-  onChange,
-}: {
-  cameras: ReadonlyArray<{ camera_key: string; name: string }>;
-  chosen: string[];
-  onChange: (next: string[]) => void;
-}) {
-  if (cameras.length === 0) {
-    return (
-      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-        This organization has no cameras yet, so there are none to choose.
-      </p>
-    );
-  }
-
-  return (
-    <fieldset
-      style={{
-        border: '1px solid var(--line-subtle)',
-        borderRadius: 'var(--radius-md)',
-        padding: 'var(--space-4)',
-        margin: 0,
-        display: 'grid',
-        gap: 'var(--space-2)',
-        maxHeight: '18rem',
-        overflowY: 'auto',
-      }}
-    >
-      <legend style={{ padding: '0 var(--space-2)', fontSize: 'var(--text-sm)' }}>
-        Which cameras
-      </legend>
-      {cameras.map((camera) => (
-        <label
-          key={camera.camera_key}
-          style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}
-        >
-          <input
-            type="checkbox"
-            checked={chosen.includes(camera.camera_key)}
-            onChange={(event) =>
-              onChange(
-                event.target.checked
-                  ? [...chosen, camera.camera_key]
-                  : chosen.filter((key) => key !== camera.camera_key),
-              )
-            }
-          />
-          <span>
-            {camera.name} <Badge>{camera.camera_key}</Badge>
-          </span>
-        </label>
-      ))}
-    </fieldset>
-  );
 }

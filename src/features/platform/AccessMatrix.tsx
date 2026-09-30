@@ -8,9 +8,18 @@
  * does, on every route, from the rows this grid's save writes.
  *
  * Controlled and fetch-free: the page owns the drafts and the save.
+ *
+ * ### Two homes, one grid
+ *
+ * The platform console shows every organization (`showOrganizations`) and
+ * gives anything. An organization's own User & Access shows just itself, and
+ * passes `canGrant` — somebody administering people there may only *give* what
+ * they hold, so a box they do not hold is greyed until it is ticked (taking
+ * away is never restricted) — and `cameraPicker`, because only inside the
+ * organization can its specific cameras be chosen.
  */
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 
 import {
   ACCESS_ACTIONS,
@@ -19,7 +28,6 @@ import {
   type AccessSection,
 } from '@app/permissions/access-catalog';
 import { roleLabel } from '@app/permissions/permissions';
-import type { RolePolicy } from '@shared/api/platform';
 import { Button, EmptyState, Select } from '@shared/ui/primitives';
 import {
   chipTone,
@@ -33,9 +41,17 @@ import {
   setCameras,
   setColumn,
   togglePermission,
+  type CanGrant,
   type ChipTone,
   type OrganizationDraft,
 } from '@features/platform/access-state';
+
+/** A role the "Start from role" list offers. `grantable: false` is shown, not offered. */
+export interface MatrixRole {
+  role: string;
+  permissions: string[];
+  grantable?: boolean;
+}
 
 const TONE_WORD: Record<ChipTone, string> = {
   granted: 'has access',
@@ -99,10 +115,19 @@ export function AccessMatrix({
   drafts,
   roles,
   onChange,
+  showOrganizations = true,
+  canGrant,
+  cameraPicker,
 }: {
   drafts: OrganizationDraft[];
-  roles: RolePolicy['roles'];
+  roles: ReadonlyArray<MatrixRole>;
   onChange: (next: OrganizationDraft) => void;
+  /** The "Permissions for" row. Off inside an organization: there is only one. */
+  showOrganizations?: boolean;
+  /** Whether the actor may *give* a permission. Omitted: everything (platform). */
+  canGrant?: CanGrant;
+  /** Offered: "Specific cameras" becomes a real choice, and this draws the list. */
+  cameraPicker?: (draft: OrganizationDraft) => ReactNode;
 }) {
   const [selectedId, setSelectedId] = useState(
     () => (drafts.find((d) => d.isMember) ?? drafts[0])?.organizationId ?? '',
@@ -142,7 +167,7 @@ export function AccessMatrix({
             variant="primary"
             size="sm"
             disabled={locked}
-            onClick={() => onChange(selectSection(draft, section))}
+            onClick={() => onChange(selectSection(draft, section, canGrant))}
           >
             Select all {section.label}
           </Button>
@@ -153,8 +178,13 @@ export function AccessMatrix({
       </div>
 
       <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}>
-        What this person may do on each screen, one organization at a time. Every box is one
-        permission, and the server enforces exactly what is ticked.
+        {showOrganizations
+          ? 'What this person may do on each screen, one organization at a time. '
+          : 'What this person may do on each screen in this organization. '}
+        Every box is one permission, and the server enforces exactly what is ticked.
+        {canGrant
+          ? ' A greyed box is a permission you do not hold yourself: you can take it away, not give it.'
+          : null}
       </p>
 
       <ul
@@ -177,6 +207,8 @@ export function AccessMatrix({
         ))}
       </ul>
 
+      {showOrganizations ? (
+        <>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }}>
         <span style={label}>Permissions for</span>
         {drafts.map((d) => {
@@ -227,6 +259,9 @@ export function AccessMatrix({
         ))}
       </ul>
 
+        </>
+      ) : null}
+
       <div
         style={{
           display: 'flex',
@@ -241,9 +276,11 @@ export function AccessMatrix({
       >
         <div style={{ minWidth: '10rem' }}>
           <div style={{ fontWeight: 'var(--weight-semibold)' }}>{draft.name}</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-            {draft.isMember ? 'Member' : 'Not a member — ticking anything admits them'}
-          </div>
+          {showOrganizations ? (
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
+              {draft.isMember ? 'Member' : 'Not a member — ticking anything admits them'}
+            </div>
+          ) : null}
         </div>
         <div style={{ minWidth: '13rem' }}>
           <Select
@@ -254,11 +291,17 @@ export function AccessMatrix({
             hint="Choosing a role replaces the ticks with that role's permissions."
           >
             <option value="">No role</option>
-            {roles.map((r) => (
-              <option key={r.role} value={r.role}>
-                {roleLabel(r.role)}
-              </option>
-            ))}
+            {roles.map((r) => {
+              // Shown so the list reads complete, never offered: the server
+              // refuses a template role wider than the actor's own.
+              const withheld = r.grantable === false && r.role !== draft.role;
+              return (
+                <option key={r.role} value={r.role} disabled={withheld}>
+                  {roleLabel(r.role)}
+                  {withheld ? ' (not yours to give)' : ''}
+                </option>
+              );
+            })}
           </Select>
         </div>
         <fieldset
@@ -291,14 +334,26 @@ export function AccessMatrix({
             />
             All cameras
           </label>
-          {draft.cameras === 'listed' ? (
+          {cameraPicker ? (
+            <label style={radioLabel}>
+              <input
+                type="radio"
+                name={`cameras-${draft.organizationId}`}
+                checked={draft.cameras === 'listed'}
+                onChange={() => onChange(setCameras(draft, 'listed'))}
+              />
+              Specific cameras
+            </label>
+          ) : draft.cameras === 'listed' ? (
             <label style={{ ...radioLabel, color: 'var(--ink-tertiary)' }}>
               <input type="radio" name={`cameras-${draft.organizationId}`} checked readOnly />
-              Specific cameras ({draft.listedCameras}) — set inside the organization
+              Specific cameras ({draft.cameraKeys.length}) — set inside the organization
             </label>
           ) : null}
         </fieldset>
       </div>
+
+      {cameraPicker && draft.cameras === 'listed' ? cameraPicker(draft) : null}
 
       {draft.status === 'suspended' ? (
         <p
@@ -350,7 +405,7 @@ export function AccessMatrix({
                 Function name
               </th>
               {ACCESS_ACTIONS.map((action) => {
-                const state = columnState(draft, section, action.id);
+                const state = columnState(draft, section, action.id, canGrant);
                 return (
                   <th key={action.id} scope="col" style={{ padding: 'var(--space-2)', textAlign: 'center', minWidth: '3.5rem' }}>
                     <div title={action.label} style={{ fontWeight: 'var(--weight-semibold)' }}>
@@ -378,7 +433,9 @@ export function AccessMatrix({
                           ref={(element) => {
                             if (element) element.indeterminate = state === 'some';
                           }}
-                          onChange={() => onChange(setColumn(draft, section, action.id, state !== 'all'))}
+                          onChange={() =>
+                            onChange(setColumn(draft, section, action.id, state !== 'all', canGrant))
+                          }
                         />
                         <span aria-hidden="true">All</span>
                       </label>
@@ -425,9 +482,18 @@ export function AccessMatrix({
                             <input
                               type="checkbox"
                               aria-label={`${action.label} — ${feature.label}`}
-                              title={permission}
+                              title={
+                                canGrant && !canGrant(permission)
+                                  ? `${permission} — you do not hold this yourself`
+                                  : permission
+                              }
                               checked={has(draft, permission)}
-                              disabled={locked}
+                              disabled={
+                                locked ||
+                                (canGrant !== undefined &&
+                                  !canGrant(permission) &&
+                                  !has(draft, permission))
+                              }
                               onChange={() => onChange(togglePermission(draft, permission))}
                             />
                           ) : (

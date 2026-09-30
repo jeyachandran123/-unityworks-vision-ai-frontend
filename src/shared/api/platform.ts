@@ -308,12 +308,17 @@ export interface PersonAccess {
  * there exactly `permissions`, recorded against `role` as the template.
  * `camera_breadth` is omitted to leave camera access as it is — which is how a
  * list of specific cameras, chosen inside the organization, survives.
+ *
+ * `listed` with `camera_keys` is only ever sent from inside the organization,
+ * which is the one place that can see its cameras to pick; the platform
+ * console never produces it, and the platform route refuses it.
  */
 export interface OrganizationAccessChange {
   organization_id: string;
   role: string | null;
   permissions: string[];
-  camera_breadth?: 'none' | 'all_in_tenant';
+  camera_breadth?: CameraBreadth;
+  camera_keys?: string[];
 }
 
 export interface NewPerson {

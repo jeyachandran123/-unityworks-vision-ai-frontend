@@ -225,12 +225,12 @@ describe('people, through the real write API', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /add a person/i }));
     await userEvent.type(await screen.findByLabelText(/^email$/i), 'new@example.com');
-    await userEvent.click(screen.getByRole('button', { name: /continue/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next: Permissions' }));
 
-    // Step three is cameras, and it is not skippable.
-    expect(await screen.findByRole('radio', { name: /no cameras/i })).toBeInTheDocument();
+    // Cameras sit beside the ticks on the permissions step, always stated.
+    expect(await screen.findByRole('radio', { name: /no cameras/i })).toBeChecked();
     expect(screen.getByRole('radio', { name: /all cameras/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /specific cameras/i })).toBeInTheDocument();
   });
 
   it('creates an account through the real write API and shows the one-time password', async () => {
@@ -240,10 +240,9 @@ describe('people, through the real write API', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /add a person/i }));
     await userEvent.type(await screen.findByLabelText(/^email$/i), 'new@example.com');
-    await userEvent.click(screen.getByRole('button', { name: /continue/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /continue/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /continue/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /create account/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next: Permissions' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Next: Review' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Create person' }));
 
     await waitFor(() =>
       expect(calls.some((c) => c.startsWith('POST') && c.includes('/admin/users'))).toBe(true),

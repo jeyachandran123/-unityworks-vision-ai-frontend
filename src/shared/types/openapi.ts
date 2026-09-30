@@ -9,8 +9,10 @@
 /* eslint-disable */
 
 export const API_PATHS = [
+  "/api/v1/admin/roles",
   "/api/v1/admin/users",
   "/api/v1/admin/users/{user_id}",
+  "/api/v1/admin/users/{user_id}/access",
   "/api/v1/admin/users/{user_id}/activate",
   "/api/v1/admin/users/{user_id}/camera-scope",
   "/api/v1/admin/users/{user_id}/deactivate",
@@ -113,6 +115,9 @@ export type ValidationError = {
   "type": string;
 };
 
+/** `GET /api/v1/admin/roles` */
+export type RolePolicyApiV1AdminRolesGetResponse = Record<string, unknown>;
+
 /** `GET /api/v1/admin/users` */
 export type ListUsersApiV1AdminUsersGetResponse = Record<string, unknown>;
 
@@ -124,6 +129,12 @@ export type GetUserApiV1AdminUsersUserIdGetResponse = Record<string, unknown>;
 
 /** `PATCH /api/v1/admin/users/{user_id}` */
 export type UpdateUserApiV1AdminUsersUserIdPatchResponse = Record<string, unknown>;
+
+/** `GET /api/v1/admin/users/{user_id}/access` */
+export type GetAccessApiV1AdminUsersUserIdAccessGetResponse = Record<string, unknown>;
+
+/** `PUT /api/v1/admin/users/{user_id}/access` */
+export type SetAccessApiV1AdminUsersUserIdAccessPutResponse = Record<string, unknown>;
 
 /** `POST /api/v1/admin/users/{user_id}/activate` */
 export type ActivateUserApiV1AdminUsersUserIdActivatePostResponse = Record<string, unknown>;

@@ -45,11 +45,12 @@ import {
   type OrganizationDraft,
 } from '@features/platform/access-state';
 
-const CAMERA_WORD: Record<string, string> = {
-  none: 'No cameras',
-  all_in_tenant: 'All cameras',
-  listed: 'Specific cameras (unchanged)',
-};
+/** A draft's camera reach, in words. */
+function cameraWord(draft: OrganizationDraft): string {
+  if (draft.cameras === 'all_in_tenant') return 'All cameras';
+  if (draft.cameras === 'listed') return `Specific cameras (${draft.cameraKeys.length})`;
+  return 'No cameras';
+}
 
 function failure(error: unknown, fallback: string) {
   return (
@@ -63,7 +64,7 @@ function failure(error: unknown, fallback: string) {
 
 /* ── the stepper ──────────────────────────────────────────────────────────── */
 
-function Stepper({ steps, current }: { steps: string[]; current: number }) {
+export function Stepper({ steps, current }: { steps: string[]; current: number }) {
   return (
     <ol
       aria-label="Progress"
@@ -122,7 +123,7 @@ function Stepper({ steps, current }: { steps: string[]; current: number }) {
 
 /* ── the review ───────────────────────────────────────────────────────────── */
 
-function AccessReview({
+export function AccessReview({
   drafts,
   changes,
 }: {
@@ -153,7 +154,7 @@ function AccessReview({
             </div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
               {change.role ? roleLabel(change.role) : 'No role'} ·{' '}
-              {CAMERA_WORD[draft.cameras] ?? draft.cameras} · {draft.permissions.length} permissions
+              {cameraWord(draft)} · {draft.permissions.length} permissions
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
               {ticksBySection(draft, ACCESS_CATALOG)
@@ -167,7 +168,7 @@ function AccessReview({
   );
 }
 
-function Controls({ children }: { children: ReactNode }) {
+export function Controls({ children }: { children: ReactNode }) {
   return (
     <div
       style={{

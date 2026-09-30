@@ -10,6 +10,7 @@ import {
   resetToRole,
   sectionHasAny,
   selectSection,
+  setCameraKeys,
   setCameras,
   setColumn,
   togglePermission,
@@ -36,7 +37,7 @@ function draft(overrides: Partial<OrganizationDraft> = {}): OrganizationDraft {
     role: null,
     permissions: [],
     cameras: 'none',
-    listedCameras: 0,
+    cameraKeys: [],
     ...overrides,
   };
 }
@@ -102,7 +103,7 @@ describe('what is sent', () => {
       role: 'auditor',
       permissions: ['view_audit'],
       cameras: 'listed',
-      listedCameras: 2,
+      cameraKeys: ['c1', 'c2'],
     }),
     draft({ organizationId: 'org-b', isMember: false }),
   ];
@@ -169,7 +170,7 @@ describe('building drafts', () => {
         role: 'auditor',
         permissions: ['view_audit', 'view_live'],
         cameras: 'listed',
-        listedCameras: 2,
+        cameraKeys: ['c1', 'c2'],
       },
     ]);
   });
@@ -184,5 +185,54 @@ describe('building drafts', () => {
       ['Alpha', false],
       ['Zeta', true],
     ]);
+  });
+});
+
+describe('inside one organization', () => {
+  const holds = (p: string) => ['view_audit', 'view_reports'].includes(p);
+
+  it('adds only what the actor holds when a column is turned on', () => {
+    const d = setColumn(draft(), COMPLIANCE, 'view', true, holds);
+    expect(d.permissions).toEqual(['view_audit', 'view_reports']);
+    // Every box the actor may tick is on, so the column reads as all.
+    expect(columnState(d, COMPLIANCE, 'view', holds)).toBe('all');
+    // And turning it off removes them again.
+    expect(setColumn(d, COMPLIANCE, 'view', false, holds).permissions).toEqual([]);
+  });
+
+  it('still lets a tick the actor does not hold be taken away', () => {
+    const d = draft({ permissions: ['view_evidence'] });
+    expect(columnState(d, COMPLIANCE, 'view', holds)).toBe('some');
+    expect(setColumn(d, COMPLIANCE, 'view', false, holds).permissions).toEqual([]);
+  });
+
+  it('selects only the grantable part of a section', () => {
+    expect(selectSection(draft(), COMPLIANCE, holds).permissions).toEqual([
+      'view_audit',
+      'view_reports',
+    ]);
+  });
+
+  it('sends the named cameras when specific cameras are chosen', () => {
+    const loaded = [draft()];
+    const edited = [setCameraKeys(setCameras(draft(), 'listed'), ['cam-02', 'cam-01'])];
+    expect(changesFrom(loaded, edited)).toEqual([
+      {
+        organization_id: 'org-a',
+        role: null,
+        permissions: [],
+        camera_breadth: 'listed',
+        camera_keys: ['cam-01', 'cam-02'],
+      },
+    ]);
+  });
+
+  it('sends a changed list even when the breadth stays listed', () => {
+    const loaded = [draft({ cameras: 'listed', cameraKeys: ['cam-01'] })];
+    const edited = [setCameraKeys(loaded[0]!, ['cam-01', 'cam-02'])];
+    expect(changesFrom(loaded, edited)[0]).toMatchObject({
+      camera_breadth: 'listed',
+      camera_keys: ['cam-01', 'cam-02'],
+    });
   });
 });

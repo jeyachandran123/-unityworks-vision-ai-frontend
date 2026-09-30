@@ -18,6 +18,7 @@
  */
 
 import { api } from './client';
+import type { OrganizationAccess } from './platform';
 
 export type ScopeBreadth = 'none' | 'listed' | 'all_in_tenant';
 
@@ -104,7 +105,15 @@ export interface ResetOverrideResponse {
 export interface CreateUserDraft {
   email: string;
   display_name?: string;
+  /** The older shape: roles alone. Never sent together with `permissions`. */
   roles?: string[];
+  /**
+   * The access matrix's shape: one template `role` and the exact
+   * `permissions` ticked. The server records the role plus the exceptions that
+   * make the person's access exactly the ticks, in the same step.
+   */
+  role?: string | null;
+  permissions?: string[];
   /**
    * Required by the server, with no default — and that is the fix for a real
    * bug rather than an inconvenience. Accounts used to be created with no
@@ -120,6 +129,27 @@ export interface CreateUserDraft {
 export interface CameraScopeResponse {
   user_id: string;
   camera_scope: CameraScope;
+}
+
+/**
+ * One role, and whether the caller may give it — every permission it carries
+ * is one they hold. The server checks the same thing on save.
+ */
+export interface TenantRole {
+  role: string;
+  permissions: string[];
+  grantable: boolean;
+}
+
+/**
+ * A person's whole access in this organization, as the matrix saves it. The
+ * organization is the caller's own and is never sent.
+ */
+export interface TenantAccessChange {
+  role: string | null;
+  permissions: string[];
+  camera_breadth?: ScopeBreadth;
+  camera_keys?: string[];
 }
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
@@ -170,4 +200,21 @@ export const adminUsersApi = {
     api.put<CameraScopeResponse>(`/admin/users/${encodeURIComponent(userId)}/camera-scope`, {
       camera_scope: scope,
     }),
+
+  /** This person's access here — the same shape as one organization on the platform console. */
+  access: (userId: string) =>
+    api.get<OrganizationAccess>(`/admin/users/${encodeURIComponent(userId)}/access`),
+
+  /**
+   * Set this person's whole access here. Refused (403) for yourself, for a
+   * permission you do not hold, for a template role wider than yours, and for
+   * camera reach beyond your own. Removing is never refused.
+   */
+  setAccess: (userId: string, change: TenantAccessChange) =>
+    api.put<OrganizationAccess>(`/admin/users/${encodeURIComponent(userId)}/access`, change),
+};
+
+export const adminRolesApi = {
+  /** Every role, what it grants, and whether you may give it. */
+  list: () => api.get<{ roles: TenantRole[] }>('/admin/roles'),
 };

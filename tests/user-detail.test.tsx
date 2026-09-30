@@ -1,15 +1,15 @@
 /**
  * The user detail route, `/admin/users/:userId`.
  *
- * Covers navigation from the Accounts table, the ranked identity/account/
- * roles/access hierarchy, the activate/deactivate confirmation policy, role
- * assign/remove (including the admin-carrying-role confirmation), the
- * INHERIT/GRANT/REVOKE override controls and their labels, the anti-
- * escalation GRANT gate, the 403/unauthorized redirect, and one structural
- * assertion consistent with `command-center.test.tsx`'s own approach: jsdom
- * has no real layout, so what is asserted is the composition that makes the
- * ranked hierarchy possible (four sections, one of them `data-lead`), not
- * pixel geometry.
+ * Covers navigation from the Accounts table, the ranked identity/account then
+ * access hierarchy, the activate/deactivate confirmation policy, that a failed
+ * access read never shows a guessed grid, the 403/unauthorized redirect, and
+ * one structural assertion consistent with `command-center.test.tsx`'s own
+ * approach: jsdom has no real layout, so what is asserted is the composition
+ * that makes the ranked hierarchy possible, not pixel geometry.
+ *
+ * The access grid itself — ticking, review and save, what an administrator may
+ * give, specific cameras — is `tenant-access.test.tsx`.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -168,198 +168,22 @@ describe('user detail: identity and account', () => {
 
     await screen.findByRole('heading', { name: /org admin/i });
     expect(screen.getByRole('button', { name: 'Deactivate' })).toBeDisabled();
-    expect(screen.getByText(/your own account/i)).toBeInTheDocument();
+    expect(screen.getByText(/access and activation state cannot be changed/i)).toBeInTheDocument();
   });
 });
 
-describe('user detail: roles', () => {
-  it('assigns a role through the real role API', async () => {
-    const calls: string[] = [];
+describe('user detail: access', () => {
+  it('never shows a guessed grid when the access read fails', async () => {
     installFetch({
       session: adminIdentity(),
       adminUsers: [MANAGER],
-      adminUserPermissions: { 'user-1': permRows() },
-      calls,
-    });
-    const user = userEvent.setup();
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    await user.selectOptions(screen.getByLabelText(/assign a role/i), 'kitchen_supervisor');
-    await user.click(screen.getByRole('button', { name: 'Assign' }));
-
-    await waitFor(() =>
-      expect(
-        calls.some((c) => c.startsWith('POST') && c.includes('/admin/users/user-1/roles')),
-      ).toBe(true),
-    );
-  });
-
-  it('removes a non-admin-carrying role without confirmation', async () => {
-    const calls: string[] = [];
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [MANAGER],
-      adminUserPermissions: { 'user-1': permRows() },
-      calls,
-    });
-    const user = userEvent.setup();
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    await user.click(screen.getByRole('button', { name: 'Remove' }));
-
-    await waitFor(() =>
-      expect(
-        calls.some(
-          (c) =>
-            c.startsWith('DELETE') && c.includes('/admin/users/user-1/roles/restaurant_manager'),
-        ),
-      ).toBe(true),
-    );
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('removing an admin-carrying role requires confirmation', async () => {
-    const calls: string[] = [];
-    const target = {
-      ...ADMIN_SELF,
-      id: 'user-3',
-      email: 'other-admin@example.com',
-      display_name: 'Other Admin',
-    };
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [target],
-      adminUserPermissions: { 'user-3': permRows() },
-      calls,
-    });
-    const user = userEvent.setup();
-    renderApp(<AppRouter />, '/admin/users/user-3');
-
-    await screen.findByRole('heading', { name: /other admin/i });
-    await user.click(screen.getByRole('button', { name: 'Remove' }));
-
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByText(/administration-level access/i),
-    ).toBeInTheDocument();
-    expect(calls.some((c) => c.includes('/roles/org_admin') && c.startsWith('DELETE'))).toBe(false);
-
-    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    await waitFor(() =>
-      expect(calls.some((c) => c.includes('/roles/org_admin') && c.startsWith('DELETE'))).toBe(true),
-    );
-  });
-});
-
-describe('user detail: permission overrides', () => {
-  it('shows Inherited by default, with the role-derived state alongside it', async () => {
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [MANAGER],
-      adminUserPermissions: {
-        'user-1': permRows({ view_live: { role_grants: true, effective: true } }),
-      },
+      routes: { '/admin/users/user-1/access': new Response(null, { status: 500 }) },
     });
     renderApp(<AppRouter />, '/admin/users/user-1');
 
     await screen.findByRole('heading', { name: /manager/i });
-    expect(await screen.findByText('Role grants')).toBeInTheDocument();
-    expect(screen.getAllByText('Inherited').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Effective').length).toBeGreaterThan(0);
-  });
-
-  it('GRANT is offered only for a permission the acting admin holds themselves', async () => {
-    // An administrator holding everything except `access_devtools`. The
-    // Organization Admin now holds every permission, so the actor is narrowed
-    // by hand: the two rows in the Engineering group then split exactly the
-    // case this test needs — one row must offer "+ Add", the other must not.
-    const admin = adminIdentity();
-    installFetch({
-      session: {
-        ...admin,
-        permissions: admin.permissions.filter((p) => p !== 'access_devtools'),
-      },
-      adminUsers: [MANAGER],
-      adminUserPermissions: { 'user-1': permRows() },
-    });
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    const table = await screen.findByRole('table', { name: /engineering permissions/i });
-    const devtoolsRow = within(table).getByText('Access devtools').closest('tr') as HTMLElement;
-    const demandRow = within(table).getByText('Register demand').closest('tr') as HTMLElement;
-
-    expect(within(devtoolsRow).queryByRole('button', { name: '+ Add' })).not.toBeInTheDocument();
-    expect(within(devtoolsRow).getByRole('button', { name: '− Restrict' })).toBeInTheDocument();
-    expect(within(demandRow).getByRole('button', { name: '+ Add' })).toBeInTheDocument();
-  });
-
-  it('setting GRANT calls the real override API and reflects the new state after refetch', async () => {
-    const calls: string[] = [];
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [MANAGER],
-      adminUserPermissions: { 'user-1': permRows() },
-      calls,
-    });
-    const user = userEvent.setup();
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    const table = await screen.findByRole('table', { name: /evidence & audit permissions/i });
-    const row = within(table).getByText('View audit').closest('tr') as HTMLElement;
-    await user.click(within(row).getByRole('button', { name: '+ Add' }));
-
-    await waitFor(() =>
-      expect(
-        calls.some(
-          (c) => c.includes('/admin/users/user-1/permissions/view_audit') && c.startsWith('PUT'),
-        ),
-      ).toBe(true),
-    );
-    expect(await within(table).findByText('+ Added')).toBeInTheDocument();
-  });
-
-  it('resetting an override calls DELETE and returns to Inherited', async () => {
-    const calls: string[] = [];
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [MANAGER],
-      adminUserPermissions: {
-        'user-1': permRows({ view_evidence: { state: 'revoke', effective: false } }),
-      },
-      calls,
-    });
-    const user = userEvent.setup();
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    expect(await screen.findByText('− Restricted')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Reset to inherited' }));
-
-    await waitFor(() =>
-      expect(
-        calls.some(
-          (c) =>
-            c.includes('/admin/users/user-1/permissions/view_evidence') && c.startsWith('DELETE'),
-        ),
-      ).toBe(true),
-    );
-  });
-
-  it('never shows guessed access when the permission read fails', async () => {
-    installFetch({
-      session: adminIdentity(),
-      adminUsers: [MANAGER],
-      routes: { '/admin/users/user-1/permissions': new Response(null, { status: 500 }) },
-    });
-    renderApp(<AppRouter />, '/admin/users/user-1');
-
-    await screen.findByRole('heading', { name: /manager/i });
-    expect(screen.queryByText('Effective')).not.toBeInTheDocument();
-    expect(screen.queryByText('Not effective')).not.toBeInTheDocument();
+    await screen.findByText(/did not complete|went wrong/i);
+    expect(screen.queryByRole('checkbox', { name: 'View — Live Wall' })).not.toBeInTheDocument();
   });
 });
 
@@ -386,7 +210,7 @@ describe('user detail: authorization boundary', () => {
 });
 
 describe('user detail: structural composition', () => {
-  it('renders four ranked sections, with identity/account as the lead', async () => {
+  it('renders two ranked sections, with identity/account as the lead', async () => {
     installFetch({
       session: adminIdentity(),
       adminUsers: [MANAGER],
@@ -396,12 +220,12 @@ describe('user detail: structural composition', () => {
 
     await screen.findByRole('heading', { name: /manager/i });
 
-    // PageIntro plus three SectionRules: Identity & account, Roles, Access —
+    // PageIntro plus two SectionRules: Identity & account, then Access —
     // structural evidence of the ranked (not equal-weight) composition. jsdom
     // has no layout engine, so this is what can be pinned here; true visual
     // verification is deferred (see report §19/§24).
     const marks = document.querySelectorAll('.uwv-spine-mark');
-    expect(marks.length).toBeGreaterThanOrEqual(4);
+    expect(marks.length).toBeGreaterThanOrEqual(3);
 
     const lead = document.querySelector('[data-lead="true"][data-order="2"]');
     expect(lead).not.toBeNull();
@@ -410,6 +234,6 @@ describe('user detail: structural composition', () => {
     const orders = [...document.querySelectorAll('[data-order]')].map((el) =>
       el.getAttribute('data-order'),
     );
-    expect(orders).toEqual(expect.arrayContaining(['1', '2', '3', '4']));
+    expect(orders).toEqual(expect.arrayContaining(['1', '2', '3']));
   });
 });

@@ -966,8 +966,18 @@ export interface StubOptions {
    * save reflects it.
    */
   platformAccess?: Record<string, StubPersonAccess>;
-  /** Every body sent to `PUT …/access` and `POST /platform/people`, in order. */
+  /**
+   * Every body sent to `PUT …/access` (platform and organization), `POST
+   * /platform/people` and `POST /admin/users`, in order.
+   */
   accessWrites?: Array<{ method: string; url: string; body: unknown }>;
+  /** `GET /admin/roles`. Defaults to every role, all grantable. */
+  adminRoles?: unknown;
+  /**
+   * Seeds the ticked permissions `GET /admin/users/{id}/access` reports, per
+   * user id — and the store `PUT …/access` mutates. Defaults to none.
+   */
+  adminUserAccess?: Record<string, string[]>;
   /** Overrides the camera block on /status. */
   cameras?: unknown;
   /** Overrides the live_runtime block on /status. */
@@ -1116,6 +1126,34 @@ export function stubFetch(options: StubOptions = {}) {
     adminPermissionsState[id] = rows.map((row) => ({ ...row }));
   }
   let nextAdminUserSeq = 1;
+  // The organization-side access matrix's ticks, per user. Cloned, like every
+  // other seeded store here, so a save never leaks into the next test.
+  const adminAccessState: Record<string, string[]> = {};
+  for (const [id, permissions] of Object.entries(options.adminUserAccess ?? {})) {
+    adminAccessState[id] = [...permissions];
+  }
+  /** One user's access in this organization, in the server's shape. */
+  const tenantAccess = (id: string, record: Record<string, unknown>) => {
+    const roles = (record['roles'] as string[] | undefined) ?? [];
+    const scope = record['camera_scope'] as { breadth?: string; camera_keys?: string[] } | undefined;
+    const permissions = [...(adminAccessState[id] ?? [])].sort();
+    return {
+      organization_id: activeSession?.tenant_id ?? 'org-test',
+      organization_name: 'Test organization',
+      status: 'active',
+      is_member: true,
+      is_home: true,
+      role: roles[0] ?? null,
+      roles: [...roles],
+      permissions,
+      effective: permissions,
+      camera_scope: {
+        breadth: scope?.breadth ?? 'none',
+        camera_keys: [...(scope?.camera_keys ?? [])],
+        site_ids: [],
+      },
+    };
+  };
 
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -1632,6 +1670,21 @@ export function stubFetch(options: StubOptions = {}) {
     // The Stage 5/7 admin surface. Checked ahead of the old `/users` route
     // below, because `/admin/users`.includes('/users') is true and would
     // otherwise be swallowed by the generic matcher.
+    if (url.includes('/admin/roles')) {
+      return jsonResponse(
+        options.adminRoles ?? {
+          roles: [
+            { role: 'org_admin', permissions: Object.values(PERMISSIONS), grantable: true },
+            {
+              role: 'restaurant_manager',
+              permissions: ['view_live', 'view_observations', 'view_incidents'],
+              grantable: true,
+            },
+          ],
+        },
+      );
+    }
+
     if (url.includes('/admin/users')) {
       const afterBase = url.split('/admin/users')[1] ?? '';
       const segments = afterBase.split('?')[0]!.split('/').filter(Boolean);
@@ -1658,7 +1711,11 @@ export function stubFetch(options: StubOptions = {}) {
             email,
             display_name: body['display_name'] || email.split('@')[0],
             is_active: true,
-            roles: Array.isArray(body['roles']) ? body['roles'] : [],
+            roles: Array.isArray(body['roles'])
+              ? body['roles']
+              : typeof body['role'] === 'string'
+                ? [body['role']]
+                : [],
             // Echoed back, as the real route does. A created account whose
             // camera scope came back missing would be indistinguishable from
             // the provisioning bug this field exists to close.
@@ -1672,6 +1729,10 @@ export function stubFetch(options: StubOptions = {}) {
             last_login_at: null,
           };
           if (!body['password']) created['generated_password'] = 'generated-password-1';
+          options.accessWrites?.push({ method, url, body });
+          adminAccessState[id] = Array.isArray(body['permissions'])
+            ? [...(body['permissions'] as string[])]
+            : [];
           adminUsersState[id] = created;
           adminPermissionsState[id] = defaultPermissionRows();
           return jsonResponse(created);
@@ -1683,6 +1744,25 @@ export function stubFetch(options: StubOptions = {}) {
         if (!record) return envelope('NOT_FOUND', 404);
 
         if (rest.length === 0 && method === 'GET') return jsonResponse(record);
+        if (rest[0] === 'access' && rest.length === 1) {
+          if (method === 'PUT') {
+            options.accessWrites?.push({ method, url, body });
+            const role = typeof body['role'] === 'string' ? body['role'] : null;
+            record['roles'] = role ? [role] : [];
+            adminAccessState[id] = [...((body['permissions'] as string[] | undefined) ?? [])];
+            if (typeof body['camera_breadth'] === 'string') {
+              record['camera_scope'] = {
+                breadth: body['camera_breadth'],
+                camera_keys:
+                  body['camera_breadth'] === 'listed'
+                    ? [...((body['camera_keys'] as string[] | undefined) ?? [])]
+                    : [],
+                site_ids: [],
+              };
+            }
+          }
+          return jsonResponse(tenantAccess(id, record));
+        }
         if (rest.length === 0 && method === 'PATCH') {
           if (body['display_name']) record['display_name'] = body['display_name'];
           return jsonResponse(record);
