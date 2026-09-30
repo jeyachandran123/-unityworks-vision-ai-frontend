@@ -4,7 +4,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
+import { focusManager } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { PERMISSIONS } from '@app/permissions/permissions';
@@ -223,6 +224,35 @@ describe('editing a person’s access', () => {
     expect(screen.getByRole('button', { name: 'Save access' })).toBeDisabled();
   });
 
+  it('keeps unsaved ticks when the window regains focus', async () => {
+    // Final review I1: a background refetch must not remount the editor and
+    // silently throw away what the operator has ticked.
+    installFetch(operatorStub());
+    const user = await openEditor();
+    await user.click(screen.getByRole('button', { name: 'Borden Foods, not a member' }));
+    await user.click(screen.getByRole('checkbox', { name: 'View — Live Wall' }));
+
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+    focusManager.setFocused(undefined);
+
+    expect(screen.getByRole('button', { name: 'Borden Foods, has access' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'View — Live Wall' })).toBeChecked();
+  });
+
+  it('says in words, not only colour, what each organization dot means', async () => {
+    // Final review M4: colour is never the only signal.
+    installFetch(operatorStub());
+    await openEditor();
+    const legend = screen.getByRole('list', { name: 'What the dots mean' });
+    expect(legend).toHaveTextContent('has access');
+    expect(legend).toHaveTextContent('member, nothing ticked');
+    expect(legend).toHaveTextContent('not a member');
+  });
+
   it('is reached from the person page', async () => {
     installFetch(operatorStub());
     renderApp(<AppRouter />, '/platform/people/user-1');
@@ -240,6 +270,9 @@ describe('creating a person', () => {
 
     await screen.findByRole('heading', { name: 'New person' });
     const next = screen.getByRole('button', { name: 'Next: Permissions' });
+    // Final review M5: a browser must not autofill the operator's own login here.
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password');
+    expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'off');
     expect(next).toBeDisabled();
 
     await user.type(screen.getByLabelText('Name'), 'Priya Raman');

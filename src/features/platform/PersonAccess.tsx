@@ -274,6 +274,9 @@ export function NewPersonPage() {
                 id="new-person-email"
                 label="Email"
                 type="email"
+                // A browser must not fill in the operator's own saved login:
+                // this is somebody else's account being created.
+                autoComplete="off"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -281,6 +284,7 @@ export function NewPersonPage() {
                 id="new-person-password"
                 label="Password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 hint={`At least ${PASSWORD_MIN_LENGTH} characters. Give it to them directly; it is not sent anywhere.`}
                 error={
@@ -364,15 +368,25 @@ export function NewPersonPage() {
 export function EditPersonAccessPage() {
   const { userId = '' } = useParams();
   const [saved, setSaved] = useState(false);
+  // Bumped by a save, and the only thing that remounts the editor. Keying it on
+  // the query's own freshness threw away every unsaved tick whenever a
+  // background refetch landed — a window focus was enough.
+  const [version, setVersion] = useState(0);
   const access = useQuery({
     queryKey: ['platform', 'person-access', userId],
     queryFn: () => platformAdminApi.personAccess(userId),
     enabled: Boolean(userId),
+    // The grid is a form being edited. Only a save refreshes what it started
+    // from; a refetch under the operator's hands would be a second author.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
   const roles = useQuery({ queryKey: ['platform', 'roles'], queryFn: platformAdminApi.roles });
 
   if (access.isLoading || roles.isLoading) return <LoadingState label="Reading access" />;
-  if (access.isError || roles.isError || !access.data || !roles.data) {
+  // A failed *background* refetch keeps its data; only a read that never
+  // succeeded replaces the editor.
+  if (!access.data || !roles.data) {
     return (
       <ErrorState
         title="Access could not be read"
@@ -409,11 +423,14 @@ export function EditPersonAccessPage() {
         />
       ) : (
         <AccessEditor
-          key={access.dataUpdatedAt}
+          key={version}
           access={person}
           roles={roles.data.roles}
           userId={userId}
-          onSaved={() => setSaved(true)}
+          onSaved={() => {
+            setSaved(true);
+            setVersion((current) => current + 1);
+          }}
         />
       )}
     </>
@@ -442,8 +459,9 @@ function AccessEditor({
   const save = useMutation({
     mutationFn: () => platformAdminApi.setPersonAccess(userId, changes),
     onSuccess: (next) => {
-      onSaved();
+      // The server's answer first, then the remount that reads it.
       client.setQueryData(['platform', 'person-access', userId], next);
+      onSaved();
       void client.invalidateQueries({ queryKey: ['platform', 'person', userId] });
       void client.invalidateQueries({ queryKey: ['platform', 'people'] });
     },

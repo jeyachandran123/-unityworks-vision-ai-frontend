@@ -43,12 +43,22 @@ const TONE_WORD: Record<ChipTone, string> = {
   outside: 'not a member',
 };
 
-/** The health tokens the rest of the product uses for "on / partly / off". */
+/**
+ * The health tokens the rest of the product uses for "on / partly / off" —
+ * and a different *shape* for each, full, half and hollow, so the three stay
+ * apart for somebody who cannot tell green from amber. The legend under the
+ * chips says the same thing in words.
+ */
 const TONE_DOT: Record<ChipTone, CSSProperties> = {
   granted: { background: 'var(--health-online)' },
-  empty: { background: 'var(--health-degraded)' },
+  empty: {
+    background: 'linear-gradient(90deg, var(--health-degraded) 50%, transparent 50%)',
+    boxShadow: 'inset 0 0 0 1px var(--health-degraded)',
+  },
   outside: { background: 'transparent', boxShadow: 'inset 0 0 0 1px var(--health-idle)' },
 };
+
+const TONES: ReadonlyArray<ChipTone> = ['granted', 'empty', 'outside'];
 
 const dot: CSSProperties = {
   width: 8,
@@ -195,6 +205,27 @@ export function AccessMatrix({
           );
         })}
       </div>
+
+      <ul
+        aria-label="What the dots mean"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 'var(--space-4)',
+          listStyle: 'none',
+          margin: 0,
+          padding: 0,
+          fontSize: 'var(--text-xs)',
+          color: 'var(--ink-tertiary)',
+        }}
+      >
+        {TONES.map((tone) => (
+          <li key={tone} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span aria-hidden="true" style={{ ...dot, ...TONE_DOT[tone] }} />
+            {TONE_WORD[tone]}
+          </li>
+        ))}
+      </ul>
 
       <div
         style={{
