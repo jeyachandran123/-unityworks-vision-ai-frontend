@@ -182,16 +182,93 @@ export interface PeopleList {
   offset: number;
 }
 
+/** Every stream the wall holds, by state: `live`, `connecting`, `reconnecting`, `offline`, `error`, `disabled`. */
+export type StreamStates = Record<string, number>;
+
+/** One customer on one line: what it has, who can run it, and whether it is live. */
+export interface FleetRow {
+  id: string;
+  name: string;
+  slug: string;
+  status: OrganizationStatus;
+  created_at: string | null;
+  zones: number;
+  cameras: number;
+  /** Cameras switched on. The denominator `cameras_live` is a share of. */
+  cameras_enabled: number;
+  /** Read from the runtime: a frame arrived in the last few seconds. */
+  cameras_live: number;
+  stream_states: StreamStates;
+  members: number;
+  /** Active members holding Organization Admin there. Zero means nobody can administer it. */
+  admins: number;
+  last_sign_in_at: string | null;
+}
+
+/** What an act changed, summarised by the server from a whitelist. Never the raw detail. */
+export interface ActivityChange {
+  from?: string;
+  to?: string;
+  reason?: string;
+  role?: string | null;
+  added?: number;
+  removed?: number;
+  fields?: string[];
+}
+
+export interface ActivityRow {
+  id: string;
+  action: string;
+  organization_id: string;
+  organization_name: string;
+  actor: string;
+  resource_id: string;
+  /** The person the act was about, when it was about a person. */
+  subject: string | null;
+  outcome: string;
+  change: ActivityChange | null;
+  occurred_at: string | null;
+}
+
+export interface ActivityDay {
+  /** `YYYY-MM-DD`, in the reader's own day. */
+  date: string;
+  total: number;
+  refused: number;
+}
+
 export interface PlatformOverview {
-  organizations: { total: number; active: number; suspended: number; archived: number };
-  estate: { zones: number; cameras: number; cameras_running: number };
+  generated_at: string;
+  organizations: {
+    total: number;
+    active: number;
+    suspended: number;
+    archived: number;
+    new_30d: number;
+  };
+  estate: {
+    zones: number;
+    cameras: number;
+    cameras_enabled: number;
+    /** Every stream the wall holds, whatever its state. */
+    cameras_running: number;
+    cameras_live: number;
+    stream_states: StreamStates;
+  };
   people: {
     users: number;
     active_users: number;
+    disabled_users: number;
     multi_organization_users: number;
     never_signed_in: number;
+    signed_in_24h: number;
+    signed_in_7d: number;
+    signed_in_30d: number;
+    /** Accounts with a password and no organization to enter. */
+    without_membership: number;
     platform_operators: number;
   };
+  fleet: FleetRow[];
   attention: {
     organizations_needing_setup: Array<{
       id: string;
@@ -199,16 +276,18 @@ export interface PlatformOverview {
       zone_count: number;
       camera_count: number;
     }>;
+    organizations_without_admin: Array<{ id: string; name: string }>;
+    organizations_not_live: Array<{ id: string; name: string; cameras_enabled: number }>;
+    refused_changes_7d: number;
   };
-  recent_activity: Array<{
-    id: string;
-    action: string;
-    organization_id: string;
-    actor: string;
-    resource_id: string;
-    outcome: string;
-    occurred_at: string | null;
-  }>;
+  activity: {
+    utc_offset: number;
+    /** Oldest first, fourteen of them. */
+    days: ActivityDay[];
+    last_7d: number;
+    previous_7d: number;
+  };
+  recent_activity: ActivityRow[];
 }
 
 export interface OperatorRow {
@@ -330,7 +409,12 @@ export interface NewPerson {
 }
 
 export const platformAdminApi = {
-  overview: () => api.get<PlatformOverview>('/platform/overview'),
+  /**
+   * The dashboard's counts. The reader's UTC offset decides where one day of the
+   * activity chart ends, so a fortnight is cut at their midnight, not UTC's.
+   */
+  overview: (utcOffset: number = -new Date().getTimezoneOffset()) =>
+    api.get<PlatformOverview>(`/platform/overview${query({ utc_offset: utcOffset })}`),
 
   people: (params: { q?: string; organization_id?: string; limit?: number; offset?: number } = {}) =>
     api.get<PeopleList>(`/platform/people${query({ ...params })}`),

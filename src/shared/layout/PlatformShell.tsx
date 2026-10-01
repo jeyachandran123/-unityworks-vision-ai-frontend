@@ -145,7 +145,7 @@ export function PlatformShell() {
                 style={{ width: '100%', justifyContent: 'flex-start' }}
               >
                 <Icon icon={ControlIcons.goTo} size="inline" />
-                organization application
+                Organization application
               </Button>
             </div>
           </nav>
@@ -270,7 +270,7 @@ export function PlatformShell() {
                   role="menuitem"
                   style={{ width: '100%' }}
                 >
-                  organization application
+                  Organization application
                 </Button>
                 <Button
                   variant="ghost"
@@ -288,11 +288,16 @@ export function PlatformShell() {
 
         <main
           id="main"
+          // The spine, as in `AppShell`: every section label on a platform
+          // page ties a tick back to it. Without the line the ticks hung in
+          // the margin beside the sidebar, attached to nothing. The left
+          // padding is the spine's gutter and belongs to `.uwv-spine`, which
+          // is why it is not set here — an inline value would win.
+          className="uwv-spine"
           style={{
             flex: 1,
             paddingTop: 'var(--space-8)',
             paddingRight: 'var(--space-6)',
-            paddingLeft: 'var(--space-6)',
             paddingBottom: 'var(--space-12)',
             maxWidth: 'var(--content-max)',
             width: '100%',
@@ -313,17 +318,20 @@ function PlatformLink({ item }: { item: PlatformNavItem }) {
       to={item.path}
       end={!item.matchNested}
       title={item.hint}
-      style={({ isActive }) => ({
+      // Colour and the current-page mark live in `.uwv-platform-link`, keyed
+      // on the `aria-current` NavLink sets — an inline colour would beat the
+      // stylesheet's hover and current states unconditionally.
+      className="uwv-platform-link"
+      style={{
         display: 'flex',
         alignItems: 'center',
         gap: 'var(--space-3)',
         padding: 'var(--space-2) var(--space-3)',
+        marginBottom: 2,
         borderRadius: 'var(--radius-sm)',
-        color: isActive ? 'var(--ink-primary)' : 'var(--ink-secondary)',
-        background: isActive ? 'var(--surface-hover)' : 'transparent',
         textDecoration: 'none',
         fontSize: 'var(--text-sm)',
-      })}
+      }}
     >
       <Icon icon={item.icon} size="inline" />
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>

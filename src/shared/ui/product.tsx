@@ -418,7 +418,6 @@ export function Attention({
       style={{
         position: 'relative',
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr)',
         // No `gridTemplateColumns` here.
         //
         // Stage 5 moved the two-column split into `.uwv-attention` so it could

@@ -39,6 +39,7 @@ import {
   Armchair,
   ArrowRight,
   Ban,
+  Building2,
   Camera,
   Cctv,
   Check,
@@ -59,6 +60,19 @@ import {
   Fingerprint,
   FlaskConical,
   FileText,
+  History,
+  KeyRound,
+  LogIn,
+  Minus,
+  PencilLine,
+  Power,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  UserCog,
+  UserMinus,
+  UserPlus,
+  UserX,
   Gauge,
   HardHat,
   Image,
@@ -343,4 +357,46 @@ export const StatusIcons = {
   fixture: TestTube,
   /** The engineering register's mark. */
   engineering: Diamond,
+} as const;
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The control plane
+
+   What the Platform Admin's dashboard needs and nothing else in the product
+   draws: one icon per kind of platform act, so a fortnight of the feed can be
+   scanned by shape before a word of it is read, and the few instruments the
+   overview carries.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export const PlatformIcons = {
+  /** A customer — an organization, as a building. */
+  organization: Building2,
+  /** An organization was created. */
+  created: Building2,
+  /** An organization was renamed or edited. */
+  updated: PencilLine,
+  /** Suspended, archived or restored. */
+  status: Power,
+  /** A Platform Admin entered an organization. */
+  entered: LogIn,
+  /** Somebody was admitted to an organization. */
+  memberAdded: UserPlus,
+  /** Somebody's membership was removed. */
+  memberRemoved: UserMinus,
+  /** A new Organization Admin was created. */
+  adminCreated: UserCog,
+  /** What somebody may do was changed. */
+  access: KeyRound,
+  /** An account that can enter no organization. */
+  stranded: UserX,
+  /** The activity record. */
+  activity: History,
+  /** Read the counts again. */
+  refresh: RefreshCw,
+  /** More than the week before. Neither good nor bad — a count went up. */
+  up: TrendingUp,
+  /** Fewer than the week before. */
+  down: TrendingDown,
+  /** The same as the week before. */
+  level: Minus,
 } as const;

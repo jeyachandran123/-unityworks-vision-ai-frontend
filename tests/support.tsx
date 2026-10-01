@@ -1329,24 +1329,23 @@ export function stubFetch(options: StubOptions = {}) {
     if (url.includes('/platform/overview')) {
       if (!operator) return envelope('OUT_OF_SCOPE', 403);
       return jsonResponse(
-        options.platformOverview ?? {
-          organizations: {
-            total: platformList.length,
-            active: platformList.length,
-            suspended: 0,
-            archived: 0,
-          },
-          estate: { zones: 4, cameras: 12, cameras_running: 9 },
-          people: {
-            users: peopleState.length,
-            active_users: peopleState.length,
-            multi_organization_users: peopleState.filter((p) => p.memberships.length > 1).length,
-            never_signed_in: 0,
-            platform_operators: 1,
-          },
-          attention: { organizations_needing_setup: [] },
-          recent_activity: [],
-        },
+        options.platformOverview ??
+          platformOverviewFixture({
+            organizations: {
+              total: platformList.length,
+              active: platformList.length,
+              suspended: 0,
+              archived: 0,
+              new_30d: 0,
+            },
+            people: {
+              ...platformOverviewFixture().people,
+              users: peopleState.length,
+              active_users: peopleState.length,
+              disabled_users: 0,
+              multi_organization_users: peopleState.filter((p) => p.memberships.length > 1).length,
+            },
+          }),
       );
     }
 
@@ -2036,6 +2035,56 @@ export function stubFetch(options: StubOptions = {}) {
 
     return envelope('NOT_FOUND', 404);
   });
+}
+
+/**
+ * A complete platform overview, every field present, everything clear.
+ *
+ * Tests override what they are about. The default is deliberately unremarkable
+ * — nothing in the attention queue — so a test that expects a flag has to put
+ * one there.
+ */
+export function platformOverviewFixture(patch: Record<string, unknown> = {}) {
+  const today = new Date();
+  const days = Array.from({ length: 14 }, (_, index) => {
+    const at = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (13 - index));
+    const date = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+    return { date, total: 0, refused: 0 };
+  });
+  return {
+    generated_at: today.toISOString(),
+    organizations: { total: 2, active: 2, suspended: 0, archived: 0, new_30d: 0 },
+    estate: {
+      zones: 4,
+      cameras: 12,
+      cameras_enabled: 12,
+      cameras_running: 12,
+      cameras_live: 9,
+      stream_states: { live: 9, reconnecting: 2, error: 1 },
+    },
+    people: {
+      users: 5,
+      active_users: 5,
+      disabled_users: 0,
+      multi_organization_users: 0,
+      never_signed_in: 0,
+      signed_in_24h: 2,
+      signed_in_7d: 3,
+      signed_in_30d: 5,
+      without_membership: 0,
+      platform_operators: 1,
+    },
+    fleet: [] as unknown[],
+    attention: {
+      organizations_needing_setup: [] as unknown[],
+      organizations_without_admin: [] as unknown[],
+      organizations_not_live: [] as unknown[],
+      refused_changes_7d: 0,
+    },
+    activity: { utc_offset: 0, days, last_7d: 0, previous_7d: 0 },
+    recent_activity: [] as unknown[],
+    ...patch,
+  };
 }
 
 export function installFetch(options: StubOptions = {}) {

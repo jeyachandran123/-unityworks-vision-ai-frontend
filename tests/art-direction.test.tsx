@@ -136,7 +136,12 @@ describe('the attention panel', () => {
         aside={<a href="/incidents/inc-1">No head covering at the prep bench</a>}
       />,
     );
-    expect(document.querySelector('.uwv-attention')).not.toBeNull();
+    const split = document.querySelector('.uwv-attention') as HTMLElement;
+    expect(split).not.toBeNull();
+    // The split lives in the stylesheet so it can stop below the breakpoint.
+    // An inline template beats a stylesheet unconditionally, and one left
+    // behind kept the aside under the statement at every width.
+    expect(split.style.gridTemplateColumns).toBe('');
     expect(screen.getByRole('link', { name: /no head covering/i })).toHaveAttribute(
       'href',
       '/incidents/inc-1',

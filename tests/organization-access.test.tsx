@@ -232,16 +232,18 @@ describe('a platform operator', () => {
     installFetch(operatorStub());
     renderApp(<AppRouter />, '/platform');
 
-    await waitFor(() => expect(screen.getByText('organizations')).toBeInTheDocument());
-    // Estate figures come from the server, not from the length of a list here.
-    expect(screen.getByText('Streaming now')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector('[data-figure="Customers"]')).not.toBeNull(),
+    );
 
-    // And each figure carries its number. Asserting only the label let the
-    // estate count survive a wire rename reading `undefined`: the heading was
-    // still there, the tile was blank, and nothing failed.
-    const zones = document.querySelector('[data-figure="Zones"]') as HTMLElement;
-    expect(zones).not.toBeNull();
-    expect(within(zones).getByText('4')).toBeInTheDocument();
+    // Each figure carries its number. Asserting only the label let the estate
+    // count survive a wire rename reading `undefined`: the heading was still
+    // there, the tile was blank, and nothing failed. Live cameras come from the
+    // server's runtime count, not from the length of a list here.
+    const live = document.querySelector('[data-figure="Cameras live"]') as HTMLElement;
+    expect(live).not.toBeNull();
+    expect(within(live).getByText('9')).toBeInTheDocument();
+    expect(within(live).getByText('of 12 switched on')).toBeInTheDocument();
   });
 
   it('sees the organizations console inside the platform shell, not an organization', async () => {
@@ -267,7 +269,9 @@ describe('a platform operator', () => {
     const user = userEvent.setup();
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument());
 
-    await user.click(screen.getByRole('link', { name: /people/i }));
+    // From the navigation itself: the dashboard has its own road to People too.
+    const nav = screen.getByRole('navigation', { name: 'Platform' });
+    await user.click(within(nav).getByRole('link', { name: /people/i }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument());
 
     await user.click(screen.getByRole('link', { name: /operators/i }));

@@ -632,3 +632,421 @@ a:hover { text-decoration: underline; }
 details[open] > summary .uwv-disclosure-caret {
   transform: rotate(90deg);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE CONTROL PLANE DASHBOARD
+
+   The Platform Admin's first page. Instruments rather than cards: each tile is
+   a plane with one number set large and the drawing that explains it, and
+   every tile in a row is the same height so the row reads as a console rather
+   than as four boxes that happen to be adjacent. One accent, the same state
+   colours as everywhere else, and no gradient — `--atmosphere` stays the only
+   one in the product.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.uwv-mini-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.uwv-counted {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  color: var(--ink-tertiary);
+}
+
+.uwv-kpis {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 40rem) {
+  .uwv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 80rem) {
+  .uwv-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.uwv-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--surface-panel);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--motion-base) var(--ease-out);
+}
+.uwv-kpi:hover { border-color: var(--line-default); }
+
+.uwv-kpi-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
+}
+
+.uwv-kpi-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  color: var(--ink-primary);
+}
+.uwv-kpi-unit {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--ink-tertiary);
+}
+.uwv-kpi-note {
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  line-height: var(--leading-normal);
+}
+.uwv-kpi-fine {
+  font-size: var(--text-2xs);
+  color: var(--ink-tertiary);
+}
+
+.uwv-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line-default);
+  background: var(--surface-overlay);
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.uwv-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+.uwv-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.uwv-legend li > span[aria-hidden="true"] { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.uwv-legend strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+}
+
+/* The attention queue: one row per thing, each a road to it. */
+.uwv-queue { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.uwv-queue-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: inherit;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+.uwv-queue-row:hover { background: var(--surface-hover); text-decoration: none; }
+.uwv-queue-row:hover .uwv-queue-go { color: var(--accent); transform: translateX(2px); }
+.uwv-queue-title {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+}
+.uwv-queue-detail { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--ink-tertiary); }
+.uwv-queue-go {
+  display: flex;
+  color: var(--ink-tertiary);
+  align-self: center;
+  transition: color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+/* A fortnight as bars. The refused share of a day sits at its foot, in red. */
+.uwv-bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  align-items: end;
+  border-bottom: 1px solid var(--line-default);
+}
+.uwv-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-line);
+  overflow: hidden;
+  transition: background var(--motion-fast) var(--ease-out), height var(--motion-slow) var(--ease-out);
+}
+.uwv-bar[data-today="true"] { background: var(--accent); }
+.uwv-bar:hover { background: var(--accent-hover); }
+.uwv-bar-refused { display: block; width: 100%; background: var(--severity-critical); }
+.uwv-bars-axis {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-tertiary);
+  text-align: center;
+  white-space: nowrap;
+}
+.uwv-bars-axis [data-today="true"] { color: var(--accent); }
+
+.uwv-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+/* Every customer on one line. A table, because the columns are compared. */
+.uwv-scroll-x { overflow-x: auto; }
+.uwv-fleet { width: 100%; min-width: 46rem; border-collapse: collapse; font-size: var(--text-sm); }
+.uwv-fleet th {
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--line-default);
+  white-space: nowrap;
+}
+.uwv-fleet td {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--line-subtle);
+  vertical-align: middle;
+  color: var(--ink-secondary);
+}
+.uwv-fleet tbody tr { transition: background var(--motion-fast) var(--ease-out); }
+.uwv-fleet tbody tr:hover { background: var(--surface-hover); }
+.uwv-fleet tbody tr:last-child td { border-bottom: 0; }
+.uwv-fleet .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+.uwv-fleet th.num { color: var(--ink-tertiary); }
+.uwv-fleet-name { font-weight: var(--weight-semibold); color: var(--ink-primary); }
+.uwv-fleet-name:hover { color: var(--accent); }
+.uwv-quiet-ink { color: var(--ink-tertiary); font-size: var(--text-xs); }
+
+.uwv-track {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.uwv-track > span { display: block; height: 100%; border-radius: inherit; }
+
+.uwv-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0.4rem;
+  border: 1px solid;
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* People, as facts. */
+.uwv-split { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 62rem) {
+  .uwv-split { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+.uwv-facts { list-style: none; margin: 0; padding: 0; }
+.uwv-fact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line-subtle);
+}
+.uwv-fact:first-child { padding-top: 0; }
+.uwv-fact:last-child { border-bottom: 0; padding-bottom: 0; }
+.uwv-fact-label { display: block; font-size: var(--text-sm); color: var(--ink-primary); }
+.uwv-fact-detail { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--ink-tertiary); }
+.uwv-fact-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+}
+
+/* The feed: filter chips, then a timeline per day. */
+.uwv-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-5); }
+.uwv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line-default);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.uwv-chip > span { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-tertiary); }
+.uwv-chip:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink-primary); }
+.uwv-chip[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
+.uwv-chip[aria-pressed="true"] > span { color: var(--accent); }
+.uwv-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.uwv-feed-day + .uwv-feed-day { margin-top: var(--space-6); }
+.uwv-feed-day-label {
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+.uwv-feed { list-style: none; margin: 0; padding: 0; position: relative; }
+/* The thread that ties a day's acts together, drawn through the icons. */
+.uwv-feed::before {
+  content: "";
+  position: absolute;
+  left: calc(0.875rem - 0.5px);
+  top: var(--space-4);
+  bottom: var(--space-4);
+  width: 1px;
+  background: var(--line-subtle);
+}
+.uwv-feed-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+  padding: var(--space-2) 0;
+}
+.uwv-feed-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-default);
+  color: var(--accent);
+}
+.uwv-feed-item[data-refused="true"] .uwv-feed-icon {
+  background: var(--state-absent-wash);
+  border-color: var(--severity-critical);
+  color: var(--severity-critical);
+}
+.uwv-feed-sentence {
+  padding-top: 0.2rem;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+.uwv-feed-person { font-weight: var(--weight-semibold); color: var(--ink-primary); }
+.uwv-feed-place {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-xs);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+.uwv-feed-place:hover { text-decoration: none; background: var(--surface-selected); }
+.uwv-feed-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--ink-tertiary);
+}
+.uwv-feed-time {
+  padding-top: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+/* The platform navigation. The current page is marked by a bar and the
+   accent, not by the focus ring: the ring is for the keyboard, and it is drawn
+   inset so it never runs into the edge of the sidebar. */
+.uwv-platform-link {
+  position: relative;
+  color: var(--ink-secondary);
+  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.uwv-platform-link:hover { background: var(--surface-hover); color: var(--ink-primary); text-decoration: none; }
+.uwv-platform-link[aria-current="page"] { background: var(--accent-wash); color: var(--ink-primary); }
+.uwv-platform-link[aria-current="page"] svg { color: var(--accent); }
+.uwv-platform-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.uwv-platform-link:focus-visible { outline-offset: -2px; }
+
+/* A breakdown read line by line. */
+.uwv-bandbars { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.uwv-bandbars li {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: var(--space-4);
+}
+.uwv-bandbars-label { font-size: var(--text-xs); color: var(--ink-secondary); }
+.uwv-bandbars-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+}
