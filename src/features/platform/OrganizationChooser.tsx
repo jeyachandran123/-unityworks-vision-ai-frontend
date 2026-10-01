@@ -174,7 +174,7 @@ export function OrganizationChooser() {
         <header style={{ marginBottom: 'var(--space-8)' }}>
           <div
             style={{
-              fontFamily: 'var(--font-mono)',
+              fontWeight: 'var(--weight-semibold)',
               fontSize: 'var(--text-2xs)',
               letterSpacing: 'var(--tracking-wider)',
               textTransform: 'uppercase',
@@ -225,7 +225,7 @@ export function OrganizationChooser() {
               marginBottom: 'var(--space-5)',
               padding: 'var(--space-3) var(--space-4)',
               border: '1px solid var(--line-default)',
-              borderLeft: '3px solid var(--state-critical, var(--ink-primary))',
+              borderLeft: '3px solid var(--severity-critical, var(--ink-primary))',
               borderRadius: 'var(--radius-sm)',
               background: 'var(--surface-raised)',
               fontSize: 'var(--text-sm)',
@@ -239,7 +239,7 @@ export function OrganizationChooser() {
 
         {!loading && everyOrganization.isError ? (
           <ErrorState
-            title="organizations could not be loaded"
+            title="Organizations could not be loaded"
             body="The platform list is unavailable. Any organization you are a member of is still listed below."
           />
         ) : null}
@@ -256,7 +256,7 @@ export function OrganizationChooser() {
         ) : null}
 
         <ul
-          aria-label="organizations"
+          aria-label="Organizations"
           style={{
             listStyle: 'none',
             margin: 0,
@@ -286,7 +286,7 @@ export function OrganizationChooser() {
               <Icon icon={ControlIcons.goTo} size="inline" />
             </Button>
             <span style={{ marginLeft: 'var(--space-3)', color: 'var(--ink-tertiary)' }}>
-              organizations, people, operators and access — above every customer, in its own
+              Organizations, people, operators and access — above every customer, in its own
               console. A different job from entering one.
             </span>
           </p>
@@ -401,7 +401,7 @@ function OrganizationCard({
         {operator && !archived ? (
           <span
             style={{
-              fontFamily: 'var(--font-mono)',
+              fontWeight: 'var(--weight-semibold)',
               fontSize: 'var(--text-2xs)',
               letterSpacing: 'var(--tracking-wide)',
               textTransform: 'uppercase',
@@ -421,7 +421,7 @@ function Count({ label, value }: { label: string; value: number }) {
     <div>
       <dt
         style={{
-          fontFamily: 'var(--font-mono)',
+          fontWeight: 'var(--weight-semibold)',
           fontSize: 'var(--text-2xs)',
           letterSpacing: 'var(--tracking-wider)',
           textTransform: 'uppercase',

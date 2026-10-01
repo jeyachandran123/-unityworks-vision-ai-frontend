@@ -448,27 +448,18 @@ function Controls({
           >
             Period
           </legend>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          {/* The shared segmented control's look, on the buttons this form
+              already had: a choice that filters, so pressed/unpressed buttons
+              rather than tabs. */}
+          <div className="uwv-tabs">
             {PERIODS.map((option) => (
               <button
                 key={option.id}
                 type="button"
+                className="uwv-tab"
                 onClick={() => onPeriod(option.id)}
                 aria-pressed={periodId === option.id}
-                style={{
-                  padding: '0.3rem 0.7rem',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 'var(--weight-medium)',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  whiteSpace: 'nowrap',
-                  background: periodId === option.id ? 'var(--accent)' : 'var(--surface-raised)',
-                  color:
-                    periodId === option.id ? 'var(--ink-on-accent)' : 'var(--ink-primary)',
-                  borderColor:
-                    periodId === option.id ? 'var(--accent)' : 'var(--line-default)',
-                }}
+                style={disabled ? { cursor: 'not-allowed' } : undefined}
               >
                 {option.label}
               </button>

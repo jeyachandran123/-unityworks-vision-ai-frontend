@@ -67,47 +67,37 @@ const rows = () => [...document.querySelectorAll('.uwv-camera-line')];
 
 /* ── the alignment contract ───────────────────────────────────────────────── */
 
-describe('the spine tick hangs off the label it names', () => {
-  it('marks every section label as the anchor, and nothing else', async () => {
+describe('every section is marked once, by a real heading', () => {
+  it('gives each marked section exactly one heading', async () => {
     await dashboard({ cameras: SIXTEEN, runtime: RUNNING });
 
-    const marks = [...document.querySelectorAll('.uwv-spine-mark')];
+    const marks = [...document.querySelectorAll('.uwv-section-head')];
     expect(marks.length).toBeGreaterThan(3);
 
-    // Every section that ties itself to the spine carries exactly one anchor,
-    // and the anchor is the label. Before this repair the tick was drawn from
-    // the wrapper, which assumed the label was the first thing inside it — true
-    // of the page opening and false of every section below it, which is why the
-    // opening's tick landed and the other four floated 22.5px high.
+    // A section is a heading a screen reader can jump to, not a styled label:
+    // exactly one h1 (the opening) or h2 (every section below it) per mark.
     for (const mark of marks) {
       expect(
-        mark.querySelectorAll('.uwv-spine-tick').length,
-        `${mark.textContent?.slice(0, 24)} has the wrong number of anchors`,
+        mark.querySelectorAll('h1, h2').length,
+        `${mark.textContent?.slice(0, 24)} has the wrong number of headings`,
       ).toBe(1);
     }
   });
 
-  it('does not grow a tick on an eyebrow that is not a section boundary', async () => {
+  it('does not promote a label inside a region to a section', async () => {
     await dashboard({ cameras: SIXTEEN, runtime: RUNNING });
 
-    // "Not yet reported" names a list *inside* the estate region. An eyebrow
-    // that opted itself into the anchor would draw a tick out into the margin
-    // beside a line that is not a section boundary.
+    // "Not yet reported" names a list *inside* the estate region. It is a
+    // label, and must not become a heading or a section boundary.
     const inner = await screen.findByText('Not yet reported');
-    expect(inner.classList.contains('uwv-spine-tick')).toBe(false);
-    expect(inner.closest('.uwv-spine-tick')).toBeNull();
+    expect(inner.closest('.uwv-section-head')).toBeNull();
+    expect(['H1', 'H2', 'H3'].includes(inner.tagName)).toBe(false);
   });
 
-  it('keeps the label out of the gap so the actions cannot move it', async () => {
+  it('names the attention section as a heading', async () => {
     await dashboard({ cameras: SIXTEEN, runtime: RUNNING });
 
-    // The section's breathing room belongs to the label column, not the row.
-    // On the row, baseline alignment let a taller action push the label down —
-    // 16px below the rule in a section with no actions and 21px in one with
-    // them, on the same page, decided by a permission.
-    const label = await screen.findByText('Attention');
-    const column = label.parentElement as HTMLElement;
-    expect(column.style.paddingTop).toBe('var(--space-4)');
+    expect(await screen.findByRole('heading', { name: 'Attention', level: 2 })).toBeInTheDocument();
   });
 });
 

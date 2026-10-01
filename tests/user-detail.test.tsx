@@ -66,7 +66,7 @@ describe('navigating to a user from the Accounts table', () => {
     const user = userEvent.setup();
     renderApp(<AppRouter />, '/admin/people');
 
-    await screen.findByRole('heading', { name: 'People' });
+    await screen.findByRole('heading', { name: 'People', level: 1 });
     await user.click(await screen.findByRole('link', { name: /manager/i }));
 
     await screen.findByRole('heading', { name: /manager/i });
@@ -224,7 +224,7 @@ describe('user detail: structural composition', () => {
     // structural evidence of the ranked (not equal-weight) composition. jsdom
     // has no layout engine, so this is what can be pinned here; true visual
     // verification is deferred (see report §19/§24).
-    const marks = document.querySelectorAll('.uwv-spine-mark');
+    const marks = document.querySelectorAll('.uwv-section-head');
     expect(marks.length).toBeGreaterThanOrEqual(3);
 
     const lead = document.querySelector('[data-lead="true"][data-order="2"]');

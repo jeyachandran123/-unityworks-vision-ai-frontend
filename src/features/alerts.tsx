@@ -203,7 +203,7 @@ function CropExhibit({ object: subject }: { object: EvidenceObject }) {
       style={{
         margin: 0,
         width: 128,
-        border: `2px solid ${subject.is_subject ? SUBJECT_INK : 'var(--border-subtle, rgb(0 0 0 / 0.12))'}`,
+        border: `2px solid ${subject.is_subject ? SUBJECT_INK : 'var(--line-subtle, rgb(0 0 0 / 0.12))'}`,
         borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
         background: '#000',

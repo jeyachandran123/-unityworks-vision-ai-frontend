@@ -430,7 +430,7 @@ function CameraDetail({
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontFamily: 'var(--font-mono)',
+                fontWeight: 'var(--weight-semibold)',
                 fontSize: 'var(--text-2xs)',
                 letterSpacing: 'var(--tracking-wider)',
                 textTransform: 'uppercase',

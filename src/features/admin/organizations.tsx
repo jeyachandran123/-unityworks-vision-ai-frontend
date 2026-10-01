@@ -112,7 +112,7 @@ export function OrganizationsPage() {
   const columns: ReadonlyArray<Column<Organization>> = [
     {
       key: 'name',
-      header: 'organization',
+      header: 'Organization',
       render: (organization) => (
         <Link to={`/platform/organizations/${encodeURIComponent(organization.id)}`}>
           {organization.name}
@@ -143,7 +143,7 @@ export function OrganizationsPage() {
     <>
       <PageIntro
         eyebrow="Platform"
-        title="organizations"
+        title="Organizations"
         standfirst="Every customer on this deployment. Creating, suspending and archving one happens here and nowhere else."
         actions={
           <Button onClick={() => setAdding((open) => !open)}>
@@ -195,7 +195,7 @@ export function OrganizationsPage() {
               gap: 'var(--space-6)',
             }}
           >
-            <Figure scale="lead" label="organizations" value={String(all.length)} />
+            <Figure scale="lead" label="Organizations" value={String(all.length)} />
             <Figure
               scale="lead"
               label="Active"
@@ -214,7 +214,7 @@ export function OrganizationsPage() {
       <Region order={adding ? 4 : 3}>
         <SectionRule
           lead
-          label="organizations"
+          label="Organizations"
           actions={
             <div
               style={{
@@ -243,7 +243,7 @@ export function OrganizationsPage() {
           {organizations.isError ? <Failed error={organizations.error} /> : null}
           {organizations.data ? (
             <DataTable
-              caption="organizations on this platform"
+              caption="Organizations on this platform"
               columns={columns}
               rows={all}
               rowKey={(organization) => organization.id}
@@ -287,7 +287,7 @@ export function OrganizationDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="organization"
+        eyebrow="Organization"
         title={it.name}
         standfirst={
           <>
@@ -325,7 +325,7 @@ export function OrganizationDetailPage() {
               {it.status_reason ? (
                 <>
                   {' — '}
-                  <span style={{ color: 'var(--text-secondary)' }}>{it.status_reason}</span>
+                  <span style={{ color: 'var(--ink-secondary)' }}>{it.status_reason}</span>
                 </>
               ) : null}
             </p>
@@ -444,7 +444,7 @@ function EnterOrganization({ organization }: { organization: Organization }) {
         <Button onClick={() => void go()} disabled={busy || archived}>
           {busy ? 'Opening…' : 'Enter organization'}
         </Button>
-        <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+        <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
           {archived
             ? 'An archived organization cannot be entered. Nobody may sign in to one.'
             : 'You will enter as Platform Admin, with full access. The entry is recorded in this organization’s audit trail.'}
@@ -562,7 +562,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
                     <Badge>home</Badge>
                   </span>
                 ) : null}
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
                   {(person.memberships.find((m) => m.organization_id === organizationId)?.roles ?? [])
                     .length === 0
                     ? 'No role here — can enter, sees nothing'
@@ -611,7 +611,7 @@ function Members({ organizationId, archived }: { organizationId: string; archive
         <Button disabled={!addUser || add.isPending || archived} onClick={() => add.mutate(addUser)}>
           {add.isPending ? 'Adding…' : 'Add as Organization Admin'}
         </Button>
-        <p style={{ margin: 0, flexBasis: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+        <p style={{ margin: 0, flexBasis: '100%', color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>
           {archived
             ? 'An archived organization takes no new members.'
             : 'They become Organization Admin here, with every camera, alongside any organizations they already run.'}
@@ -671,7 +671,7 @@ function Lifecycle({ organization }: { organization: Organization }) {
               padding: 'var(--space-4)',
               border: '1px solid var(--line-subtle)',
               borderRadius: 'var(--radius-md)',
-              color: 'var(--text-secondary)',
+              color: 'var(--ink-secondary)',
             }}
           >
             {STATUS_MEANING[target]}
@@ -747,7 +747,7 @@ function Lifecycle({ organization }: { organization: Organization }) {
                 </span>
               ) : null}
               {result.note ? (
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
                   {result.note}
                 </span>
               ) : null}

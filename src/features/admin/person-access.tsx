@@ -107,7 +107,7 @@ export function CameraPicker({
 }) {
   if (cameras.length === 0) {
     return (
-      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+      <p style={{ margin: 0, color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
         This organization has no cameras yet, so there are none to choose.
       </p>
     );
@@ -382,7 +382,7 @@ export function AddPersonFlow({
                 <code style={{ fontSize: 'var(--text-lg)', wordBreak: 'break-all' }}>
                   {created.generated_password}
                 </code>
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
                   This is the only time it is shown. It is not stored anywhere this screen can
                   reach, and leaving the page loses it. Give it to them over something other than
                   email.
@@ -513,13 +513,13 @@ export function AddPersonFlow({
                 ],
               ].map(([term, value]) => (
                 <div key={term} style={{ display: 'contents' }}>
-                  <dt style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{term}</dt>
+                  <dt style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>{term}</dt>
                   <dd style={{ margin: 0 }}>{value}</dd>
                 </div>
               ))}
             </dl>
             {draft.permissions.length === 0 ? (
-              <p style={{ marginBottom: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+              <p style={{ marginBottom: 0, color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
                 Nothing is ticked. The account will exist and be able to sign in, and will reach
                 nothing until somebody gives it access.
               </p>

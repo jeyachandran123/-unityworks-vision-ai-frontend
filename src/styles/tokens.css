@@ -11,160 +11,163 @@
  * visible" must never look like "nothing was there", and neither may look like
  * a violation — one of those accuses somebody nobody could see.
  *
- * The palette is deliberately restrained: one accent, five state colours, and
- * greys with a slight cool bias so they read as chosen rather than defaulted.
+ * ── The language (2026-10 revamp) ──────────────────────────────────────────
+ *
+ * One brand colour, a deep-to-vibrant purple; lavender and a soft blue as its
+ * quiet companions; neutrals with a faint violet bias so they read as chosen;
+ * and the state colours, which carry meaning and so never borrow the brand's.
+ * That last rule is why NOT_VISIBLE moved from violet to teal when the brand
+ * became purple: a state that looked like a button, or like the logo, would be
+ * a state nobody read as a state.
+ *
+ * The navigation is deep purple in *both* themes. It is furniture, not page,
+ * and holding it constant is what makes the two themes one product.
+ *
  * Colour is never the only signal; every state also carries a glyph and a label.
  */
 
 :root {
   /**
-   * ── Surfaces: a stack with a light source, not a plane ────────────────
+   * ── Surfaces: a stack with a light source ─────────────────────────────
    *
-   * Stage 5's critique found that every region in the product sat on the same
-   * value with a hairline around it, which is why a page read as assembled
-   * rather than composed. There are now four grounds and they mean four
-   * different things:
-   *
-   *   --ground          the canvas the application is built on. Deepest. Only
-   *                     the shell paints it. Nothing sits *on* it directly.
-   *   --surface-base    the reading plane, where a page's prose and rules live.
-   *   --surface-panel   a region that is a plane rather than an object — a wall,
-   *                     a ledger, a report body. Lifts off base without
-   *                     becoming a card.
-   *   --surface-raised  an object genuinely above the page: a card that earned
-   *                     it, the topbar, the sidebar, a modal body.
-   *
-   * The separations are deliberate rather than nominal, which is what the
-   * previous 1.28:1 base-to-raised step was not.
+   *   --ground          the canvas the shell is built on. Deepest.
+   *   --surface-base    the reading plane a page's prose and headings sit on.
+   *   --surface-panel   a region that is a ground for content — a card, a
+   *                     ledger, a report body.
+   *   --surface-raised  an object genuinely above the page: a control, the
+   *                     topbar, a menu trigger, a modal body.
+   *   --surface-overlay what floats over everything: menus, toasts.
    */
-  --ground: #070a0c;
-  --surface-base: #0c1013;
-  --surface-panel: #11171c;
-  --surface-raised: #161d23;
-  --surface-overlay: #1e262e;
-  --surface-sunken: #080b0d;
-  --surface-hover: #222b33;
-  --surface-selected: #1b2f36;
+  --ground: #0b0a12;
+  --surface-base: #0f0d18;
+  --surface-panel: #15121f;
+  --surface-raised: #1b1828;
+  --surface-overlay: #231f33;
+  --surface-sunken: #0a0911;
+  --surface-hover: #241f36;
+  --surface-selected: #2a2147;
 
   /**
-   * The atmosphere.
-   *
-   * One gradient in the entire product, painted on the app canvas and nowhere
-   * else. It gives the interface a light source — the page is fractionally
-   * brighter where reading starts and settles into the ground below — which is
-   * the difference between a room and a flat fill. No component may define
-   * another one.
+   * The atmosphere. One gradient in the entire product, painted on the app
+   * canvas and nowhere else: fractionally brighter where reading starts.
    */
-  --atmosphere: linear-gradient(180deg, #101820 0%, #0c1013 34rem);
+  --atmosphere: linear-gradient(180deg, #13101f 0%, #0f0d18 34rem);
 
   /**
-   * The engineering register.
-   *
-   * Stage 2 committed to making the engineering area *look* different without
-   * becoming a second design system. The difference is carried by ground and
-   * type register, never by a second palette: every state, severity and health
-   * colour is identical on an engineering surface, because an engineer reading
-   * `not_visible` must see exactly what an operator sees.
-   *
-   * Cooler and one step deeper than `--surface-base`, so a screenshot of an
-   * engineering page is unambiguous even with the chrome cropped out — which is
-   * the stated purpose in `UI_UX_ARCHITECTURE.md` §3.
-   */
-  --surface-engineering: #090d11;
-  /**
-   * A panel *on* the engineering ground.
-   *
-   * The shell paints `--surface-engineering` on the whole page of an
-   * engineering route — that is what makes a cropped screenshot unambiguous.
-   * `EngineeringSurface` then paints a block inside that page, and with only
-   * one engineering value the two were identical: a bordered region whose fill
-   * matched its own background, so the surface that is supposed to say "this is
-   * engineering data" was invisible. This is the second step the register
-   * needed, and it is a step in the same cold direction rather than a second
+   * The engineering register. Cooler and one step deeper than the page so a
+   * screenshot of an engineering surface is unambiguous with the chrome
+   * cropped out. Carried by ground and type register, never by a second
    * palette.
    */
-  --surface-engineering-panel: #0e1319;
-  --engineering-line: #1b2530;
-  --engineering-ink: #8fa3b4;
+  --surface-engineering: #0c0b14;
+  --surface-engineering-panel: #121019;
+  --engineering-line: #252136;
+  --engineering-ink: #a6a2c2;
 
   /**
-   * The ground a video frame is letterboxed against.
-   *
-   * Deliberately NOT a surface token, and deliberately identical in both
-   * themes. A camera tile is a picture from a recorder, not a panel in the
-   * application: letterboxing it against the light theme's pale surface put a
-   * grey border around footage and made a dark scene look like a rendering
-   * fault. Black is what every other monitoring client does, and it is what the
-   * detail view already did — this token is what makes the tile agree with it.
+   * The ground a video frame is letterboxed against. Black in both themes:
+   * footage is a picture from a recorder, not a panel in the application.
    */
   --video-ground: #000000;
-
-  /**
-   * Text laid over `--video-ground`, and fixed in both themes for the same
-   * reason it is.
-   *
-   * "Waiting for video…" sits inside the picture area, so it takes its contrast
-   * from the video ground rather than from the page. Left as `--ink-tertiary`
-   * it would be dark grey on black once the light theme became reachable —
-   * 3.87:1, a fail, on the one surface in the product that cannot change
-   * colour to accommodate it. This value is 9.39:1 on black.
-   */
-  --video-ink: #9fb0ba;
+  /** Text laid over `--video-ground`. 9.4:1 on black, in both themes. */
+  --video-ink: #a8b3c2;
 
   /* ── Ink ── */
-  --ink-primary: #e8eef1;
-  --ink-secondary: #9fb0ba;
-  /* Lightened from #6d7f8a: that value cleared 4.5:1 on the two darkest
-     surfaces but fell to 4.22 on --surface-raised and 3.83 on
-     --surface-overlay, and this token carries StatCard's `unavailableReason`
-     — the sentence explaining why a safety figure reads `—` — at 11–13px,
-     where the large-text exemption does not apply. Now 4.58:1 at worst. */
-  /* Raised again for Stage 5: the deeper surface stack lightened
-     --surface-hover and --surface-overlay, and #7c8c96 fell to 4.14:1 on a
-     hovered row. 4.64:1 at worst now. */
-  --ink-tertiary: #8794a0;
-  --ink-inverse: #0c1013;
-  --ink-on-accent: #04191d;
+  --ink-primary: #efedf7;
+  --ink-secondary: #aba7c2;
+  /* 4.7:1 on --surface-overlay and on --surface-hover, the two lightest grounds
+     it is ever set on; this token carries the reason a figure reads `—`. */
+  --ink-tertiary: #8f8ba8;
+  --ink-inverse: #0f0d18;
+  /* White on `--accent-fill`, in both themes. */
+  --ink-on-accent: #ffffff;
 
   /* ── Lines ── */
-  --line-subtle: #1e262c;
-  --line-default: #2a343c;
-  --line-strong: #3b4750;
+  --line-subtle: #211d30;
+  --line-default: #2d283f;
+  --line-strong: #403a57;
 
-  /* ── Accent: a deep instrument teal. Optical, not decorative. ── */
-  --accent: #4fb3c4;
-  --accent-hover: #6cc6d5;
-  --accent-active: #3d97a7;
-  --accent-wash: #12262c;
-  --accent-line: #2c5f6b;
+  /**
+   * ── The brand ─────────────────────────────────────────────────────────
+   *
+   * Two purples, because one cannot do both jobs on a dark ground.
+   * `--accent` is the purple you *read* — a link, an icon, the focus ring —
+   * and must clear 4.5:1 on the page, so on dark it is light. `--accent-fill`
+   * is the purple you *press* — a primary button, the active navigation pill —
+   * and must carry white text at 4.5:1, so it is deeper. On light the two
+   * nearly meet.
+   */
+  --accent: #a48cff;
+  --accent-hover: #b8a5ff;
+  --accent-active: #8f73ff;
+  --accent-fill: #7552f2;
+  --accent-fill-hover: #7a58f4;
+  --accent-fill-active: #6845e6;
+  --accent-wash: #1f1838;
+  --accent-line: #4b3d85;
+  /* Lavender and soft blue: the companions. Washes only, never text. */
+  --lavender-wash: #1c1730;
+  --blue-wash: #121b2e;
 
-  /* ── The four observation states. Non-negotiable. ── */
+  /* ── The four observation states. Non-negotiable in meaning. ── */
   --state-present: #46b877;
-  --state-present-wash: #11241a;
-  --state-absent: #e0655c;
-  --state-absent-wash: #2b1614;
-  --state-not-visible: #8b7fd4;
-  --state-not-visible-wash: #1d1a2e;
-  --state-unknown: #7d8f9a;
-  --state-unknown-wash: #191f24;
+  --state-present-wash: #10241a;
+  --state-absent: #e8675d;
+  --state-absent-wash: #2c1514;
+  /* Teal, not violet: see the header. */
+  --state-not-visible: #3fb6c7;
+  --state-not-visible-wash: #0e262b;
+  --state-unknown: #8a8aa0;
+  --state-unknown-wash: #1a1925;
 
   /* ── Connection / health ── */
   --health-online: #46b877;
-  --health-degraded: #d9a441;
-  --health-degraded-wash: #2a2113;
-  --health-offline: #e0655c;
-  --health-idle: #7d8f9a;
+  --health-degraded: #e0aa45;
+  --health-degraded-wash: #2b2112;
+  --health-offline: #e8675d;
+  --health-idle: #8a8aa0;
 
   /* ── Severity ── */
-  --severity-critical: #e0655c;
-  --severity-high: #e08a4a;
-  --severity-medium: #d9a441;
-  --severity-low: #6c9fd4;
-  --severity-info: #7d8f9a;
+  --severity-critical: #e8675d;
+  --severity-high: #e8904d;
+  --severity-medium: #e0aa45;
+  --severity-low: #6ea6f0;
+  --severity-info: #8a8aa0;
+
+  /**
+   * ── The navigation ────────────────────────────────────────────────────
+   *
+   * Deep purple in both themes. Its ink is fixed light for the same reason:
+   * the sidebar does not change ground when the page does.
+   */
+  --nav-bg: #120f1f;
+  --nav-bg-raised: #1b1630;
+  --nav-line: rgb(255 255 255 / 0.07);
+  --nav-ink: #efedf8;
+  /* 7.1:1 on --nav-bg. */
+  --nav-ink-muted: #aaa5c7;
+  /* 4.8:1 on --nav-bg: section labels and the "soon" marker. */
+  --nav-ink-faint: #8a84ad;
+  --nav-hover: rgb(255 255 255 / 0.06);
+  /* The readable purple on a dark ground, whatever the page's theme: the focus
+     ring inside the navigation, the lit viewfinder over black footage. */
+  --accent-on-dark: #a48cff;
+  --nav-accent: var(--accent-on-dark);
+  --nav-active-bg: var(--accent-fill);
+  --nav-active-ink: #ffffff;
+
+  /* The topbar: a raised strip, one step off the page. */
+  --topbar-bg: #120f1c;
 
   /* ── Type ── */
-  --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /**
+   * No webfont, deliberately. This product runs inside restaurants, often on a
+   * network that cannot reach a font CDN and sometimes on one that must not.
+   * Inter where the machine has it, then the platform's own best UI face.
+   */
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Inter Display", "Inter", "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Cascadia Code", Menlo, Consolas, monospace;
 
   --text-2xs: 0.6875rem;
   --text-xs: 0.75rem;
@@ -175,24 +178,13 @@
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
   --text-3xl: 2.25rem;
-  /**
-   * The display end of the scale.
-   *
-   * ### Why there is no webfont
-   *
-   * This product is deployed inside restaurants, frequently on a network that
-   * cannot reach a font CDN and sometimes on one that must not. A typeface
-   * fetched from a third party would make the product's identity depend on an
-   * outbound request from a kitchen, and the fallback — which is what would
-   * actually render — would be unconsidered.
-   *
-   * So identity is built from what is guaranteed to be there, treated
-   * properly: three registers (display, text, data), a real scale, optical
-   * tracking that tightens as size grows, and tabular figures wherever numbers
-   * are compared. That is typography doing work, rather than a font doing it.
-   */
-  --text-4xl: 3rem;
-  --text-5xl: 4rem;
+  --text-4xl: 2.75rem;
+  --text-5xl: 3.5rem;
+
+  /* Roles over the scale, so a heading is a decision and not a size. */
+  --type-page-title: clamp(1.625rem, 1.2rem + 1.4vw, 2.125rem);
+  --type-section: 1rem;
+  --type-card-title: 0.9375rem;
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -201,19 +193,13 @@
 
   --leading-tight: 1.2;
   --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+  --leading-relaxed: 1.6;
   /* Optical tracking. Type tightens as it grows; labels open as they shrink. */
-  --tracking-display: -0.035em;
-  --tracking-tight: -0.018em;
-  --tracking-wide: 0.08em;
-  --tracking-wider: 0.14em;
+  --tracking-display: -0.025em;
+  --tracking-tight: -0.012em;
+  --tracking-wide: 0.04em;
+  --tracking-wider: 0.08em;
 
-  /**
-   * The measure. Running prose stops here; data does not.
-   *
-   * Named rather than repeated, because the value that was scattered across
-   * pages as `62ch` is a typographic decision and belongs beside the scale.
-   */
   --measure: 66ch;
   --measure-tight: 46ch;
 
@@ -230,32 +216,30 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
-  /* ── Radius ── */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* ── Radius: four steps and a pill ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-full: 999px;
 
-  /* ── Elevation. Restrained: a border does most of the work on dark. ── */
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  /* ── Control sizes: every button and input is one of these heights ── */
+  --control-sm: 2rem;
+  --control-md: 2.375rem;
+
+  /* ── Elevation. On dark, a border does most of the work. ── */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 8px 24px -8px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.65), 0 4px 12px rgb(0 0 0 / 0.35);
 
   /* ── Motion. Short and few. ── */
   --motion-fast: 120ms;
   --motion-base: 180ms;
-  --motion-slow: 280ms;
+  --motion-slow: 260ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /**
-   * Entrance easing for a surface that arrives from off-screen.
-   *
-   * Distinct from `--ease-out` because a drawer sliding in and a colour
-   * changing on hover are different events: one moves through space and needs a
-   * settle, the other does not move at all. Every duration here is still under
-   * a third of a second, and all of it is disabled by the reduced-motion block
-   * in `global.css`.
-   */
+  /** Entrance easing for a surface that arrives from off-screen. */
   --ease-entrance: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* ── Layers ── */
@@ -267,94 +251,35 @@
   --z-tooltip: 70;
 
   /* ── Layout ── */
-  --sidebar-width: 15.5rem;
-  --sidebar-width-collapsed: 3.5rem;
-  --topbar-height: 3.25rem;
+  --sidebar-width: 16rem;
+  --sidebar-width-collapsed: 4rem;
+  --topbar-height: 3.5rem;
   --content-max: 96rem;
-  /**
-   * The inspector rail.
-   *
-   * Composition on the dense screens is a wide primary column and a narrower
-   * rail of context beside it, not two equal halves. This is that rail, and it
-   * is a token because the Command Center, the Camera Wall and the incident
-   * ledger all use the same one — which is what makes them feel like one
-   * product rather than three layouts.
-   */
+  /** The inspector rail beside a dense screen's primary column. */
   --rail-width: 22rem;
   /**
    * Below this width the sidebar stops being furniture and becomes a drawer.
-   *
-   * A media query cannot read a custom property, so the number is repeated in
-   * `AppShell`'s matchMedia call; this declaration is the one a reader finds
-   * first, and a test asserts the two agree.
+   * Repeated in `AppShell`'s matchMedia call; a test asserts the two agree.
    */
   --shell-breakpoint: 62rem;
 
-  /**
-   * Focus. One ring everywhere, always visible.
-   *
-   * Drawn as an `outline`, not a stacked `box-shadow`. The previous ring spaced
-   * itself off the control with a 2px band of `--surface-base`, which is only
-   * the correct colour when the control sits directly on the page. Inside a
-   * Card, Drawer, Modal or menu that band painted the page background over the
-   * raised surface and the ring arrived wearing a halo of the wrong colour.
-   *
-   * An outline needs no painted spacer: `outline-offset` leaves a genuinely
-   * transparent gap, so whatever surface is actually behind the control shows
-   * through. It also follows the element's own border-radius, which is why the
-   * global radius override that used to accompany this token is gone.
-   */
+  /** Focus. One ring everywhere, drawn as an outline so it follows the radius. */
   --focus-ring-color: var(--accent);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
   /**
-   * ── The spine ───────────────────────────────────────────────────
-   *
-   * A hairline that runs down the left of a page's content, with every section
-   * boundary tied to it by a tick and every section label set in the margin
-   * beside it. It is the product's identity mark and it is structural rather
-   * than decorative: it is what turns a column of stacked bands into one
-   * continuous reading, and it is the reason a page here does not look like a
-   * page of cards. `--spine-gutter` is the outdent the label takes; below
-   * `--shell-breakpoint` the spine collapses and the labels return inline,
-   * because at that width the margin does not exist to give away.
-   */
-  --spine-gutter: 1.5rem;
-
-  /**
-   * The one step between a region's ground and the axis its label sits on.
-   *
-   * Before this token every padded region chose its own: the attention panel
-   * 32px, the estate's terminal ground 24px, a camera tile's chrome 12px.
-   * Measured in the browser against a label column at x=289, their first text
-   * landed at 322, 313 and 302 — three insets that were never decided, only
-   * accumulated, and which read together as a page whose sections had each been
-   * positioned on their own.
-   *
-   * There are now exactly two positions in the system: content on the axis, and
-   * content one step in from it because it sits on a ground of its own. Two
-   * reads as a decision. Four read as an accident.
+   * The inset of content on a ground of its own. One value, everywhere, so a
+   * panel's text and the page's text start on two positions, not four.
    */
   --region-inset: 1.5rem;
 
-  /**
-   * Entrance stagger.
-   *
-   * The delay between one region arriving and the next. Small enough that the
-   * page reads as one movement rather than a queue, and it stops after six
-   * regions — a stagger that keeps counting is a page that keeps moving.
-   */
-  --stagger: 45ms;
+  /** Entrance stagger: one movement per page, stopping after six regions. */
+  --stagger: 40ms;
 
   /**
-   * The no-signal hatch.
-   *
-   * Painted on a camera tile that is producing no picture. It exists so that
-   * "there is no feed" cannot be mistaken for "the feed is of a dark room",
-   * which is the same distinction the wall's own copy makes about channel 7
-   * being black. Fixed in both themes for the same reason `--video-ground` is:
-   * it is drawn inside the picture area, not on the page.
+   * The no-signal hatch on a camera tile producing no picture. Fixed in both
+   * themes: it is drawn inside the picture area, not on the page.
    */
   --hatch-line: rgb(255 255 255 / 0.045);
 }
@@ -362,109 +287,87 @@
 /* Light theme. Same tokens, re-pointed — never a separate set of components. */
 :root[data-theme="light"] {
   /**
-   * Light is designed here, not derived.
-   *
-   * The Stage 5 critique named the failure precisely: the light theme was the
-   * dark layout with white backgrounds. Its ground was #f5f7f8 and its panels
-   * were #ffffff — a separation of 1.06:1 — so nothing lifted, nothing
-   * recessed, and a page of white cards on a near-white page read as a
-   * wireframe.
-   *
-   * The fix is not more borders. It is to give light the same four-ground stack
-   * dark has, and to spend the range in the direction light actually has room
-   * in: *downward*. The reading plane drops to #eef2f4 so a panel in true white
-   * genuinely rises off it, and so the shadow tokens finally have something to
-   * fall on. The canvas drops further still, so the shell reads as furniture
-   * around the page rather than as more page.
-   *
-   * The neutrals keep their cool bias. That is a decision, not an inheritance:
-   * the accent is an instrument teal, and a warm-grey ground under it would
-   * read as a document product rather than a monitoring one. Light here is
-   * daylight on an instrument panel, not paper.
+   * The reference composition: a very light lavender canvas, white content
+   * surfaces lifted by a whisper of shadow, and the deep-purple navigation
+   * beside them. Panels and raised objects are both white; elevation is carried
+   * by `--shadow-card` and the lavender line, not by a second grey.
    */
-  --ground: #dde4e8;
-  --surface-base: #eef2f4;
-  --surface-panel: #f6f8f9;
-  /* Just short of white, and deliberately so. White is the ceiling of a light
-     theme, and a theme that spends it on cards has nothing left for the things
-     that sit *above* a card: a menu, a modal, a toast, a badge. Raised stops
-     one step below, which costs the card nothing perceptible against a #eef2f4
-     page and leaves --surface-overlay a real step to occupy. */
-  --surface-raised: #fbfcfd;
+  --ground: #eeecf7;
+  --surface-base: #f5f4fb;
+  --surface-panel: #ffffff;
+  --surface-raised: #ffffff;
   --surface-overlay: #ffffff;
-  --surface-sunken: #e3e9ec;
-  --surface-hover: #e6ecef;
-  --surface-selected: #d9edf1;
+  --surface-sunken: #efedf8;
+  --surface-hover: #f3f0fd;
+  --surface-selected: #ede7ff;
 
-  /* Light's atmosphere runs the other way: fractionally cooler and deeper at
-     the top, so content settles into the light rather than floating on a
-     uniform fill. Same rule — one gradient, canvas only. */
-  --atmosphere: linear-gradient(180deg, #e5ebef 0%, #eef2f4 34rem);
+  --atmosphere: linear-gradient(180deg, #f1effb 0%, #f5f4fb 34rem);
 
-  /* The engineering register, light. Cooler and one step deeper than the page,
-     for the same reason it is one step deeper on dark: the ground is what makes
-     a cropped screenshot unambiguous. `--engineering-ink` is `#46565f`, which
-     is 7.4:1 on this surface. */
-  --surface-engineering: #e4ebef;
-  --surface-engineering-panel: #f0f5f7;
-  --engineering-line: #c7d4da;
-  --engineering-ink: #46565f;
+  --surface-engineering: #efeef6;
+  --surface-engineering-panel: #f8f7fc;
+  --engineering-line: #dcd8ea;
+  /* 7.6:1 on --surface-engineering. */
+  --engineering-ink: #45405e;
 
-  /* --video-ground is deliberately NOT re-pointed here. Footage letterboxes
-     against black in both themes; see the dark block. */
-
-  --ink-primary: #10171b;
-  --ink-secondary: #46565f;
-  /* Darkened from #6b7c86, which failed 4.5:1 on all four light surfaces
-     (3.67 on --surface-sunken at worst). Now 4.53:1 at worst. */
-  /* Re-measured against the redesigned light stack, where --ground is now a
-     genuine ground rather than near-white: #5d6c75 read 4.22:1 on it.
-     4.55:1 at worst now. */
-  --ink-tertiary: #586770;
+  --ink-primary: #16132b;
+  --ink-secondary: #4d4966;
+  /* 4.8:1 on --surface-base, 4.6:1 on --surface-sunken: the two darkest
+     grounds this token is set on. */
+  --ink-tertiary: #66627f;
   --ink-inverse: #ffffff;
   --ink-on-accent: #ffffff;
 
-  --line-subtle: #e4eaec;
-  --line-default: #d2dbdf;
-  --line-strong: #b4c1c7;
+  --line-subtle: #eeebf6;
+  --line-default: #e2deef;
+  --line-strong: #c8c2dd;
 
-  /* Deepened one step so a link still clears 4.5:1 on --ground. */
-  --accent: #126873;
-  --accent-hover: #0f5a66;
-  --accent-active: #0c4a54;
-  --accent-wash: #e0f0f3;
-  --accent-line: #8fc3cc;
+  /* Readable purple: 5.6:1 on white, 5.2:1 on the canvas. */
+  --accent: #6743f0;
+  --accent-hover: #5935e0;
+  --accent-active: #4d2bcc;
+  /* Pressable purple: white text at 4.9:1. */
+  --accent-fill: #7150f4;
+  --accent-fill-hover: #6343ea;
+  --accent-fill-active: #5636d9;
+  --accent-wash: #f1ecff;
+  --accent-line: #d4c8fd;
+  --lavender-wash: #f3f0fc;
+  --blue-wash: #e8f0fd;
 
-  /* Darkened for contrast on a light ground — not simply reused. */
   --state-present: #1a7240;
-  --state-present-wash: #dff2e6;
-  --state-absent: #b83a30;
-  --state-absent-wash: #fae3e1;
-  --state-not-visible: #5341a8;
-  --state-not-visible-wash: #e8e4f7;
-  --state-unknown: #566670;
-  --state-unknown-wash: #e7ebed;
+  --state-present-wash: #e2f4e8;
+  --state-absent: #b8382e;
+  --state-absent-wash: #fbe5e3;
+  --state-not-visible: #0d6f7d;
+  --state-not-visible-wash: #ddf1f3;
+  --state-unknown: #5d5b72;
+  --state-unknown-wash: #ecebf2;
 
   --health-online: #1a7240;
   --health-degraded: #8a6100;
-  --health-degraded-wash: #f8eed2;
-  --health-offline: #b83a30;
-  --health-idle: #566670;
+  --health-degraded-wash: #faf0d6;
+  --health-offline: #b8382e;
+  --health-idle: #5d5b72;
 
-  --severity-critical: #b83a30;
+  --severity-critical: #b8382e;
   --severity-high: #a35418;
   --severity-medium: #8a6100;
-  --severity-low: #2b5f9e;
-  --severity-info: #566670;
+  --severity-low: #2858a8;
+  --severity-info: #5d5b72;
 
-  /* Deepened: the previous values were tuned against an #f5f7f8 ground and
-     were all but invisible. On the new reading plane a white panel has
-     something to cast onto, so elevation is finally carried by light rather
-     than by another border. */
-  --shadow-sm: 0 1px 2px rgb(16 23 27 / 0.07), 0 1px 1px rgb(16 23 27 / 0.04);
-  --shadow-md: 0 6px 16px -4px rgb(16 23 27 / 0.14), 0 2px 4px rgb(16 23 27 / 0.06);
-  --shadow-lg: 0 20px 44px -12px rgb(16 23 27 / 0.22), 0 4px 10px rgb(16 23 27 / 0.08);
+  /* The navigation does not change ground with the page. */
+  --nav-bg: #1b1530;
+  --nav-bg-raised: #251d40;
+  --nav-line: rgb(255 255 255 / 0.08);
+  --nav-ink: #f1effa;
+  --nav-ink-muted: #b1abcf;
+  --nav-ink-faint: #9089b6;
+  --nav-hover: rgb(255 255 255 / 0.07);
+
+  --topbar-bg: #ffffff;
+
+  --shadow-sm: 0 1px 2px rgb(22 19 43 / 0.05);
+  --shadow-card: 0 1px 2px rgb(22 19 43 / 0.04), 0 4px 14px -6px rgb(22 19 43 / 0.08);
+  --shadow-md: 0 2px 4px rgb(22 19 43 / 0.04), 0 12px 28px -10px rgb(22 19 43 / 0.16);
+  --shadow-lg: 0 4px 12px rgb(22 19 43 / 0.06), 0 28px 56px -18px rgb(22 19 43 / 0.26);
 }
-
-/* The hatch is drawn on --video-ground, which is black in both themes, so it
-   does not re-point here. Declared once, above. */

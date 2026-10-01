@@ -14,6 +14,14 @@
  * and `UnknownState` are separate components because "nothing happened",
  * "something broke", "still loading" and "we could not tell" are four different
  * facts, and a product that renders them identically is lying about three.
+ *
+ * ### Where the look lives
+ *
+ * In `global.css`, under "THE BUILDING BLOCKS", as classes. Hover, press, focus
+ * and disabled have no inline form, and a button that cannot show any of them
+ * reads as a picture of a button. The components here own structure, roles and
+ * behaviour; a caller's `style` still wins over the class, so a one-off layout
+ * adjustment never needs a new variant.
  */
 
 import {
@@ -28,7 +36,9 @@ import {
   type CSSProperties,
   type InputHTMLAttributes,
   type ReactNode,
+  type RefObject,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 import { describeState, type ObservationState, STATES } from '@shared/semantics/observation';
 import {
@@ -44,7 +54,7 @@ import {
    Button
    ──────────────────────────────────────────────────────────────────────────── */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
 type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -55,13 +65,6 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-const BUTTON_SURFACE: Record<ButtonVariant, CSSProperties> = {
-  primary: { background: 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'var(--accent)' },
-  secondary: { background: 'var(--surface-raised)', color: 'var(--ink-primary)', borderColor: 'var(--line-default)' },
-  ghost: { background: 'transparent', color: 'var(--ink-secondary)', borderColor: 'transparent' },
-  danger: { background: 'var(--state-absent-wash)', color: 'var(--state-absent)', borderColor: 'var(--state-absent)' },
-};
-
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -69,7 +72,7 @@ export function Button({
   icon,
   children,
   disabled,
-  style,
+  className,
   ...rest
 }: ButtonProps) {
   return (
@@ -79,23 +82,9 @@ export function Button({
       // `aria-busy` rather than swapping the label: a screen reader announces
       // the state change without the accessible name disappearing mid-action.
       aria-busy={loading || undefined}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-2)',
-        padding: size === 'sm' ? '0.3rem 0.7rem' : '0.45rem 0.95rem',
-        fontSize: size === 'sm' ? 'var(--text-xs)' : 'var(--text-sm)',
-        fontWeight: 'var(--weight-medium)',
-        borderRadius: 'var(--radius-sm)',
-        border: '1px solid',
-        cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        opacity: disabled || loading ? 0.55 : 1,
-        transition: `background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out)`,
-        whiteSpace: 'nowrap',
-        ...BUTTON_SURFACE[variant],
-        ...style,
-      }}
+      className={className ? `uwv-btn ${className}` : 'uwv-btn'}
+      data-variant={variant}
+      data-size={size}
       {...rest}
     >
       {loading ? <Spinner size={13} /> : icon}
@@ -117,7 +106,7 @@ export function IconButton({
       // reader, which is the most common accessibility defect in dashboards.
       aria-label={label}
       title={label}
-      style={{ padding: '0.3rem', minWidth: '1.9rem' }}
+      data-icon-only="true"
       {...rest}
     >
       {children}
@@ -126,7 +115,7 @@ export function IconButton({
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Spinner
+   Spinner, skeleton
    ──────────────────────────────────────────────────────────────────────────── */
 
 export function Spinner({ size = 16 }: { size?: number }) {
@@ -137,11 +126,36 @@ export function Spinner({ size = 16 }: { size?: number }) {
         width: size,
         height: size,
         borderRadius: '50%',
-        border: '2px solid var(--line-strong)',
-        borderTopColor: 'var(--accent)',
+        border: '2px solid color-mix(in srgb, currentColor 22%, transparent)',
+        borderTopColor: 'currentColor',
         display: 'inline-block',
+        flexShrink: 0,
         animation: 'uwv-spin 720ms linear infinite',
       }}
+    />
+  );
+}
+
+/**
+ * The shape of what is coming. Never a number, never a word: a skeleton that
+ * held a plausible value would be the fabricated reading this product forbids.
+ */
+export function Skeleton({
+  width = '100%',
+  height = '0.875rem',
+  radius,
+  style,
+}: {
+  width?: CSSProperties['width'];
+  height?: CSSProperties['height'];
+  radius?: CSSProperties['borderRadius'];
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className="uwv-skeleton"
+      style={{ width, height, borderRadius: radius, ...style }}
     />
   );
 }
@@ -156,37 +170,65 @@ export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-export function Input({ label, hint, error, id, ...rest }: FieldProps) {
+function FieldError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span id={id} className="uwv-field-error">
+      <Icon icon={StatusIcons.error} size="inline" />
+      {children}
+    </span>
+  );
+}
+
+export function Input({ label, hint, error, id, className, ...rest }: FieldProps) {
   const generated = useId();
   const inputId = id ?? generated;
   const hintId = `${inputId}-hint`;
   const errorId = `${inputId}-error`;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <label htmlFor={inputId} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-secondary)' }}>
+    <div className="uwv-field">
+      <label htmlFor={inputId} className="uwv-field-label">
         {label}
       </label>
       <input
         id={inputId}
         aria-invalid={error ? true : undefined}
         aria-describedby={[hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined}
-        style={{
-          padding: '0.55rem 0.75rem',
-          background: 'var(--surface-sunken)',
-          border: `1px solid ${error ? 'var(--state-absent)' : 'var(--line-default)'}`,
-          borderRadius: 'var(--radius-sm)',
-          color: 'var(--ink-primary)',
-          fontSize: 'var(--text-sm)',
-        }}
+        className={className ? `uwv-control ${className}` : 'uwv-control'}
         {...rest}
       />
-      {hint ? <span id={hintId} style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>{hint}</span> : null}
-      {error ? (
-        <span id={errorId} style={{ fontSize: 'var(--text-xs)', color: 'var(--state-absent)' }}>
-          {error}
-        </span>
-      ) : null}
+      {hint ? <span id={hintId} className="uwv-field-hint">{hint}</span> : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
+    </div>
+  );
+}
+
+export function Textarea({
+  label,
+  hint,
+  error,
+  id,
+  className,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; hint?: string; error?: string }) {
+  const generated = useId();
+  const fieldId = id ?? generated;
+  const hintId = `${fieldId}-hint`;
+  const errorId = `${fieldId}-error`;
+  return (
+    <div className="uwv-field">
+      <label htmlFor={fieldId} className="uwv-field-label">
+        {label}
+      </label>
+      <textarea
+        id={fieldId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={[hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined}
+        className={className ? `uwv-control ${className}` : 'uwv-control'}
+        {...rest}
+      />
+      {hint ? <span id={hintId} className="uwv-field-hint">{hint}</span> : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
   );
 }
@@ -195,6 +237,7 @@ export function Select({
   label,
   hint,
   id,
+  className,
   children,
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement> & { label: string; hint?: ReactNode }) {
@@ -202,18 +245,11 @@ export function Select({
   const selectId = id ?? generated;
   const hintId = `${selectId}-hint`;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <label htmlFor={selectId} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-secondary)' }}>
+    <div className="uwv-field">
+      <label htmlFor={selectId} className="uwv-field-label">
         {label}
       </label>
-      {/* `appearance: none` and a drawn chevron.
-
-          Left native, this control rendered with the operating system's own
-          chevron, border radius and focus treatment — on the Reports page, the
-          single most document-like screen in the product, two Windows dropdowns
-          sat inside a compliance form and were the strongest remaining signal
-          that this was a web form rather than an instrument. The behaviour is
-          untouched: it is still a `<select>`, still labelled, still keyboard
+      {/* A real `<select>` with a drawn chevron: still labelled, still keyboard
           operable, and the option list is still the platform's own. */}
       <select
         id={selectId}
@@ -221,29 +257,13 @@ export function Select({
         // so the explanation is read out with the control instead of being
         // discovered afterwards by somebody who has already chosen wrong.
         aria-describedby={hint ? hintId : undefined}
-        style={{
-          appearance: 'none',
-          WebkitAppearance: 'none',
-          padding: '0.45rem 2rem 0.45rem 0.6rem',
-          background: 'var(--surface-sunken)',
-          backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%237c8c96' stroke-width='1.4'/></svg>\")",
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 0.7rem center',
-          border: '1px solid var(--line-default)',
-          borderRadius: 'var(--radius-sm)',
-          color: 'var(--ink-primary)',
-          fontSize: 'var(--text-sm)',
-        }}
+        className={className ? `uwv-control ${className}` : 'uwv-control'}
         {...rest}
       >
         {children}
       </select>
       {hint ? (
-        <p
-          id={hintId}
-          style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}
-        >
+        <p id={hintId} className="uwv-field-hint">
           {hint}
         </p>
       ) : null}
@@ -265,22 +285,7 @@ export function Badge({
   mono?: boolean;
 }) {
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 'var(--space-1)',
-        padding: '0.1rem 0.4rem',
-        borderRadius: 'var(--radius-xs)',
-        fontSize: 'var(--text-2xs)',
-        fontFamily: mono ? 'var(--font-mono)' : 'inherit',
-        border: '1px solid',
-        background: tone === 'accent' ? 'var(--accent-wash)' : 'var(--surface-overlay)',
-        color: tone === 'accent' ? 'var(--accent)' : 'var(--ink-secondary)',
-        borderColor: tone === 'accent' ? 'var(--accent-line)' : 'var(--line-default)',
-        whiteSpace: 'nowrap',
-      }}
-    >
+    <span className="uwv-badge" data-tone={tone} data-mono={mono ? 'true' : undefined}>
       {children}
     </span>
   );
@@ -311,14 +316,15 @@ export function StateBadge({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 'var(--space-2)',
-        padding: '0.15rem 0.5rem',
-        borderRadius: 'var(--radius-xs)',
+        gap: 'var(--space-1)',
+        height: '1.375rem',
+        padding: '0 var(--space-2)',
+        borderRadius: 'var(--radius-full)',
         fontSize: 'var(--text-xs)',
-        fontWeight: 'var(--weight-medium)',
+        fontWeight: 'var(--weight-semibold)',
         background: descriptor.washVar,
         color: descriptor.colorVar,
-        border: `1px solid ${descriptor.colorVar}`,
+        border: `1px solid color-mix(in srgb, ${descriptor.colorVar} 40%, transparent)`,
         whiteSpace: 'nowrap',
       }}
       title={descriptor.description}
@@ -326,8 +332,7 @@ export function StateBadge({
       {/* The icon replaces the character the descriptor carries, but the
           descriptor keeps its `glyph` field: `shared/semantics/observation.ts`
           owns which states exist and what each one means, and a rendering
-          choice does not belong in that module. `StateIcons` is this layer's
-          mapping onto the same four keys. */}
+          choice does not belong in that module. */}
       <Icon icon={StateIcons[descriptor.state]} size="inline" />
       {showLabel ? descriptor.label : null}
       {/* The word is always available to assistive technology even when the
@@ -340,13 +345,9 @@ export function StateBadge({
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
- * Severity, as a descending run of shapes.
- *
- * The characters this replaces drew the same triangle for `critical` and
- * `high`, so the top two ranks were distinguishable only by colour — which is
- * the one signal this product never allows to work alone. An octagon, a
- * triangle, a filled circle, a ringed dot and an `i` fall in weight as the
- * rank falls, and stay legible in grayscale.
+ * Severity, as a descending run of shapes: an octagon, a triangle, a filled
+ * circle, a ringed dot and an `i` fall in weight as the rank falls, and stay
+ * legible in grayscale.
  */
 const SEVERITY_ICON: Record<Severity, LucideIcon> = SeverityIcons;
 
@@ -357,11 +358,11 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 'var(--space-1)',
-        fontSize: 'var(--text-2xs)',
-        textTransform: 'uppercase',
-        letterSpacing: 'var(--tracking-wide)',
+        fontSize: 'var(--text-xs)',
+        textTransform: 'capitalize',
         fontWeight: 'var(--weight-semibold)',
         color: `var(--severity-${severity})`,
+        whiteSpace: 'nowrap',
       }}
     >
       <Icon icon={SEVERITY_ICON[severity]} size="inline" />
@@ -386,6 +387,7 @@ export function StatusBadge({
         alignItems: 'center',
         gap: 'var(--space-2)',
         fontSize: 'var(--text-xs)',
+        fontWeight: 'var(--weight-medium)',
         color: 'var(--ink-secondary)',
         whiteSpace: 'nowrap',
       }}
@@ -393,13 +395,16 @@ export function StatusBadge({
       <span
         aria-hidden="true"
         style={{
-          width: 7,
-          height: 7,
+          width: 8,
+          height: 8,
           borderRadius: '50%',
-          background: `var(--health-${tone})`,
+          background: tone === 'idle' ? 'transparent' : `var(--health-${tone})`,
           // A ring rather than a fill for `idle`, so the four tones differ in
-          // shape as well as colour.
-          boxShadow: tone === 'idle' ? 'inset 0 0 0 1px var(--health-idle)' : 'none',
+          // shape as well as colour; a soft halo on the others.
+          boxShadow:
+            tone === 'idle'
+              ? 'inset 0 0 0 1.5px var(--health-idle)'
+              : `0 0 0 3px color-mix(in srgb, var(--health-${tone}) 18%, transparent)`,
           flexShrink: 0,
         }}
       />
@@ -422,15 +427,7 @@ export function Card({
   style?: CSSProperties;
 }) {
   return (
-    <section
-      style={{
-        background: 'var(--surface-raised)',
-        border: '1px solid var(--line-subtle)',
-        borderRadius: 'var(--radius-md)',
-        padding: padded ? 'var(--space-5)' : 0,
-        ...style,
-      }}
-    >
+    <section className="uwv-card" style={{ padding: padded ? 'var(--space-5)' : 0, ...style }}>
       {children}
     </section>
   );
@@ -455,14 +452,14 @@ export function SectionHeader({
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <h2 style={{ fontSize: 'var(--text-md)' }}>{title}</h2>
+        <h2 className="uwv-section-title">{title}</h2>
         {description ? (
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)', marginTop: 'var(--space-1)' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-tertiary)', marginTop: 'var(--space-1)' }}>
             {description}
           </p>
         ) : null}
       </div>
-      {actions}
+      {actions ? <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>{actions}</div> : null}
     </header>
   );
 }
@@ -483,23 +480,21 @@ export function PageHeader({
       style={{
         display: 'flex',
         flexWrap: 'wrap',
-        alignItems: 'flex-start',
+        alignItems: 'flex-end',
         gap: 'var(--space-4)',
-        paddingBottom: 'var(--space-5)',
-        marginBottom: 'var(--space-6)',
-        borderBottom: '1px solid var(--line-subtle)',
+        marginBottom: 'var(--space-8)',
       }}
     >
       <div style={{ flex: 1, minWidth: '16rem' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', letterSpacing: '-0.015em' }}>{title}</h1>
+        <h1 className="uwv-page-title">{title}</h1>
         {description ? (
-          <p style={{ color: 'var(--ink-secondary)', marginTop: 'var(--space-2)', maxWidth: '62ch' }}>
+          <p style={{ color: 'var(--ink-secondary)', marginTop: 'var(--space-2)', maxWidth: 'var(--measure)' }}>
             {description}
           </p>
         ) : null}
         {meta ? <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{meta}</div> : null}
       </div>
-      {actions ? <div style={{ display: 'flex', gap: 'var(--space-2)' }}>{actions}</div> : null}
+      {actions ? <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div> : null}
     </header>
   );
 }
@@ -528,15 +523,16 @@ export function StatCard({
 
   return (
     <Card>
-      <div style={{ fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-wider)', color: 'var(--ink-tertiary)' }}>
+      <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-tertiary)' }}>
         {label}
       </div>
       <div
         style={{
-          fontSize: 'var(--text-3xl)',
-          fontFamily: 'var(--font-mono)',
+          fontSize: unavailable ? 'var(--text-2xl)' : 'var(--text-3xl)',
+          fontFamily: 'var(--font-display)',
           fontVariantNumeric: 'tabular-nums',
           fontWeight: 'var(--weight-semibold)',
+          letterSpacing: 'var(--tracking-display)',
           lineHeight: 1.05,
           marginTop: 'var(--space-3)',
           color: unavailable ? 'var(--ink-tertiary)' : tone === 'accent' ? 'var(--accent)' : 'var(--ink-primary)',
@@ -569,53 +565,16 @@ function StateFrame({
   tone: string;
 }) {
   return (
-    /* An absence is a caption, not a region.
-     *
-     * This frame used to centre its content in 96px of vertical padding, which
-     * made every "nothing here yet" on every page about 200px tall. Stage 5
-     * measured the consequence across the product: on Administration two of
-     * them were the largest objects on the screen, on Staff Hygiene one of them
-     * *was* the screen, and on the Command Center the two biggest things on a
-     * dashboard were notices that nothing was happening. A page whose dominant
-     * mass is its empty states is a page that reads as broken even when
-     * everything about it is correct.
-     *
-     * Every string, every role and every tone is unchanged. What changed is
-     * that it now occupies what an explanation occupies: aligned to the text
-     * column, glyph on the same line as the title, and as tall as its own
-     * sentences. */
-    <div
-      role="status"
-      style={{
-        display: 'grid',
-        gap: 'var(--space-2)',
-        padding: 'var(--space-5)',
-        border: '1px dashed var(--line-default)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--surface-sunken)',
-        alignSelf: 'start',
-      }}
-    >
-      {/* `center`, not `baseline`. An SVG has no baseline of its own, so a
-          baseline-aligned row drops it to sit on the text's descender line and
-          the icon reads a couple of pixels low against its title. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        <span style={{ color: tone, flexShrink: 0, display: 'flex' }}>
-          <Icon icon={icon} size="control" />
-        </span>
-        <span style={{ fontWeight: 'var(--weight-semibold)' }}>{title}</span>
-      </div>
-      <div
-        style={{
-          fontSize: 'var(--text-sm)',
-          color: 'var(--ink-tertiary)',
-          maxWidth: 'var(--measure)',
-          paddingLeft: 'calc(15px + var(--space-3))',
-        }}
-      >
-        {body}
-      </div>
-      {action ? <div style={{ paddingLeft: 'calc(15px + var(--space-3))' }}>{action}</div> : null}
+    /* An absence is a caption, not a region: aligned to the text column, glyph
+     * beside the title, and as tall as its own sentences. A page whose dominant
+     * mass is its empty states reads as broken even when it is correct. */
+    <div role="status" className="uwv-state">
+      <span className="uwv-state-icon" style={{ color: tone }}>
+        <Icon icon={icon} size="control" />
+      </span>
+      <span className="uwv-state-title">{title}</span>
+      <div className="uwv-state-body">{body}</div>
+      {action ? <div className="uwv-state-action">{action}</div> : null}
     </div>
   );
 }
@@ -625,7 +584,14 @@ export function LoadingState({ label = 'Loading' }: { label?: string }) {
     <div
       role="status"
       aria-live="polite"
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-12)' }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-12)',
+        color: 'var(--accent)',
+      }}
     >
       <Spinner />
       <span style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-tertiary)' }}>{label}…</span>
@@ -642,7 +608,7 @@ export function EmptyState({
   body: ReactNode;
   action?: ReactNode;
 }) {
-  return <StateFrame icon={StatusIcons.empty} title={title} body={body} action={action} tone="var(--ink-tertiary)" />;
+  return <StateFrame icon={StatusIcons.empty} title={title} body={body} action={action} tone="var(--accent)" />;
 }
 
 export function ErrorState({
@@ -673,16 +639,14 @@ export function ErrorState({
           ) : null}
         </>
       }
-      action={onRetry ? <Button onClick={onRetry}>Try again</Button> : undefined}
+      action={onRetry ? <Button size="sm" onClick={onRetry}>Try again</Button> : undefined}
     />
   );
 }
 
 /**
- * "We could not determine this." Distinct from empty and from error.
- *
- * Purple, matching the NOT_VISIBLE/UNKNOWN family, so uncertainty reads the same
- * way everywhere in the product.
+ * "We could not determine this." Distinct from empty and from error, and drawn
+ * in the UNKNOWN token so uncertainty reads the same way everywhere.
  */
 export function UnknownState({
   title = 'Unable to determine',
@@ -740,8 +704,8 @@ export function DataTable<T>({
   return (
     // The scroll container is the table's own, so a wide table never makes the
     // page scroll sideways.
-    <div style={{ overflowX: 'auto', border: '1px solid var(--line-subtle)', borderRadius: 'var(--radius-md)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '32rem' }}>
+    <div className="uwv-table-wrap">
+      <table className="uwv-table">
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
@@ -749,19 +713,8 @@ export function DataTable<T>({
               <th
                 key={column.key}
                 scope="col"
-                style={{
-                  textAlign: column.numeric ? 'right' : 'left',
-                  padding: 'var(--space-3) var(--space-4)',
-                  fontSize: 'var(--text-2xs)',
-                  textTransform: 'uppercase',
-                  letterSpacing: 'var(--tracking-wide)',
-                  color: 'var(--ink-tertiary)',
-                  fontWeight: 'var(--weight-semibold)',
-                  background: 'var(--surface-sunken)',
-                  borderBottom: '1px solid var(--line-default)',
-                  whiteSpace: 'nowrap',
-                  width: column.width,
-                }}
+                data-numeric={column.numeric ? 'true' : undefined}
+                style={column.width ? { width: column.width } : undefined}
               >
                 {column.header}
               </th>
@@ -770,19 +723,9 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={rowKey(row, index)} style={{ borderBottom: '1px solid var(--line-subtle)' }}>
+            <tr key={rowKey(row, index)}>
               {columns.map((column) => (
-                <td
-                  key={column.key}
-                  style={{
-                    padding: 'var(--space-3) var(--space-4)',
-                    fontSize: 'var(--text-sm)',
-                    textAlign: column.numeric ? 'right' : 'left',
-                    fontVariantNumeric: column.numeric ? 'tabular-nums' : 'normal',
-                    fontFamily: column.numeric ? 'var(--font-mono)' : 'inherit',
-                    verticalAlign: 'top',
-                  }}
-                >
+                <td key={column.key} data-numeric={column.numeric ? 'true' : undefined}>
                   {column.render(row)}
                 </td>
               ))}
@@ -795,7 +738,7 @@ export function DataTable<T>({
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Tabs
+   Tabs, and the segmented control
    ──────────────────────────────────────────────────────────────────────────── */
 
 export function Tabs({
@@ -810,7 +753,7 @@ export function Tabs({
   label: string;
 }) {
   return (
-    <div role="tablist" aria-label={label} style={{ display: 'flex', gap: 'var(--space-1)', borderBottom: '1px solid var(--line-subtle)' }}>
+    <div role="tablist" aria-label={label} className="uwv-tabs">
       {tabs.map((tab) => {
         const selected = tab.id === active;
         return (
@@ -818,6 +761,7 @@ export function Tabs({
             key={tab.id}
             role="tab"
             type="button"
+            className="uwv-tab"
             aria-selected={selected}
             // Roving tabindex: one stop for the whole tablist, arrow keys move
             // within it — the pattern assistive technology expects.
@@ -827,17 +771,8 @@ export function Tabs({
               const index = tabs.findIndex((t) => t.id === active);
               if (event.key === 'ArrowRight') onChange(tabs[(index + 1) % tabs.length]!.id);
               if (event.key === 'ArrowLeft') onChange(tabs[(index - 1 + tabs.length) % tabs.length]!.id);
-            }}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: `2px solid ${selected ? 'var(--accent)' : 'transparent'}`,
-              color: selected ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
-              fontSize: 'var(--text-sm)',
-              fontWeight: selected ? 'var(--weight-medium)' : 'var(--weight-regular)',
-              cursor: 'pointer',
-              marginBottom: '-1px',
+              if (event.key === 'Home') onChange(tabs[0]!.id);
+              if (event.key === 'End') onChange(tabs[tabs.length - 1]!.id);
             }}
           >
             {tab.label}
@@ -848,19 +783,90 @@ export function Tabs({
   );
 }
 
+/**
+ * A choice among a few options that filters what is on screen — a period, a
+ * window, a view. Not tabs: nothing is hidden behind it, so it is a group of
+ * pressed/unpressed buttons rather than a tablist.
+ */
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: ReadonlyArray<{ id: T; label: string }>;
+  value: T;
+  onChange: (id: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className="uwv-tabs">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className="uwv-tab"
+          aria-pressed={option.id === value}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
    Modal / Drawer
    ──────────────────────────────────────────────────────────────────────────── */
 
-function useDismiss(open: boolean, onClose: () => void) {
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Escape closes, Tab stays inside, and focus goes back where it came from.
+ *
+ * A dialog that lets Tab walk out into the page behind it is a dialog a
+ * keyboard user can lose, and one that drops focus on close leaves them at the
+ * top of the document.
+ */
+function useDialogBehaviour(open: boolean, onClose: () => void, surface: RefObject<HTMLElement | null>) {
+  // Held in a ref so the effect below runs on open and close only. Callers pass
+  // an inline arrow, which is a new function every render; depending on it
+  // re-ran the effect on each keystroke inside the dialog, and every re-run
+  // pulled focus back to the surface — so a field could not be typed into.
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
     if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    surface.current?.focus();
+
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        close.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !surface.current) return;
+      const items = [...surface.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      if (items.length === 0) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === surface.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (previous && typeof previous.focus === 'function' && document.contains(previous)) previous.focus();
+    };
+  }, [open, surface]);
 }
 
 export function Modal({
@@ -878,23 +884,17 @@ export function Modal({
 }) {
   const titleId = useId();
   const surface = useRef<HTMLDivElement>(null);
-  useDismiss(open, onClose);
-
-  useEffect(() => {
-    if (open) surface.current?.focus();
-  }, [open]);
+  useDialogBehaviour(open, onClose, surface);
 
   if (!open) return null;
 
   return (
     <div
+      className="uwv-scrim"
       style={{
-        position: 'fixed',
-        inset: 0,
         zIndex: 'var(--z-modal)' as unknown as number,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgb(0 0 0 / 0.6)',
         padding: 'var(--space-4)',
       }}
       onClick={onClose}
@@ -905,31 +905,19 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        className="uwv-dialog"
         onClick={(event) => event.stopPropagation()}
-        style={{
-          background: 'var(--surface-overlay)',
-          border: '1px solid var(--line-default)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-lg)',
-          width: 'min(34rem, 100%)',
-          maxHeight: '85vh',
-          overflow: 'auto',
-        }}
       >
-        <header style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--line-subtle)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <h2 id={titleId} style={{ fontSize: 'var(--text-md)', flex: 1 }}>
+        <header className="uwv-dialog-head">
+          <h2 id={titleId} className="uwv-dialog-title">
             {title}
           </h2>
           <IconButton label="Close" onClick={onClose}>
             <Icon icon={ControlIcons.close} />
           </IconButton>
         </header>
-        <div style={{ padding: 'var(--space-5)' }}>{children}</div>
-        {footer ? (
-          <footer style={{ padding: 'var(--space-5)', borderTop: '1px solid var(--line-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            {footer}
-          </footer>
-        ) : null}
+        <div className="uwv-dialog-body">{children}</div>
+        {footer ? <footer className="uwv-dialog-foot">{footer}</footer> : null}
       </div>
     </div>
   );
@@ -947,34 +935,36 @@ export function Drawer({
   children: ReactNode;
 }) {
   const titleId = useId();
-  useDismiss(open, onClose);
+  const surface = useRef<HTMLElement>(null);
+  useDialogBehaviour(open, onClose, surface);
   if (!open) return null;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-drawer)' as unknown as number, display: 'flex', justifyContent: 'flex-end', background: 'rgb(0 0 0 / 0.45)' }} onClick={onClose}>
+    <div
+      className="uwv-scrim"
+      style={{ zIndex: 'var(--z-drawer)' as unknown as number, display: 'flex', justifyContent: 'flex-end' }}
+      onClick={onClose}
+    >
       <aside
+        ref={surface}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
+        className="uwv-drawer"
         onClick={(event) => event.stopPropagation()}
-        style={{
-          width: 'min(30rem, 100%)',
-          background: 'var(--surface-raised)',
-          borderLeft: '1px solid var(--line-default)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'auto',
-        }}
       >
-        <header style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--line-subtle)', display: 'flex', gap: 'var(--space-4)', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-raised)' }}>
-          <h2 id={titleId} style={{ fontSize: 'var(--text-md)', flex: 1 }}>
+        <header className="uwv-dialog-head">
+          <h2 id={titleId} className="uwv-dialog-title">
             {title}
           </h2>
           <IconButton label="Close" onClick={onClose}>
             <Icon icon={ControlIcons.close} />
           </IconButton>
         </header>
-        <div style={{ padding: 'var(--space-5)' }}>{children}</div>
+        <div className="uwv-dialog-body" style={{ flex: 1 }}>
+          {children}
+        </div>
       </aside>
     </div>
   );
@@ -986,11 +976,11 @@ export function Drawer({
 
 export function KeyValue({ items }: { items: ReadonlyArray<{ key: string; value: ReactNode }> }) {
   return (
-    <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(7rem, auto) 1fr', gap: 'var(--space-2) var(--space-4)', margin: 0, fontSize: 'var(--text-sm)' }}>
+    <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(7rem, auto) 1fr', gap: 'var(--space-3) var(--space-5)', margin: 0, fontSize: 'var(--text-sm)' }}>
       {items.map((item) => (
         <div key={item.key} style={{ display: 'contents' }}>
-          <dt style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>{item.key}</dt>
-          <dd style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', wordBreak: 'break-word' }}>{item.value}</dd>
+          <dt style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)', paddingTop: 1 }}>{item.key}</dt>
+          <dd style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--ink-primary)', wordBreak: 'break-word' }}>{item.value}</dd>
         </div>
       ))}
     </dl>
@@ -1000,15 +990,15 @@ export function KeyValue({ items }: { items: ReadonlyArray<{ key: string; value:
 /**
  * A collapsed JSON inspector.
  *
- * Collapsed by default and explicitly secondary: §14 of the brief calls a wall
- * of raw JSON the thing DevTools should not be. It is the escape hatch beneath a
- * structured view, never the view itself.
+ * Collapsed by default and explicitly secondary: a wall of raw JSON is the
+ * thing DevTools should not be. It is the escape hatch beneath a structured
+ * view, never the view itself.
  */
 export function JsonViewer({ data, label = 'Raw response' }: { data: unknown; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <details open={open} onToggle={(event) => setOpen((event.target as HTMLDetailsElement).open)}>
-      <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)', padding: 'var(--space-2) 0' }}>
+      <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)', color: 'var(--ink-tertiary)', padding: 'var(--space-2) 0' }}>
         {label}
       </summary>
       <pre
@@ -1017,7 +1007,7 @@ export function JsonViewer({ data, label = 'Raw response' }: { data: unknown; la
           padding: 'var(--space-4)',
           background: 'var(--surface-sunken)',
           border: '1px solid var(--line-subtle)',
-          borderRadius: 'var(--radius-sm)',
+          borderRadius: 'var(--radius-md)',
           fontSize: 'var(--text-2xs)',
           fontFamily: 'var(--font-mono)',
           overflowX: 'auto',
@@ -1040,12 +1030,22 @@ export function Timeline({
       {entries.map((entry) => (
         <li key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: entry.tone ?? 'var(--accent)', marginTop: 5 }} />
-            <span aria-hidden="true" style={{ flex: 1, width: 1, background: 'var(--line-default)', marginTop: 4 }} />
+            <span
+              aria-hidden="true"
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: entry.tone ?? 'var(--accent)',
+                boxShadow: `0 0 0 3px color-mix(in srgb, ${entry.tone ?? 'var(--accent)'} 18%, transparent)`,
+                marginTop: 5,
+              }}
+            />
+            <span aria-hidden="true" style={{ flex: 1, width: 1, background: 'var(--line-default)', marginTop: 6 }} />
           </div>
           <div style={{ paddingBottom: 'var(--space-2)' }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)', color: 'var(--ink-tertiary)' }}>{entry.time}</div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', marginTop: 2 }}>{entry.title}</div>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', marginTop: 2 }}>{entry.title}</div>
             {entry.detail ? <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)', marginTop: 'var(--space-1)' }}>{entry.detail}</div> : null}
           </div>
         </li>
@@ -1105,19 +1105,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         style={{ position: 'fixed', bottom: 'var(--space-6)', right: 'var(--space-6)', zIndex: 'var(--z-toast)' as unknown as number, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
       >
         {messages.map((message) => (
-          <div
-            key={message.id}
-            style={{
-              padding: 'var(--space-3) var(--space-4)',
-              background: 'var(--surface-overlay)',
-              border: `1px solid ${message.tone === 'error' ? 'var(--state-absent)' : 'var(--line-default)'}`,
-              borderRadius: 'var(--radius-sm)',
-              boxShadow: 'var(--shadow-md)',
-              fontSize: 'var(--text-sm)',
-              maxWidth: '24rem',
-            }}
-          >
-            {message.text}
+          <div key={message.id} className="uwv-toast" data-tone={message.tone}>
+            <span style={{ display: 'flex', color: message.tone === 'error' ? 'var(--state-absent)' : 'var(--accent)', paddingTop: 2 }}>
+              <Icon icon={message.tone === 'error' ? StatusIcons.error : SeverityIcons.info} size="inline" />
+            </span>
+            <span>{message.text}</span>
           </div>
         ))}
       </div>

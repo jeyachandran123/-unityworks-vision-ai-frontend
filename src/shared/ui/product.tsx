@@ -51,36 +51,26 @@ import {
    ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The small uppercase label that names a region.
+ * The small uppercase label that names a group of things.
  *
- * Mono, widely tracked, and never larger than 11px. It is the quietest thing on
- * a screen and it does most of the orientation work — an operator reads it once
- * and then stops seeing it, which is exactly what a label should do.
+ * Set in the text face, widely tracked, never larger than 11px. It is the
+ * quietest thing on a screen and it does most of the orientation work — an
+ * operator reads it once and then stops seeing it, which is exactly what a
+ * label should do. Section *headings* are not eyebrows: they are sentence-case
+ * headings (`SectionRule`), because a page's structure should read as prose.
  */
 export function Eyebrow({
   children,
   tone = 'muted',
-  anchor = false,
 }: {
   children: ReactNode;
   tone?: 'muted' | 'accent';
-  /**
-   * Whether this label is the one its section hangs off the spine by.
-   *
-   * The tick is drawn from the label rather than from the section wrapper, so
-   * the label is what has to carry it. Opt-in because most eyebrows on a page
-   * are not section boundaries — "In rank order" above the incident queue names
-   * a list inside a region and must not grow a tick out into the margin.
-   */
-  anchor?: boolean;
 }) {
   return (
     <div
-      className={anchor ? 'uwv-spine-tick' : undefined}
       style={{
-        fontFamily: 'var(--font-mono)',
         fontSize: 'var(--text-2xs)',
-        fontWeight: 'var(--weight-medium)',
+        fontWeight: 'var(--weight-semibold)',
         letterSpacing: 'var(--tracking-wider)',
         textTransform: 'uppercase',
         color: tone === 'accent' ? 'var(--accent)' : 'var(--ink-tertiary)',
@@ -92,17 +82,12 @@ export function Eyebrow({
 }
 
 /**
- * A page opening, composed rather than stacked.
+ * A page opening. Every page in the product opens this way.
  *
- * `PageHeader` in `primitives.tsx` is the pattern this replaces on the screens
- * that have been rebuilt: title, subtitle, horizontal rule, four cards. It is
- * kept and unchanged for the pages Stage 4 has not reached, so nothing breaks —
- * but a rule under a heading is a page saying "the interesting part starts
- * below", and on the screens that matter the interesting part starts here.
- *
- * The difference is hierarchy: an eyebrow that names the area, a display-scale
- * title with optical tracking, a standfirst held to the measure, and the meta
- * on the same optical line as the title rather than beneath it.
+ * The area the page belongs to, then the title at display scale, then the
+ * meta on its own line; the standfirst and the page's actions sit beside the
+ * title on a wide screen and follow it on a narrow one, which is the correct
+ * reading order — the sentence explains the title.
  */
 export function PageIntro({
   eyebrow,
@@ -119,42 +104,26 @@ export function PageIntro({
 }) {
   return (
     <header
-      className="uwv-spine-mark uwv-arrive"
+      className="uwv-section-head uwv-arrive"
       data-lead="true"
       data-order="1"
-      style={{ marginBottom: 'var(--space-10)' }}
+      style={{ marginBottom: 'var(--space-8)' }}
     >
-      {/* 'start', not 'end'.
-          
-          A grid row's 'end' bottom-aligns both columns to whichever is
-          tallest. That is invisible when the standfirst is two or three lines
-          — which is what every page this was designed against had — and it is
-          a defect the moment one runs longer: Cameras' standfirst is five
-          lines plus a button, so the title column was pushed down to match its
-          bottom, opening a gap above the eyebrow that had nothing to do with
-          spacing and everything to do with which column happened to be
-          taller. 'start' means the title is always where a title belongs —
-          flush with the top of the opening — regardless of how long the prose
-          beside it runs. */}
+      {/* 'start', not 'end': a grid row's 'end' bottom-aligns both columns to
+          whichever is taller, and a long standfirst would push the title down
+          with it. The title is always flush with the top of the opening. */}
       <div className="uwv-lead" style={{ alignItems: 'start' }}>
         <div style={{ minWidth: 0 }}>
-          <Eyebrow anchor>{eyebrow}</Eyebrow>
-          <h1
-            style={{
-              fontSize: 'clamp(1.75rem, 1.1rem + 2.4vw, var(--text-4xl))',
-              letterSpacing: 'var(--tracking-display)',
-              fontWeight: 'var(--weight-semibold)',
-              marginTop: 'var(--space-3)',
-            }}
-          >
+          <span className="uwv-area-label">{eyebrow}</span>
+          <h1 className="uwv-page-title" style={{ marginTop: 'var(--space-2)' }}>
             {title}
           </h1>
           {meta ? (
             <div
               style={{
-                marginTop: 'var(--space-5)',
+                marginTop: 'var(--space-4)',
                 display: 'flex',
-                gap: 'var(--space-2) var(--space-5)',
+                gap: 'var(--space-2) var(--space-4)',
                 flexWrap: 'wrap',
                 alignItems: 'center',
               }}
@@ -164,18 +133,6 @@ export function PageIntro({
           ) : null}
         </div>
 
-        {/* The standfirst sits beside the title, not beneath it.
-
-            Stage 5 found the same shape on all nineteen pages: a display
-            heading, four lines of prose at full measure, then the content —
-            with the entire right half of the opening empty. Moving the
-            standfirst into that empty half does three things at once. The
-            opening becomes an asymmetric composition rather than a stack, the
-            page's first real content arrives four lines higher, and the prose
-            gets the narrower measure it wanted anyway.
-
-            Below the `uwv-lead` breakpoint it returns underneath, which is the
-            correct reading order: the sentence explains the title. */}
         {standfirst || actions ? (
           <div
             style={{
@@ -184,6 +141,7 @@ export function PageIntro({
               alignItems: 'flex-start',
               gap: 'var(--space-4)',
               minWidth: 0,
+              paddingTop: 'var(--space-1)',
             }}
           >
             {standfirst ? (
@@ -193,16 +151,13 @@ export function PageIntro({
                   color: 'var(--ink-secondary)',
                   fontSize: 'var(--text-sm)',
                   lineHeight: 'var(--leading-relaxed)',
-                  paddingBottom: 'var(--space-1)',
                 }}
               >
                 {standfirst}
               </p>
             ) : null}
             {actions ? (
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                {actions}
-              </div>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div>
             ) : null}
           </div>
         ) : null}
@@ -214,11 +169,9 @@ export function PageIntro({
 /**
  * One region of a page, and one beat of its entrance.
  *
- * `order` places the region in the arrival sequence, which runs 45ms apart and
+ * `order` places the region in the arrival sequence, which runs 40ms apart and
  * stops at six. It is passed rather than counted because a page's visual order
- * is a design decision: the region that should arrive first is not always the
- * one that happens to render first, and a hook that inferred it would be wrong
- * exactly when it mattered.
+ * is a design decision.
  */
 export function Region({
   order,
@@ -237,16 +190,8 @@ export function Region({
 }
 
 /**
- * A plane: a region that is a *ground content sits on*, not an object.
- *
- * `Card` was doing both jobs and could only say one thing. A wall of cameras, a
- * ledger of incidents and the body of a report are not items in a list of equal
- * items — they are surfaces. Enclosing them in a card said "here is one section
- * among several", which is exactly the reading that flattened every page.
- *
- * So a plane lifts off `--surface-base` by a measured step and carries a subtle
- * line, and nothing else. It never takes a shadow: a shadow claims the region
- * is above the page, and a ground is not above anything.
+ * A plane: a white ground content sits on — a wall, a ledger, a report body —
+ * lifted off the page by a line and a whisper of shadow.
  */
 export function Plane({
   children,
@@ -257,11 +202,8 @@ export function Plane({
   children: ReactNode;
   padded?: boolean;
   /**
-   * A composition class to apply *with* the plane.
-   *
-   * A ground and a layout are separate decisions, and a plane that could only
-   * be a block would force every caller to nest a second div inside it to say
-   * how its contents are arranged. Composed rather than nested.
+   * A composition class to apply *with* the plane. A ground and a layout are
+   * separate decisions; composed rather than nested.
    */
   className?: string;
   style?: CSSProperties;
@@ -276,6 +218,10 @@ export function Plane({
   );
 }
 
+/**
+ * A section heading: what this part of the page is, in a sentence-case heading,
+ * with one line of explanation under it and the section's actions beside it.
+ */
 export function SectionRule({
   label,
   detail,
@@ -287,13 +233,8 @@ export function SectionRule({
   detail?: ReactNode;
   actions?: ReactNode;
   /**
-   * Whether this section is the one the page is actually about.
-   *
-   * A page has one lead and the rest is context. Declaring it costs a boolean
-   * and buys the thing the Stage 5 critique found missing everywhere: a visible
-   * answer to "what matters most right now". The lead's tick is drawn in the
-   * accent at twice the weight and its label takes the accent too, so the axis
-   * itself says where the page's centre of gravity is before a word is read.
+   * Whether this section is the one the page is actually about. A page has one
+   * lead and the rest is context; the lead's heading takes the accent mark.
    */
   lead?: boolean;
   /** Places this section in the page's arrival sequence. */
@@ -301,34 +242,41 @@ export function SectionRule({
 }) {
   return (
     <div
-      className={order ? 'uwv-spine-mark uwv-arrive' : 'uwv-spine-mark'}
+      className={order ? 'uwv-section-head uwv-arrive' : 'uwv-section-head'}
       data-lead={lead ? 'true' : undefined}
       data-order={order}
       style={{
         display: 'flex',
-        alignItems: 'baseline',
-        gap: 'var(--space-4)',
-        borderTop: `1px solid ${lead ? 'var(--line-default)' : 'var(--line-subtle)'}`,
-        // No `paddingTop` here. It belongs to the label column below, and the
-        // difference is not cosmetic.
-        //
-        // Baseline alignment settles a flex row on whichever item reaches
-        // furthest above the shared baseline. With the gap on the row, the
-        // label started level with the actions and the taller action pushed it
-        // down — 16px below the rule in a section with no actions, 21px in one
-        // with them, on the same page, decided by a permission. Giving the gap
-        // to the label puts its baseline below the actions' unconditionally, so
-        // the label is always the anchor, never the item that moves, and the
-        // actions settle onto its line instead. Same typography, one position.
-        marginBottom: 'var(--space-5)',
+        alignItems: 'flex-end',
+        flexWrap: 'wrap',
+        gap: 'var(--space-3) var(--space-4)',
+        marginBottom: 'var(--space-4)',
       }}
     >
-      <div style={{ flex: 1, minWidth: 0, paddingTop: 'var(--space-4)' }}>
-        <Eyebrow anchor tone={lead ? 'accent' : 'muted'}>{label}</Eyebrow>
+      <div style={{ flex: '1 1 18rem', minWidth: 0 }}>
+        <h2
+          className="uwv-section-title"
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+        >
+          {lead ? (
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--accent-fill)',
+                boxShadow: '0 0 0 3px var(--accent-wash)',
+                flexShrink: 0,
+              }}
+            />
+          ) : null}
+          {label}
+        </h2>
         {detail ? (
           <p
             style={{
-              marginTop: 'var(--space-2)',
+              marginTop: 'var(--space-1)',
               fontSize: 'var(--text-sm)',
               color: 'var(--ink-tertiary)',
               maxWidth: 'var(--measure)',
@@ -338,7 +286,11 @@ export function SectionRule({
           </p>
         ) : null}
       </div>
-      {actions}
+      {actions ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -432,11 +384,11 @@ export function Attention({
         // panel used to inset its content 32px while the estate's ground used 24
         // and a camera tile used 12, so the page had four text columns against
         // one label column. One token, one step, everywhere.
-        padding: 'var(--space-8) var(--space-6) var(--space-8) var(--region-inset)',
-        borderRadius: 'var(--radius-lg)',
-        background: `linear-gradient(100deg, ${spec.wash} 0%, var(--surface-raised) 58%)`,
+        padding: 'var(--space-8) var(--region-inset) var(--space-8) calc(var(--region-inset) + 4px)',
+        borderRadius: 'var(--radius-xl)',
+        background: `linear-gradient(110deg, ${spec.wash} 0%, var(--surface-panel) 62%)`,
         border: '1px solid var(--line-subtle)',
-        boxShadow: 'var(--shadow-md)',
+        boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
       }}
     >
@@ -444,7 +396,7 @@ export function Attention({
           below carry the same fact. */}
       <span
         aria-hidden="true"
-        style={{ position: 'absolute', insetBlock: 0, insetInlineStart: 0, width: 3, background: spec.color }}
+        style={{ position: 'absolute', insetBlock: 'var(--space-6)', insetInlineStart: 0, width: 4, borderRadius: '0 4px 4px 0', background: spec.color }}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
@@ -454,12 +406,11 @@ export function Attention({
         </span>
         <span
           style={{
-            fontFamily: 'var(--font-mono)',
             fontSize: 'var(--text-2xs)',
             letterSpacing: 'var(--tracking-wider)',
             textTransform: 'uppercase',
             color: spec.color,
-            fontWeight: 'var(--weight-semibold)',
+            fontWeight: 'var(--weight-bold)',
           }}
         >
           {spec.word} · {headline}
@@ -471,9 +422,8 @@ export function Attention({
           now", and it should be readable from further away than anything else
           on the screen. */}
       <div
+        className="uwv-attention-statement"
         style={{
-          fontSize: 'clamp(1.5rem, 1rem + 1.9vw, var(--text-3xl))',
-          lineHeight: 1.16,
           letterSpacing: 'var(--tracking-display)',
           fontWeight: 'var(--weight-semibold)',
           maxWidth: '26ch',
@@ -556,10 +506,10 @@ export function Figure({
       <div
         style={{
           fontSize: 'var(--text-2xs)',
+          fontWeight: 'var(--weight-semibold)',
           textTransform: 'uppercase',
           letterSpacing: 'var(--tracking-wider)',
           color: 'var(--ink-tertiary)',
-          fontFamily: 'var(--font-mono)',
         }}
       >
         {label}
@@ -573,10 +523,10 @@ export function Figure({
           // size of a word. The rhythm of the row is unchanged; only the mark
           // stops shouting.
           fontSize: unavailable ? 'var(--text-2xl)' : FIGURE_SIZE[scale],
-          fontFamily: 'var(--font-mono)',
+          fontFamily: 'var(--font-display)',
           fontVariantNumeric: 'tabular-nums',
           fontWeight: 'var(--weight-semibold)',
-          letterSpacing: 'var(--tracking-tight)',
+          letterSpacing: 'var(--tracking-display)',
           lineHeight: 1.02,
           marginTop: 'var(--space-2)',
           minHeight: unavailable ? '1.2em' : undefined,
@@ -651,8 +601,8 @@ export function LiveDot({
       />
       <span
         style={{
-          fontFamily: 'var(--font-mono)',
           fontSize: 'var(--text-2xs)',
+          fontWeight: 'var(--weight-semibold)',
           letterSpacing: 'var(--tracking-wide)',
           textTransform: 'uppercase',
           color: 'var(--ink-secondary)',
@@ -846,13 +796,13 @@ export function CameraSurface({
     // A second inner ring for selection: an operator picking a camera on a
     // wall of sixteen needs the choice legible from across a room, and a 1px
     // border change is not.
-    boxShadow: selected ? '0 0 0 1px var(--accent) inset' : 'none',
     // Tighter than a card's radius. A monitor bezel is nearly square, and the
     // 12px corner the tile used to carry was the single strongest cue that this
     // was a panel in a web application rather than a picture from a recorder.
-    borderRadius: 'var(--radius-sm)',
+    borderRadius: 'var(--radius-md)',
     overflow: 'hidden',
     padding: 0,
+    boxShadow: selected ? '0 0 0 1px var(--accent) inset' : 'var(--shadow-card)',
     cursor: interactive ? 'pointer' : 'default',
     color: 'inherit',
     font: 'inherit',
@@ -1085,14 +1035,14 @@ export function Readiness({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 'var(--space-2)',
-        padding: '0.1rem 0.45rem',
-        borderRadius: 'var(--radius-xs)',
+        height: '1.375rem',
+        padding: '0 var(--space-2)',
+        borderRadius: 'var(--radius-full)',
         border: `1px ${awaiting ? 'dashed' : 'solid'} ${awaiting ? 'var(--line-strong)' : 'var(--ink-tertiary)'}`,
         background: awaiting ? 'transparent' : 'var(--surface-sunken)',
         color: awaiting ? 'var(--ink-tertiary)' : 'var(--ink-secondary)',
-        fontFamily: 'var(--font-mono)',
         fontSize: 'var(--text-2xs)',
-        letterSpacing: 'var(--tracking-wide)',
+        fontWeight: 'var(--weight-semibold)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -1131,9 +1081,9 @@ export function AbsentRegion({
       role="status"
       style={{
         border: '1px dashed var(--line-default)',
-        borderRadius: 'var(--radius-md)',
+        borderRadius: 'var(--radius-lg)',
         padding: 'var(--space-5)',
-        background: 'var(--surface-sunken)',
+        background: 'var(--surface-panel)',
         display: 'grid',
         gap: 'var(--space-3)',
         alignContent: 'start',
@@ -1149,7 +1099,18 @@ export function AbsentRegion({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        <span style={{ color: 'var(--health-degraded)', display: 'flex', flexShrink: 0 }}>
+        <span
+          style={{
+            color: 'var(--health-degraded)',
+            display: 'grid',
+            placeItems: 'center',
+            width: '2.25rem',
+            height: '2.25rem',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--health-degraded-wash)',
+            flexShrink: 0,
+          }}
+        >
           <Icon icon={StatusIcons.unavailable} size="control" />
         </span>
         <span style={{ fontWeight: 'var(--weight-semibold)', fontSize: 'var(--text-sm)' }}>{title}</span>
@@ -1238,7 +1199,8 @@ export function Meter({
         aria-label={`${caption}: ${segments.map((s) => `${s.value} ${s.label}`).join(', ')}`}
         style={{
           display: 'flex',
-          height: 6,
+          height: 8,
+          gap: 2,
           borderRadius: 'var(--radius-full)',
           overflow: 'hidden',
           background: 'var(--surface-sunken)',
@@ -1348,7 +1310,6 @@ export function CoverageSeal({
           </span>
           <span
             style={{
-              fontFamily: 'var(--font-mono)',
               fontSize: 'var(--text-2xs)',
               letterSpacing: 'var(--tracking-wider)',
               textTransform: 'uppercase',
@@ -1579,7 +1540,7 @@ export function SeverityMark({ severity }: { severity: Severity }) {
  *
  * Not a theme and not a second design system — a ground and a marker. Every
  * token inside is the product's own, which matters more than it sounds:
- * `not_visible` must be the same purple for an engineer as for a supervisor, or
+ * `not_visible` must be the same teal for an engineer as for a supervisor, or
  * the two are looking at different products when they compare notes.
  *
  * What changes is that the page announces what it is, and a screenshot of it
@@ -1642,7 +1603,7 @@ export function EngineeringSurface({
         </span>
         <span
           style={{
-            fontFamily: 'var(--font-mono)',
+            fontWeight: 'var(--weight-semibold)',
             fontSize: 'var(--text-2xs)',
             letterSpacing: 'var(--tracking-wider)',
             textTransform: 'uppercase',

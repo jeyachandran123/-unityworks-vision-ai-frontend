@@ -92,7 +92,7 @@ export function PeoplePage() {
       header: 'Roles',
       render: (user) =>
         user.roles.length === 0 ? (
-          <span style={{ color: 'var(--text-muted)' }}>None</span>
+          <span style={{ color: 'var(--ink-tertiary)' }}>None</span>
         ) : (
           <span style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             {user.roles.map((held) => (
@@ -121,7 +121,7 @@ export function PeoplePage() {
   return (
     <>
       <PageIntro
-        eyebrow="organization"
+        eyebrow="Organization"
         title="People"
         standfirst="Everyone with an account here, the roles they hold, and the cameras they can reach."
         actions={
@@ -244,7 +244,7 @@ export function ScopeSummary({
 }) {
   // A missing scope reads as none — the same reading the server gives a
   // missing grant row, and the only one that cannot accidentally widen access.
-  if (!scope) return <span style={{ color: 'var(--text-muted)' }}>None</span>;
+  if (!scope) return <span style={{ color: 'var(--ink-tertiary)' }}>None</span>;
   if (scope.breadth === 'all_in_tenant') return <>All cameras</>;
   if (scope.breadth === 'listed') {
     return (
@@ -253,5 +253,5 @@ export function ScopeSummary({
       </>
     );
   }
-  return <span style={{ color: 'var(--text-muted)' }}>None</span>;
+  return <span style={{ color: 'var(--ink-tertiary)' }}>None</span>;
 }

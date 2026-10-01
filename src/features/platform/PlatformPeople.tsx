@@ -306,7 +306,7 @@ export function PlatformPersonPage() {
       <Region order={2}>
         <SectionRule
           lead
-          label="organizations they may enter"
+          label="Organizations they may enter"
           detail="Membership is the entry ticket. What they may do inside each one is set under Edit access."
         />
         <Plane>

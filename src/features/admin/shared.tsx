@@ -111,7 +111,7 @@ export function Pager({
         paddingTop: 'var(--space-4)',
       }}
     >
-      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+      <p style={{ margin: 0, color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
         {first}–{last} of {total} {noun}
       </p>
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -163,8 +163,8 @@ export function ObjectTabs({
             whiteSpace: 'nowrap',
             textDecoration: 'none',
             fontSize: 'var(--text-sm)',
-            color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-            borderBottom: `2px solid ${isActive ? 'var(--text-primary)' : 'transparent'}`,
+            color: isActive ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
+            borderBottom: `2px solid ${isActive ? 'var(--ink-primary)' : 'transparent'}`,
           })}
         >
           {tab.label}
@@ -201,7 +201,7 @@ export function DangerConfirm({
 
   return (
     <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '34rem' }}>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{hint}</div>
+      <div style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}>{hint}</div>
       <Input
         label={label}
         value={typed}

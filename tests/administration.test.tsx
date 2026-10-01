@@ -120,7 +120,7 @@ describe('zones are their own domain', () => {
     });
     renderApp(<AppRouter />, '/admin/zones');
 
-    await screen.findByRole('heading', { name: 'Zones' });
+    await screen.findByRole('heading', { name: 'Zones', level: 1 });
     expect(await screen.findByText(/no zones yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
@@ -179,7 +179,7 @@ describe('read and manage are genuinely separate', () => {
     installFetch({ session: adminIdentity(), zones: ZONES });
     renderApp(<AppRouter />, '/admin/zones');
 
-    await screen.findByRole('heading', { name: 'Zones' });
+    await screen.findByRole('heading', { name: 'Zones', level: 1 });
     expect(screen.getByRole('button', { name: /new zone/i })).toBeInTheDocument();
   });
 });
@@ -211,7 +211,7 @@ describe('people, through the real write API', () => {
     installFetch({ session: adminIdentity(), adminUsers: ADMIN_USERS });
     renderApp(<AppRouter />, '/admin/people');
 
-    await screen.findByRole('heading', { name: 'People' });
+    await screen.findByRole('heading', { name: 'People', level: 1 });
     const body = document.body.textContent ?? '';
     expect(body).not.toMatch(/password|hash|\$2[aby]\$/i);
   });

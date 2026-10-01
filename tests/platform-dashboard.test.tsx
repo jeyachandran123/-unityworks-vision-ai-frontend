@@ -5,7 +5,7 @@
  * them, ranked, with a road to each thing; "live" is the runtime's word, not
  * configuration's; every customer is on one line; the feed names people and
  * places and never shows an action code; and the shell around it draws its
- * spine and says "Organization application" the way a sentence would.
+ * content column and says "Organization application" the way a sentence would.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -295,10 +295,10 @@ describe('the console around it', () => {
     expect(calls.some((call) => call.includes(`/platform/overview?utc_offset=${offset}`))).toBe(true);
   });
 
-  it('draws the spine its section labels hang from, and names the way out properly', async () => {
+  it('puts the page in the content column, and names the way out properly', async () => {
     await open();
 
-    expect(document.getElementById('main')).toHaveClass('uwv-spine');
+    expect(document.getElementById('main')).toHaveClass('uwv-content');
     expect(screen.getByRole('button', { name: /Organization application/ })).toBeInTheDocument();
     expect(screen.queryByText('organization application')).not.toBeInTheDocument();
   });

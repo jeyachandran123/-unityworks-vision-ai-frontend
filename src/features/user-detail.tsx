@@ -95,7 +95,7 @@ export function UserDetailPage() {
     const notFound = isApiError(userQuery.error) && userQuery.error.kind === 'not_found';
     return (
       <>
-        <PageIntro eyebrow="Platform · Administration" title="Account" />
+        <PageIntro eyebrow="Organization · Administration" title="Account" />
         {notFound ? (
           <EmptyState
             title="No account with that id"
@@ -114,7 +114,7 @@ export function UserDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Platform · Administration"
+        eyebrow="Organization · Administration"
         title={user.display_name || user.email}
         standfirst={user.display_name ? user.email : undefined}
         meta={

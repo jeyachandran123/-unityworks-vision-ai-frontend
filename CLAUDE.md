@@ -77,6 +77,13 @@ Path aliases `@/ @app/ @shared/ @features/ @devtools/` are declared twice — `v
   `FindingReadout`). Compose from these rather than adding primitives. All iconography comes from
   `shared/ui/icons.tsx` (lucide components) — never Unicode glyphs, which rendered differently on a
   Windows workstation and a Linux kiosk.
+- **The look lives in `styles/`.** `tokens.css` holds both themes (deep-purple navigation in *both*,
+  lavender canvas and white cards in light, near-black purple in dark); the building blocks are classes
+  in `global.css` (`uwv-btn`, `uwv-control`, `uwv-table`, `uwv-dialog`, `uwv-nav-*`…) because hover,
+  focus and disabled have no inline form. Two purples, never swapped: `--accent` is the one you *read*
+  (links, icons, focus — light enough on dark), `--accent-fill` the one you *press* (white text on it at
+  4.5:1). `NOT_VISIBLE` is teal so a state can never look like the brand. Both shells compose
+  `shared/layout/shell-parts.tsx`.
 - **`shared/api/platform.ts`** is a separate client on purpose: it authorises on a `PlatformOperator`,
   a principal no tenant role can produce. `isOperator()` is the only correct gate for that surface —
   there is deliberately no permission to check.
@@ -95,8 +102,9 @@ Path aliases `@/ @app/ @shared/ @features/ @devtools/` are declared twice — `v
    `not_configured` (waiting for engineering) and `blocked` (waiting for a decision — Patron ID) stay
    distinct. `stored_records` is a storage fact and must never be rendered as a reading.
 4. **Colour is never the only signal** — every state carries a glyph/icon and a word.
-5. **Every page opens the same way** (`PageIntro` with its area named above the title) and the spine
-   belongs to the content column, so no page can opt out.
+5. **Every page opens the same way** (`PageIntro` with its area named above the title) and the content
+   column (`.uwv-content`) belongs to the shell, so no page can opt out. Sections are `SectionRule`
+   headings (`.uwv-section-head`), one heading each.
 
 ## Testing
 

@@ -368,6 +368,12 @@ export const StatusIcons = {
    overview carries.
    ──────────────────────────────────────────────────────────────────────────── */
 
+/** Whether somebody holds a permission. Not an observation state, so not `StateIcons`. */
+export const PermissionIcons = {
+  held: Check,
+  notHeld: Minus,
+} as const;
+
 export const PlatformIcons = {
   /** A customer — an organization, as a building. */
   organization: Building2,

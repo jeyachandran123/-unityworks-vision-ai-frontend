@@ -559,7 +559,7 @@ function CameraOverview({ camera }: { camera: Camera }) {
           <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
             <div>
               <strong>{camera.enabled ? 'Watching' : 'Not watching'}</strong>
-              <p style={{ margin: 'var(--space-1) 0 0', color: 'var(--text-secondary)' }}>
+              <p style={{ margin: 'var(--space-1) 0 0', color: 'var(--ink-secondary)' }}>
                 {camera.enabled
                   ? 'This camera is dialled and appears on the wall.'
                   : 'Nothing is connected to this camera. Start it to open the stream.'}
@@ -577,12 +577,12 @@ function CameraOverview({ camera }: { camera: Camera }) {
               )}
             </div>
             {lifecycle && !lifecycle.available ? (
-              <p role="status" style={{ margin: 0, color: 'var(--state-attention, inherit)' }}>
+              <p role="status" style={{ margin: 0, color: 'var(--health-degraded, inherit)' }}>
                 {lifecycle.reason}
               </p>
             ) : null}
             {lifecycle && lifecycle.available && lifecycle.reason ? (
-              <p role="status" style={{ margin: 0, color: 'var(--text-secondary)' }}>
+              <p role="status" style={{ margin: 0, color: 'var(--ink-secondary)' }}>
                 {lifecycle.reason}
               </p>
             ) : null}
@@ -595,7 +595,7 @@ function CameraOverview({ camera }: { camera: Camera }) {
             onChange={(next) => setAnalysis.mutate(next)}
           />
           {camera.enabled && !camera.analysis_enabled ? (
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
               This camera streams to the wall and raises nothing. That is a deliberate state, not
               a fault.
             </p>
@@ -620,7 +620,7 @@ function CameraOverview({ camera }: { camera: Camera }) {
                   <span
                     style={{
                       display: 'block',
-                      color: 'var(--text-muted)',
+                      color: 'var(--ink-tertiary)',
                       fontSize: 'var(--text-sm)',
                     }}
                   >
@@ -845,7 +845,7 @@ function CameraPlacement({ camera }: { camera: Camera }) {
         <PermissionGate
           permission={PERMISSIONS.manageCameras}
           fallback={
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
               You can see where this camera is but not move it. Moving one needs{' '}
               <code>manage_cameras</code>.
             </p>
@@ -870,7 +870,7 @@ function CameraPlacement({ camera }: { camera: Camera }) {
                   ))}
                 </Select>
                 <p
-                  style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                  style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}
                 >
                   Everything this camera observed before the move stays attributed to where it
                   actually was. The move opens a new period rather than rewriting the old one.
@@ -913,7 +913,7 @@ function CameraLifecycle({ camera }: { camera: Camera }) {
         <PermissionGate
           permission={PERMISSIONS.retireCameras}
           fallback={
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
               Retiring a camera needs <code>retire_cameras</code>, which is deliberately not
               implied by being able to add or rename one. Being trusted to correct a camera's
               name is not being trusted to destroy its record.
@@ -986,7 +986,7 @@ function Toggle({
         />
         <span>
           <strong style={{ display: 'block' }}>{title}</strong>
-          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{body}</span>
+          <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>{body}</span>
         </span>
       </label>
     </PermissionGate>
@@ -1005,7 +1005,7 @@ function Facts({ rows }: { rows: ReadonlyArray<[string, React.ReactNode]> }) {
     >
       {rows.map(([term, value]) => (
         <div key={term} style={{ display: 'contents' }}>
-          <dt style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{term}</dt>
+          <dt style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>{term}</dt>
           <dd style={{ margin: 0, minWidth: 0 }}>{value}</dd>
         </div>
       ))}

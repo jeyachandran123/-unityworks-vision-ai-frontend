@@ -99,7 +99,7 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
                 fontSize: 'var(--text-xs)',
                 fontWeight: 'var(--weight-semibold)',
                 border: `2px solid ${done || active ? 'var(--accent)' : 'var(--line-default)'}`,
-                background: done ? 'var(--accent)' : 'transparent',
+                background: done ? 'var(--accent-fill)' : 'transparent',
                 color: done ? 'var(--ink-on-accent)' : 'var(--ink-primary)',
               }}
             >
@@ -154,7 +154,8 @@ export function AccessReview({
             </div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
               {change.role ? roleLabel(change.role) : 'No role'} ·{' '}
-              {cameraWord(draft)} · {draft.permissions.length} permissions
+              {cameraWord(draft)} · {draft.permissions.length}{' '}
+              {draft.permissions.length === 1 ? 'permission' : 'permissions'}
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
               {ticksBySection(draft, ACCESS_CATALOG)

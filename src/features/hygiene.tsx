@@ -210,28 +210,14 @@ export function StaffHygienePage() {
           ) : undefined
         }
         actions={
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div className="uwv-tabs" role="group" aria-label="Observation window">
             {WINDOWS.map((option) => (
               <button
                 key={option.id}
                 type="button"
+                className="uwv-tab"
                 onClick={() => setWindowId(option.id)}
                 aria-pressed={windowId === option.id}
-                style={{
-                  padding: '0.3rem 0.7rem',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 'var(--weight-medium)',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  background:
-                    windowId === option.id ? 'var(--accent)' : 'var(--surface-raised)',
-                  color:
-                    windowId === option.id ? 'var(--ink-on-accent)' : 'var(--ink-primary)',
-                  borderColor:
-                    windowId === option.id ? 'var(--accent)' : 'var(--line-default)',
-                }}
               >
                 {option.label}
               </button>

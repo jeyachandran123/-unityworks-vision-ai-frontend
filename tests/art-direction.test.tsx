@@ -7,7 +7,7 @@
  * to rot, because it is the part a later page can quietly opt out of:
  *
  *   · every page opens the same way, with an area named above its title
- *   · the spine is the content column's, so a page cannot fail to have it
+ *   · the content column is the shell's, so a page cannot fail to sit in it
  *   · a proportion is still refused when nothing accounts for the total
  *   · the attention panel's aside is real rows into real incidents
  *
@@ -29,10 +29,10 @@ describe('one opening, on every page', () => {
    * Each of these routes came from one of those files.
    */
   const migrated = [
-    // 'organization', not 'Platform'. The area a tenant administrator is in
+    // 'Organization', not 'Platform'. The area a tenant administrator is in
     // *is* their organization; 'Platform' now names the surface above every
     // organization, which answers to a different principal entirely.
-    ['/admin', 'Administration', 'organization'],
+    ['/admin', 'Administration', 'Organization'],
     ['/hygiene', 'Staff Hygiene', 'Compliance'],
     ['/people-counting', 'People Counting', 'Intelligence'],
     ['/patron-id', 'Unique Patron ID', 'Platform'],
@@ -52,16 +52,16 @@ describe('one opening, on every page', () => {
     });
   }
 
-  it('the spine belongs to the content column, so no page can omit it', async () => {
+  it('the content column belongs to the shell, so no page can omit it', async () => {
     installFetch({ session: adminIdentity() });
     renderApp(<AppRouter />, '/admin');
     await screen.findByRole('heading', { name: 'Administration', level: 1 });
 
     const main = document.getElementById('main');
-    expect(main?.classList.contains('uwv-spine')).toBe(true);
+    expect(main?.classList.contains('uwv-content')).toBe(true);
 
-    // And the sections tie themselves to it.
-    expect(document.querySelectorAll('.uwv-spine-mark').length).toBeGreaterThan(2);
+    // And the page is composed in marked sections, not one undivided column.
+    expect(document.querySelectorAll('.uwv-section-head').length).toBeGreaterThan(2);
   });
 
   it('a page declares exactly one lead section', async () => {
@@ -70,7 +70,7 @@ describe('one opening, on every page', () => {
     await screen.findByRole('heading', { name: 'Administration', level: 1 });
 
     // The opening is always a lead; beyond it there is one, and only one.
-    const leads = [...document.querySelectorAll('.uwv-spine-mark[data-lead="true"]')];
+    const leads = [...document.querySelectorAll('.uwv-section-head[data-lead="true"]')];
     expect(leads.length).toBe(2);
     expect(leads[0]?.tagName).toBe('HEADER');
   });

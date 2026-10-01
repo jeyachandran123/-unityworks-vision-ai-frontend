@@ -31,6 +31,7 @@ import { adminUsersApi } from '@shared/api/user-administration';
 import { PERMISSIONS, ROLES, roleLabel, type Permission } from '@app/permissions/permissions';
 import { usePermissions } from '@app/permissions/guards';
 import { useAuth } from '@app/auth/AuthProvider';
+import { Icon, PermissionIcons } from '@shared/ui/icons';
 import { Badge, LoadingState, StatusBadge } from '@shared/ui/primitives';
 import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
 
@@ -102,7 +103,7 @@ export function AdminOverviewPage() {
   return (
     <>
       <PageIntro
-        eyebrow="organization"
+        eyebrow="Organization"
         title="Administration"
         standfirst="How this organization is set up: where it operates, what is watching, and who can see it."
       />
@@ -196,14 +197,14 @@ export function AdminOverviewPage() {
                   <strong>{surface.label}</strong>
                   {typeof surface.count === 'number' ? <Badge>{surface.count}</Badge> : null}
                 </span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
                   {surface.body}
                 </span>
               </Link>
             ))}
           </div>
           {surfaces.length === 0 ? (
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
               This account holds no administration permissions. Nothing here is hidden as a
               courtesy — the server refuses these routes too.
             </p>
@@ -245,13 +246,6 @@ const FEATURES: ReadonlyArray<{
   label: string;
   rows: ReadonlyArray<{ label: string; permission: Permission }>;
 }> = [
-  {
-    label: 'Zones',
-    rows: [
-      { label: 'View zones', permission: PERMISSIONS.viewZones },
-      { label: 'Manage zones', permission: PERMISSIONS.manageZones },
-    ],
-  },
   {
     label: 'Zones',
     rows: [
@@ -302,31 +296,56 @@ function AccessSummary() {
   const { has } = usePermissions();
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
+    <div
+      style={{
+        display: 'grid',
+        gap: 'var(--space-6) var(--space-8)',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 11rem), 1fr))',
+      }}
+    >
       {FEATURES.map((feature) => (
         <div key={feature.label}>
           <h3
             style={{
-              margin: '0 0 var(--space-2)',
-              fontSize: 'var(--text-sm)',
-              color: 'var(--text-muted)',
+              margin: '0 0 var(--space-3)',
+              fontSize: 'var(--text-2xs)',
+              fontWeight: 'var(--weight-semibold)',
+              color: 'var(--ink-tertiary)',
               textTransform: 'uppercase',
-              letterSpacing: '0.06em',
+              letterSpacing: 'var(--tracking-wider)',
             }}
           >
             {feature.label}
           </h3>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.2rem' }}>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-2)' }}>
             {feature.rows.map((row) => (
               <li
                 key={row.permission}
-                style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'baseline' }}
+                style={{
+                  display: 'flex',
+                  gap: 'var(--space-2)',
+                  alignItems: 'center',
+                  fontSize: 'var(--text-sm)',
+                  color: has(row.permission) ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
+                }}
               >
-                {/* The word, not only the mark. A tick and a cross differ by
+                {/* The word, not only the mark. A tick and a dash differ by
                     shape here, and the state is also spelled out for anyone
                     who cannot rely on either. */}
-                <span aria-hidden style={{ fontFamily: 'var(--font-mono)' }}>
-                  {has(row.permission) ? '✓' : '✕'}
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'grid',
+                    placeItems: 'center',
+                    width: '1.25rem',
+                    height: '1.25rem',
+                    borderRadius: 'var(--radius-sm)',
+                    flexShrink: 0,
+                    background: has(row.permission) ? 'var(--accent-wash)' : 'var(--surface-sunken)',
+                    color: has(row.permission) ? 'var(--accent)' : 'var(--ink-tertiary)',
+                  }}
+                >
+                  <Icon icon={has(row.permission) ? PermissionIcons.held : PermissionIcons.notHeld} size="inline" />
                 </span>
                 <span>{row.label}</span>
                 <span className="sr-only">{has(row.permission) ? 'yes' : 'no'}</span>
@@ -350,7 +369,7 @@ export function RolesAndAccessPage() {
   return (
     <>
       <PageIntro
-        eyebrow="organization"
+        eyebrow="Organization"
         title="Roles & access"
         standfirst="What each role carries, and who holds it. Individual exceptions live on a person's own profile."
       />
@@ -370,7 +389,7 @@ export function RolesAndAccessPage() {
               grants the same thing — because it is the more specific statement about that one
               person.
             </p>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
               This is what lets two people on the same role differ. A manager who may edit zones
               and one who may only read them are both Restaurant Managers; the difference is one
               added permission on the first, not a second role.

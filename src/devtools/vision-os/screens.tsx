@@ -526,19 +526,7 @@ export function EvidenceScreen() {
               }}
             />
           </div>
-          <button
-            type="submit"
-            style={{
-              padding: '0.55rem 1rem',
-              background: 'var(--accent)',
-              color: 'var(--ink-on-accent)',
-              border: '1px solid var(--accent)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--weight-medium)',
-              cursor: 'pointer',
-            }}
-          >
+          <button type="submit" className="uwv-btn" data-variant="primary">
             Retrieve
           </button>
         </form>

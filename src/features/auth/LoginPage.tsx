@@ -127,7 +127,7 @@ export function LoginPage() {
             </div>
             <div
               style={{
-                fontFamily: 'var(--font-mono)',
+                fontWeight: 'var(--weight-semibold)',
                 fontSize: 'var(--text-2xs)',
                 letterSpacing: 'var(--tracking-wider)',
                 textTransform: 'uppercase',
@@ -197,7 +197,7 @@ export function LoginPage() {
                 </span>
                 <span
                   style={{
-                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 'var(--weight-semibold)',
                     fontSize: 'var(--text-2xs)',
                     letterSpacing: 'var(--tracking-wide)',
                     textTransform: 'uppercase',

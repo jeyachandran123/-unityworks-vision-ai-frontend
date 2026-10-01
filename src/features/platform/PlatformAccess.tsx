@@ -218,7 +218,7 @@ export function PlatformRolesPage() {
       </Region>
 
       <Region order={5}>
-        <SectionRule label="Roles" detail={`${it.roles.length} roles · ${it.permissions.length} permissions`} />
+        <SectionRule label="Roles" detail={`${it.roles.length} ${it.roles.length === 1 ? 'role' : 'roles'} · ${it.permissions.length} ${it.permissions.length === 1 ? 'permission' : 'permissions'}`} />
         <Plane>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-5)' }}>
             {it.roles.map((role) => (
@@ -232,7 +232,7 @@ export function PlatformRolesPage() {
                       color: 'var(--ink-tertiary)',
                     }}
                   >
-                    {role.role} · {role.permission_count} permissions
+                    {role.role} · {role.permission_count} {role.permission_count === 1 ? 'permission' : 'permissions'}
                   </span>
                 </div>
                 <div

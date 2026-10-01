@@ -18,6 +18,7 @@ import {
   type RecorderTestResult,
   recordersApi,
 } from '@shared/api/recorders';
+import { Icon, StatusIcons } from '@shared/ui/icons';
 import { Input, Select, StatusBadge } from '@shared/ui/primitives';
 
 /* ── words ────────────────────────────────────────────────────────────────── */
@@ -562,11 +563,11 @@ export function Steps({ steps, current }: { steps: ReadonlyArray<string>; curren
                 borderRadius: '999px',
                 fontSize: 'var(--text-xs)',
                 border: '1px solid var(--line-strong)',
-                background: state === 'current' ? 'var(--accent)' : 'transparent',
-                color: state === 'current' ? 'var(--ink-inverse)' : 'inherit',
+                background: state === 'current' ? 'var(--accent-fill)' : 'transparent',
+                color: state === 'current' ? 'var(--ink-on-accent)' : 'inherit',
               }}
             >
-              {state === 'done' ? '✓' : index + 1}
+              {state === 'done' ? <Icon icon={StatusIcons.guarantee} size="inline" /> : index + 1}
             </span>
             {label}
           </li>
