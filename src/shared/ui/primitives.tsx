@@ -25,9 +25,7 @@
  */
 
 import {
-  createContext,
-  useCallback,
-  useContext,
+  forwardRef,
   useEffect,
   useId,
   useRef,
@@ -54,7 +52,12 @@ import {
    Button
    ──────────────────────────────────────────────────────────────────────────── */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
+/**
+ * `danger` is the quiet red — a destructive act offered among others, drawn
+ * so it is never mistaken for the safe one. `destructive` is the solid red,
+ * for the one button that commits it: the confirm in a confirmation dialog.
+ */
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'destructive' | 'success';
 type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -65,18 +68,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-export function Button({
-  variant = 'secondary',
-  size = 'md',
-  loading = false,
-  icon,
-  children,
-  disabled,
-  className,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'secondary', size = 'md', loading = false, icon, children, disabled, className, ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
       disabled={disabled || loading}
       // `aria-busy` rather than swapping the label: a screen reader announces
@@ -91,15 +89,15 @@ export function Button({
       {children}
     </button>
   );
-}
+});
 
-export function IconButton({
-  label,
-  children,
-  ...rest
-}: ButtonProps & { label: string }) {
+export const IconButton = forwardRef<HTMLButtonElement, ButtonProps & { label: string }>(function IconButton(
+  { label, children, ...rest },
+  ref,
+) {
   return (
     <Button
+      ref={ref}
       variant="ghost"
       size="sm"
       // An icon-only control with no accessible name is invisible to a screen
@@ -112,7 +110,7 @@ export function IconButton({
       {children}
     </Button>
   );
-}
+});
 
 /* ────────────────────────────────────────────────────────────────────────────
    Spinner, skeleton
@@ -830,7 +828,7 @@ const FOCUSABLE =
  * keyboard user can lose, and one that drops focus on close leaves them at the
  * top of the document.
  */
-function useDialogBehaviour(open: boolean, onClose: () => void, surface: RefObject<HTMLElement | null>) {
+export function useDialogBehaviour(open: boolean, onClose: () => void, surface: RefObject<HTMLElement | null>) {
   // Held in a ref so the effect below runs on open and close only. Callers pass
   // an inline arrow, which is a new function every render; depending on it
   // re-ran the effect on each keystroke inside the dialog, and every re-run
@@ -873,16 +871,23 @@ export function Modal({
   open,
   onClose,
   title,
+  description,
   children,
   footer,
+  size = 'md',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** One line under the title: what this dialog is for. */
+  description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** `sm` for a question, `md` for a short form, `lg` for a form with sections. */
+  size?: 'sm' | 'md' | 'lg';
 }) {
   const titleId = useId();
+  const descriptionId = useId();
   const surface = useRef<HTMLDivElement>(null);
   useDialogBehaviour(open, onClose, surface);
 
@@ -904,14 +909,23 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className="uwv-dialog"
+        data-size={size}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="uwv-dialog-head">
-          <h2 id={titleId} className="uwv-dialog-title">
-            {title}
-          </h2>
+          <div className="uwv-dialog-heading">
+            <h2 id={titleId} className="uwv-dialog-title">
+              {title}
+            </h2>
+            {description ? (
+              <p id={descriptionId} className="uwv-dialog-description">
+                {description}
+              </p>
+            ) : null}
+          </div>
           <IconButton label="Close" onClick={onClose}>
             <Icon icon={ControlIcons.close} />
           </IconButton>
@@ -927,12 +941,16 @@ export function Drawer({
   open,
   onClose,
   title,
+  description,
   children,
+  footer,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  description?: ReactNode;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   const titleId = useId();
   const surface = useRef<HTMLElement>(null);
@@ -955,9 +973,12 @@ export function Drawer({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="uwv-dialog-head">
-          <h2 id={titleId} className="uwv-dialog-title">
-            {title}
-          </h2>
+          <div className="uwv-dialog-heading">
+            <h2 id={titleId} className="uwv-dialog-title">
+              {title}
+            </h2>
+            {description ? <p className="uwv-dialog-description">{description}</p> : null}
+          </div>
           <IconButton label="Close" onClick={onClose}>
             <Icon icon={ControlIcons.close} />
           </IconButton>
@@ -965,6 +986,7 @@ export function Drawer({
         <div className="uwv-dialog-body" style={{ flex: 1 }}>
           {children}
         </div>
+        {footer ? <footer className="uwv-dialog-foot">{footer}</footer> : null}
       </aside>
     </div>
   );
@@ -1055,64 +1077,12 @@ export function Timeline({
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Tooltip
+   Toast
+
+   Lives in `./feedback` with the rest of what the product says back after an
+   act; re-exported here so the provider composition and older imports keep
+   one address. The tooltip moved to `./overlays`, beside everything else
+   that floats.
    ──────────────────────────────────────────────────────────────────────────── */
 
-export function Tooltip({ text, children }: { text: string; children: ReactNode }) {
-  const id = useId();
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex' }}>
-      <span aria-describedby={id}>{children}</span>
-      <span role="tooltip" id={id} className="sr-only">
-        {text}
-      </span>
-    </span>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Toast — used for session expiry and other out-of-band messages
-   ──────────────────────────────────────────────────────────────────────────── */
-
-interface ToastMessage {
-  id: number;
-  text: string;
-  tone: 'info' | 'error';
-}
-
-const ToastContext = createContext<(text: string, tone?: 'info' | 'error') => void>(() => {});
-
-export function useToast() {
-  return useContext(ToastContext);
-}
-
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ToastMessage[]>([]);
-
-  const push = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
-    const id = Date.now() + Math.random();
-    setMessages((current) => [...current, { id, text, tone }]);
-    window.setTimeout(() => setMessages((current) => current.filter((m) => m.id !== id)), 6000);
-  }, []);
-
-  return (
-    <ToastContext.Provider value={push}>
-      {children}
-      <div
-        // `aria-live` so a screen reader is told rather than shown. Session
-        // expiry is the case that matters: it happens without a user action.
-        aria-live="polite"
-        style={{ position: 'fixed', bottom: 'var(--space-6)', right: 'var(--space-6)', zIndex: 'var(--z-toast)' as unknown as number, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
-      >
-        {messages.map((message) => (
-          <div key={message.id} className="uwv-toast" data-tone={message.tone}>
-            <span style={{ display: 'flex', color: message.tone === 'error' ? 'var(--state-absent)' : 'var(--accent)', paddingTop: 2 }}>
-              <Icon icon={message.tone === 'error' ? StatusIcons.error : SeverityIcons.info} size="inline" />
-            </span>
-            <span>{message.text}</span>
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
-  );
-}
+export { ToastProvider, useToast } from './feedback';

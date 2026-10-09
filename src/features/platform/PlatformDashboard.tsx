@@ -45,6 +45,7 @@ import {
   ActivityBars,
   ActivityFeed,
   AttentionList,
+  QuickActions,
   BandBars,
   DeltaBadge,
   FactRow,
@@ -143,6 +144,7 @@ export function PlatformDashboard() {
       />
 
       <Region order={2} style={{ marginBottom: 'var(--space-10)' }}>
+        <div className={queue.length > 0 ? undefined : 'uwv-attention-split'}>
         <Attention
           tone={summary.tone}
           headline={summary.headline}
@@ -156,6 +158,19 @@ export function PlatformDashboard() {
           }
           aside={queue.length > 0 ? <AttentionList items={queue} /> : undefined}
         />
+        {/* Beside a clear panel, not inside it: an all-clear says nothing
+            needs you and claims no more, so it carries no links of its own. */}
+        {queue.length > 0 ? null : (
+          <div className="uwv-panel" style={{ padding: 'var(--space-6)' }}>
+            <QuickActions
+              onSearch={() =>
+                // The palette listens for its own shortcut; this is that shortcut.
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
+              }
+            />
+          </div>
+        )}
+        </div>
       </Region>
 
       <Region order={3} style={{ marginBottom: 'var(--space-10)' }}>

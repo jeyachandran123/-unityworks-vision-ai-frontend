@@ -20,10 +20,15 @@
  * enter. For nearly every account the two agree — and the moment they stop
  * agreeing is exactly when somebody needs to see both, so the page never
  * collapses them into one "organization" column.
+ *
+ * ### The directory is the server's
+ *
+ * Searched, filtered by organization and paged by the server, so the count is
+ * the server's total. It is not sortable: the API has no sort.
  */
 
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -35,109 +40,153 @@ import {
 import { roleLabel } from '@app/permissions/permissions';
 import { isApiError } from '@shared/api/errors';
 import {
-  Badge,
-  Button,
-  type Column,
-  DataTable,
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-  Select,
-  StatusBadge,
-} from '@shared/ui/primitives';
-import { GoTo, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+  DataGrid,
+  downloadCsv,
+  FilterChips,
+  filterValue,
+  Pagination,
+  TableCard,
+  TableToolbar,
+  useTableState,
+  type FilterDefinition,
+  type GridColumn,
+} from '@shared/ui/data-table';
+import { Callout, useToast } from '@shared/ui/feedback';
+import { ActionIcons, EntityIcons, Icon, PlatformIcons } from '@shared/ui/icons';
+import { ConfirmDialog } from '@shared/ui/overlays';
+import { Badge, Button, EmptyState, ErrorState, LoadingState, Select } from '@shared/ui/primitives';
+import { PageIntro } from '@shared/ui/product';
+import { Avatar, ButtonLink, FactList, MetricTile, Panel, StatusPill, initialsOf } from '@shared/ui/surfaces';
+
+function relative(iso: string | null | undefined): string {
+  if (!iso) return 'Never';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const minutes = Math.round((Date.now() - then) / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function failure(error: unknown, fallback: string): string {
+  return isApiError(error) ? error.friendlyMessage : fallback;
+}
 
 /* ── the directory ────────────────────────────────────────────────────────── */
 
 export function PlatformPeoplePage() {
-  const [search, setSearch] = useState('');
-  const [organizationId, setOrganizationId] = useState('');
+  const navigate = useNavigate();
+  const table = useTableState('platform-people', { pageSize: 25 });
 
   const organizations = useQuery({
     queryKey: ['platform', 'organizations', 'for-filter'],
     queryFn: () => platformApi.organizations({ limit: 200 }),
   });
-
-  const people = useQuery({
-    queryKey: ['platform', 'people', { search, organizationId }],
-    queryFn: () =>
-      platformAdminApi.people({
-        q: search.trim() || undefined,
-        organization_id: organizationId || undefined,
-        limit: 100,
-      }),
+  const overview = useQuery({
+    queryKey: ['platform', 'overview'],
+    queryFn: () => platformAdminApi.overview(),
+    staleTime: 30_000,
   });
 
-  const columns: ReadonlyArray<Column<Person>> = useMemo(
-    () => [
-      {
-        key: 'email',
-        header: 'Person',
-        render: (person) => (
-          <div style={{ minWidth: 0 }}>
-            <Link to={`/platform/people/${encodeURIComponent(person.id)}`}>
+  const organizationId = filterValue(table.filters, 'organization');
+  const params = useMemo(
+    () => ({ q: table.query || undefined, organization_id: organizationId, limit: table.pageSize, offset: table.offset }),
+    [table.query, organizationId, table.pageSize, table.offset],
+  );
+  const people = useQuery({
+    queryKey: ['platform', 'people', params],
+    queryFn: () => platformAdminApi.people(params),
+    placeholderData: (previous) => previous,
+  });
+
+  const filters: FilterDefinition[] = [
+    {
+      id: 'organization',
+      label: 'May enter',
+      single: true,
+      options: (organizations.data?.organizations ?? []).map((o) => ({ value: o.id, label: o.name })),
+    },
+  ];
+
+  const columns: ReadonlyArray<GridColumn<Person>> = [
+    {
+      key: 'person',
+      header: 'Person',
+      render: (person) => (
+        <span className="uwv-cell-primary">
+          <Avatar name={person.display_name || person.email} seed={person.id} muted={!person.is_active} />
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/platform/people/${encodeURIComponent(person.id)}`}>
               {person.display_name || person.email}
             </Link>
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--text-2xs)',
-                color: 'var(--ink-tertiary)',
-              }}
-            >
-              {person.email}
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: 'home',
-        header: 'Home organization',
-        render: (person) => (
-          <span title="Where the account lives. Not, by itself, permission to enter.">
-            {person.home_organization_id === null
-              ? 'None — Platform Admin'
-              : person.home_organization_name}
-            {person.home_membership_missing ? (
-              <span style={{ marginLeft: 'var(--space-2)' }}>
-                <Badge tone="accent">cannot enter</Badge>
-              </span>
-            ) : null}
+            <span className="uwv-cell-sub">{person.email}</span>
           </span>
-        ),
-      },
-      {
-        key: 'memberships',
-        header: 'May enter',
-        render: (person) =>
-          person.memberships.length === 0 ? (
-            <span style={{ color: 'var(--ink-tertiary)' }}>nothing</span>
+        </span>
+      ),
+      exportValue: (person) => person.display_name || person.email,
+    },
+    {
+      key: 'home',
+      header: 'Home organization',
+      render: (person) => (
+        <span title="Where the account lives. Not, by itself, permission to enter." style={{ display: 'inline-flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+          {person.home_organization_id === null ? (
+            <span className="uwv-cell-muted">None — Platform Admin</span>
           ) : (
+            person.home_organization_name
+          )}
+          {person.home_membership_missing ? <Badge tone="accent">Cannot enter</Badge> : null}
+        </span>
+      ),
+      exportValue: (person) => person.home_organization_name,
+    },
+    {
+      key: 'memberships',
+      header: 'May enter',
+      render: (person) =>
+        person.memberships.length === 0 ? (
+          <span className="uwv-cell-muted">Nothing</span>
+        ) : (
+          <span className="uwv-cell-stack">
             <span>
-              {person.organization_count}
-              <span style={{ color: 'var(--ink-tertiary)' }}>
-                {' '}
-                {person.organization_count === 1 ? 'organization' : 'organizations'}
-              </span>
+              {person.organization_count} {person.organization_count === 1 ? 'organization' : 'organizations'}
             </span>
-          ),
-      },
-      {
-        key: 'status',
-        header: 'Status',
-        render: (person) => (
-          <span style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
-            <StatusBadge tone={person.is_active ? 'online' : 'offline'}>
-              {person.is_active ? 'Active' : 'Disabled'}
-            </StatusBadge>
-            {person.is_platform_operator ? <Badge>Operator</Badge> : null}
+            <span className="uwv-cell-sub">
+              {person.memberships
+                .slice(0, 2)
+                .map((m) => m.organization_name)
+                .join(', ')}
+              {person.memberships.length > 2 ? ` +${person.memberships.length - 2}` : ''}
+            </span>
           </span>
         ),
-      },
-    ],
-    [],
-  );
+      exportValue: (person) => person.memberships.map((m) => m.organization_name).join('; '),
+    },
+    {
+      key: 'signin',
+      header: 'Last sign-in',
+      render: (person) => <span className="uwv-cell-muted">{relative(person.last_login_at)}</span>,
+      exportValue: (person) => person.last_login_at,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (person) => (
+        <span style={{ display: 'inline-flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+          <StatusPill tone={person.is_active ? 'online' : 'idle'}>{person.is_active ? 'Active' : 'Disabled'}</StatusPill>
+          {person.is_platform_operator ? <Badge tone="accent">Operator</Badge> : null}
+        </span>
+      ),
+      exportValue: (person) => (person.is_active ? 'Active' : 'Disabled'),
+    },
+  ];
+
+  const rows = people.data?.people ?? [];
+  const counts = overview.data?.people;
 
   return (
     <>
@@ -146,49 +195,127 @@ export function PlatformPeoplePage() {
         title="People"
         standfirst="Everyone on the platform. Membership is what lets somebody enter an organization; roles decide what they can do once inside."
         actions={
-          <Link to="/platform/people/new" style={{ textDecoration: 'none' }}>
-            <GoTo>New person</GoTo>
-          </Link>
+          <ButtonLink to="/platform/people/new" variant="primary" icon={ActionIcons.add}>
+            New person
+          </ButtonLink>
         }
       />
 
-      <Region order={2}>
-        <SectionRule lead label="Directory" />
-        <Plane>
-          <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <Input
-              label="Search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name or email"
-            />
-            <Select
-              label="In organization"
-              value={organizationId}
-              onChange={(event) => setOrganizationId(event.target.value)}
-            >
-              <option value="">Any</option>
-              {(organizations.data?.organizations ?? []).map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+      <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="People across the platform" style={{ marginBottom: 'var(--space-8)' }}>
+        <MetricTile
+          label="Accounts"
+          icon={EntityIcons.person}
+          value={counts ? counts.users : null}
+          unavailableReason="The overview has not answered"
+          detail={counts ? `${counts.active_users} active · ${counts.disabled_users} disabled` : undefined}
+        />
+        <MetricTile
+          label="Signed in this week"
+          icon={ActionIcons.enter}
+          value={counts ? counts.signed_in_7d : null}
+          unavailableReason="The overview has not answered"
+          detail={counts ? `${counts.signed_in_24h} in the last 24 hours` : undefined}
+        />
+        <MetricTile
+          label="In several organizations"
+          icon={EntityIcons.organization}
+          value={counts ? counts.multi_organization_users : null}
+          unavailableReason="The overview has not answered"
+          detail="Choose which to open when they sign in"
+        />
+        <MetricTile
+          label="Cannot enter anywhere"
+          icon={PlatformIcons.stranded}
+          value={counts ? counts.without_membership : null}
+          unavailableReason="The overview has not answered"
+          detail={counts && counts.without_membership > 0 ? 'Offboarded — or a mistaken removal' : 'Every account has somewhere to go'}
+          detailTone={counts && counts.without_membership > 0 ? 'warning' : 'success'}
+        />
+      </section>
 
-          {people.isLoading ? <LoadingState label="Reading people" /> : null}
-          {people.isError ? <ErrorState title="People could not be read" body="The directory is unavailable." /> : null}
-          {people.data ? (
-            <DataTable
-              caption="Everyone on the platform, with their home organization and what they may enter"
-              rows={people.data.people}
-              columns={columns}
-              rowKey={(person) => person.id}
-              empty="No account matches."
+      <section className="uwv-arrive" data-order="3" aria-label="Directory">
+        <TableCard label="People">
+          <TableToolbar
+            state={table}
+            searchLabel="Search people"
+            searchPlaceholder="Search by name or email…"
+            searching={people.isFetching && table.query !== ''}
+            filters={filters}
+            columns={columns}
+            actions={
+              <Button
+                variant="ghost"
+                icon={<Icon icon={ActionIcons.export} />}
+                disabled={rows.length === 0}
+                onClick={() => downloadCsv('people.csv', columns, rows)}
+              >
+                Export page
+              </Button>
+            }
+          />
+          <FilterChips filters={filters} state={table} />
+          <DataGrid<Person>
+            caption="Everyone on the platform, with their home organization and what they may enter"
+            columns={columns}
+            rows={rows}
+            rowKey={(person) => person.id}
+            hidden={table.hidden}
+            density={table.density}
+            loading={people.isLoading}
+            error={people.error}
+            onRetry={() => void people.refetch()}
+            narrowed={table.narrowed}
+            onRowOpen={(person) => navigate(`/platform/people/${encodeURIComponent(person.id)}`)}
+            rowActions={(person) => [
+              {
+                id: 'view',
+                label: 'View person',
+                icon: ActionIcons.view,
+                onSelect: () => navigate(`/platform/people/${encodeURIComponent(person.id)}`),
+              },
+              ...(person.is_platform_operator
+                ? []
+                : [
+                    {
+                      id: 'access',
+                      label: 'Edit access',
+                      icon: PlatformIcons.access,
+                      onSelect: () => navigate(`/platform/people/${encodeURIComponent(person.id)}/access`),
+                    },
+                  ]),
+            ]}
+            rowActionsLabel={(person) => `Actions for ${person.display_name || person.email}`}
+            empty={
+              <EmptyState
+                title="Nobody on the platform yet"
+                body="Create the first person, or the first Organization Admin from an organization's page."
+              />
+            }
+            noResults={
+              <EmptyState
+                title="No account matches"
+                body={table.query ? `Nobody is named or addressed like “${table.query}” with these filters.` : 'Nobody may enter that organization.'}
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
+              />
+            }
+          />
+          {people.data && people.data.total > 0 ? (
+            <Pagination
+              total={people.data.total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="people"
+              busy={people.isFetching}
             />
           ) : null}
-        </Plane>
-      </Region>
+        </TableCard>
+      </section>
     </>
   );
 }
@@ -198,8 +325,9 @@ export function PlatformPeoplePage() {
 export function PlatformPersonPage() {
   const { userId = '' } = useParams();
   const client = useQueryClient();
+  const toast = useToast();
   const [addTo, setAddTo] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<PersonMembership | null>(null);
 
   const person = useQuery({
     queryKey: ['platform', 'person', userId],
@@ -216,28 +344,31 @@ export function PlatformPersonPage() {
     void client.invalidateQueries({ queryKey: ['platform', 'person', userId] });
     void client.invalidateQueries({ queryKey: ['platform', 'people'] });
     void client.invalidateQueries({ queryKey: ['platform', 'overview'] });
+    void client.invalidateQueries({ queryKey: ['platform', 'members'] });
   };
 
   const add = useMutation({
-    mutationFn: (organizationId: string) =>
-      platformAdminApi.addMember(organizationId, userId, 'org_admin'),
-    onSuccess: () => {
+    mutationFn: (organizationId: string) => platformAdminApi.addMember(organizationId, userId, 'org_admin'),
+    onSuccess: (_, organizationId) => {
+      const name = organizations.data?.organizations.find((o) => o.id === organizationId)?.name ?? organizationId;
       setAddTo('');
-      setFailure(null);
       invalidate();
+      toast.success(`Now Organization Admin of ${name}`);
     },
-    onError: (error) =>
-      setFailure(isApiError(error) ? error.friendlyMessage : 'The membership could not be added.'),
   });
 
   const remove = useMutation({
     mutationFn: (organizationId: string) => platformAdminApi.removeMember(organizationId, userId),
-    onSuccess: () => {
-      setFailure(null);
+    onSuccess: (result, organizationId) => {
+      const name = person.data?.memberships.find((m) => m.organization_id === organizationId)?.organization_name ?? organizationId;
+      setRemoving(null);
       invalidate();
+      if (result.left_without_access) {
+        toast.warning(`Removed from ${name}`, { description: 'They now have no organization and cannot sign in anywhere.' });
+      } else {
+        toast.success(`Removed from ${name}`);
+      }
     },
-    onError: (error) =>
-      setFailure(isApiError(error) ? error.friendlyMessage : 'The membership could not be removed.'),
   });
 
   if (person.isLoading) return <LoadingState label="Reading person" />;
@@ -245,6 +376,7 @@ export function PlatformPersonPage() {
   if (!person.data) return null;
 
   const it = person.data;
+  const name = it.display_name || it.email;
   const held = new Set(it.memberships.map((m) => m.organization_id));
   const addable = (organizations.data?.organizations ?? []).filter(
     (organization) => !held.has(organization.id) && organization.status !== 'archived',
@@ -253,180 +385,164 @@ export function PlatformPersonPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Person"
-        title={it.display_name || it.email}
-        standfirst={
+        eyebrow="People"
+        back="/platform/people"
+        title={name}
+        mark={initialsOf(name)}
+        meta={
           <>
-            <code>{it.email}</code> ·{' '}
-            {it.home_organization_id === null
-              ? 'Platform Admin — belongs to no organization'
-              : `lives in ${it.home_organization_name}`}
+            <StatusPill tone={it.is_active ? 'online' : 'idle'}>{it.is_active ? 'Active' : 'Disabled'}</StatusPill>
+            {it.is_platform_operator ? <Badge tone="accent">Platform operator</Badge> : null}
+            <span className="uwv-page-meta-item">{it.email}</span>
+            <span className="uwv-page-meta-item">
+              {it.home_organization_id === null ? 'Platform Admin — belongs to no organization' : `Lives in ${it.home_organization_name}`}
+            </span>
           </>
         }
-        meta={
-          <span style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
-            <StatusBadge tone={it.is_active ? 'online' : 'offline'}>
-              {it.is_active ? 'Active' : 'Disabled'}
-            </StatusBadge>
-            {it.is_platform_operator ? <Badge>Platform operator</Badge> : null}
-          </span>
-        }
         actions={
-          <span style={{ display: 'inline-flex', gap: 'var(--space-4)' }}>
-            {it.is_platform_operator ? null : (
-              <Link
-                to={`/platform/people/${encodeURIComponent(it.id)}/access`}
-                style={{ textDecoration: 'none' }}
-              >
-                <GoTo>Edit access</GoTo>
-              </Link>
-            )}
-            <Link to="/platform/people">All people</Link>
-          </span>
+          it.is_platform_operator ? null : (
+            <ButtonLink to={`/platform/people/${encodeURIComponent(it.id)}/access`} variant="primary" icon={PlatformIcons.access}>
+              Edit access
+            </ButtonLink>
+          )
         }
       />
 
-      {failure ? (
-        <div
-          role="alert"
-          style={{
-            marginBottom: 'var(--space-5)',
-            padding: 'var(--space-3) var(--space-4)',
-            border: '1px solid var(--line-default)',
-            borderLeft: '3px solid var(--severity-critical, var(--ink-primary))',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface-raised)',
-            fontSize: 'var(--text-sm)',
-          }}
-        >
-          {failure}
-        </div>
+      {it.home_membership_missing ? (
+        <Callout variant="banner" tone="warning" title="Cannot enter their own home organization">
+          This account is filed in <strong>{it.home_organization_name}</strong> but has no membership there. That is a
+          legitimate state — it is also what a mistaken revocation looks like.
+        </Callout>
+      ) : null}
+      {!it.is_active ? (
+        <Callout variant="banner" tone="neutral" title="This account is disabled">
+          It cannot sign in anywhere, whatever it is a member of.
+        </Callout>
       ) : null}
 
-      <Region order={2}>
-        <SectionRule
-          lead
-          label="Organizations they may enter"
-          detail="Membership is the entry ticket. What they may do inside each one is set under Edit access."
-        />
-        <Plane>
-          {it.home_membership_missing ? (
-            <p style={{ marginTop: 0, color: 'var(--ink-secondary)' }}>
-              This account is filed in <strong>{it.home_organization_name}</strong> but has no
-              membership there, so it cannot enter its own home organization. That is a legitimate
-              state — it is also what a mistaken revocation looks like.
-            </p>
-          ) : null}
-
-          {it.is_platform_operator && it.memberships.length === 0 ? (
-            <p style={{ margin: 0 }}>
-              Platform Admin. Belongs to no organization, and can enter any of them from the
-              organizations list.
-            </p>
-          ) : it.memberships.length === 0 ? (
-            <EmptyState
-              title="No memberships"
-              body="This account cannot sign in to any organization. Give it one below."
-            />
-          ) : (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
-              {it.memberships.map((membership) => (
-                <MembershipRow
-                  key={membership.organization_id}
-                  membership={membership}
-                  busy={remove.isPending}
-                  onRemove={() => remove.mutate(membership.organization_id)}
-                />
-              ))}
-            </ul>
-          )}
+      <div className="uwv-detail-grid uwv-arrive" data-order="2">
+        <div className="uwv-stack">
+          <Panel
+            title="Organizations they may enter"
+            description="Membership is the entry ticket. What they may do inside each one is set under Edit access."
+            flush
+          >
+            {it.is_platform_operator && it.memberships.length === 0 ? (
+              <div className="uwv-datatable-state">
+                <Callout tone="info">
+                  Platform Admin. Belongs to no organization, and can enter any of them from the organizations list.
+                </Callout>
+              </div>
+            ) : it.memberships.length === 0 ? (
+              <div className="uwv-datatable-state">
+                <EmptyState title="No memberships" body="This account cannot sign in to any organization. Give it one below." />
+              </div>
+            ) : (
+              <ul className="uwv-person-list">
+                {it.memberships.map((membership) => (
+                  <li key={membership.organization_id}>
+                    <Avatar name={membership.organization_name} seed={membership.organization_id} />
+                    <span className="uwv-cell-stack">
+                      <span style={{ display: 'inline-flex', gap: 'var(--space-2)', alignItems: 'center', minWidth: 0 }}>
+                        <Link className="uwv-cell-title" to={`/platform/organizations/${encodeURIComponent(membership.organization_id)}`}>
+                          {membership.organization_name}
+                        </Link>
+                        {membership.is_home ? <Badge>Home</Badge> : null}
+                      </span>
+                      <span className="uwv-cell-sub">
+                        {membership.roles.length === 0
+                          ? 'No role here — can enter, sees nothing'
+                          : membership.roles.map(roleLabel).join(', ')}
+                        {membership.granted_at ? ` · since ${new Date(membership.granted_at).toLocaleDateString()}` : ''}
+                      </span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon icon={ActionIcons.remove} />}
+                      aria-label={`Remove from ${membership.organization_name}`}
+                      onClick={() => {
+                        remove.reset();
+                        setRemoving(membership);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
           {it.is_platform_operator ? null : (
-          <div
-            style={{
-              marginTop: 'var(--space-6)',
-              paddingTop: 'var(--space-5)',
-              borderTop: '1px solid var(--line-subtle)',
-              display: 'flex',
-              gap: 'var(--space-3)',
-              alignItems: 'flex-end',
-              flexWrap: 'wrap',
-            }}
-          >
-            <Select
-              label="Make Organization Admin of"
-              value={addTo}
-              onChange={(event) => setAddTo(event.target.value)}
+            <Panel
+              title="Give them an organization"
+              description="They become Organization Admin of that organization, with every camera, alongside any organizations they already run. With more than one, they choose which to open when they sign in."
             >
-              <option value="">Choose…</option>
-              {addable.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </Select>
-            <Button disabled={!addTo || add.isPending} onClick={() => add.mutate(addTo)}>
-              {add.isPending ? 'Adding…' : 'Add as Organization Admin'}
-            </Button>
-            {/* Said before the click, because it is the part people get wrong. */}
-            <p
-              style={{
-                margin: 0,
-                flexBasis: '100%',
-                color: 'var(--ink-tertiary)',
-                fontSize: 'var(--text-xs)',
-              }}
-            >
-              They become Organization Admin of that organization, with every camera, alongside
-              any organizations they already run. With more than one, they choose which to open
-              when they sign in.
-            </p>
-          </div>
+              <form
+                className="uwv-inline-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (addTo) add.mutate(addTo);
+                }}
+              >
+                <Select label="Make Organization Admin of" value={addTo} onChange={(event) => setAddTo(event.target.value)}>
+                  <option value="">Choose…</option>
+                  {addable.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </Select>
+                <Button type="submit" variant="primary" loading={add.isPending} disabled={!addTo}>
+                  Add as Organization Admin
+                </Button>
+              </form>
+              {add.isError ? (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                  <Callout tone="error" live>
+                    {failure(add.error, 'The membership could not be added.')}
+                  </Callout>
+                </div>
+              ) : null}
+            </Panel>
           )}
-        </Plane>
-      </Region>
-    </>
-  );
-}
+        </div>
 
-function MembershipRow({
-  membership,
-  busy,
-  onRemove,
-}: {
-  membership: PersonMembership;
-  busy: boolean;
-  onRemove: () => void;
-}) {
-  return (
-    <li
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-3)',
-        paddingBottom: 'var(--space-3)',
-        borderBottom: '1px solid var(--line-subtle)',
-        flexWrap: 'wrap',
-      }}
-    >
-      <div style={{ flex: 1, minWidth: '12rem' }}>
-        <Link to={`/platform/organizations/${encodeURIComponent(membership.organization_id)}`}>
-          {membership.organization_name}
-        </Link>
-        {membership.is_home ? (
-          <span style={{ marginLeft: 'var(--space-2)' }}>
-            <Badge tone="neutral">home</Badge>
-          </span>
-        ) : null}
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-          {membership.roles.length === 0
-            ? 'No role here — can enter, sees nothing'
-            : membership.roles.map(roleLabel).join(', ')}
+        <div className="uwv-stack">
+          <Panel title="Account">
+            <FactList
+              items={[
+                { label: 'Email', value: it.email },
+                {
+                  label: 'Home organization',
+                  value: it.home_organization_id === null ? 'None' : it.home_organization_name,
+                },
+                { label: 'May enter', value: `${it.organization_count} ${it.organization_count === 1 ? 'organization' : 'organizations'}` },
+                { label: 'Last sign-in', value: relative(it.last_login_at) },
+              ]}
+            />
+          </Panel>
         </div>
       </div>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={onRemove}>
-        Remove
-      </Button>
-    </li>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${name} from ${removing?.organization_name ?? ''}?`}
+        confirmLabel="Remove membership"
+        tone="danger"
+        pending={remove.isPending}
+        error={remove.isError ? failure(remove.error, 'The membership could not be removed.') : undefined}
+        onConfirm={() => removing && remove.mutate(removing.organization_id)}
+        onCancel={() => setRemoving(null)}
+      >
+        <p>They lose every role they hold there and can no longer enter it.</p>
+        {it.memberships.length === 1 ? (
+          <p>
+            <strong>This is their only organization.</strong> Afterwards they cannot sign in anywhere.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </>
   );
 }

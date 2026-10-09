@@ -37,8 +37,9 @@ import {
   type NavSection,
 } from '@app/router/navigation';
 import { useConnectionStatus } from '@shared/realtime/useConnection';
-import { ControlIcons, Icon, StatusIcons } from '@shared/ui/icons';
+import { ActionIcons, ControlIcons, EntityIcons, Icon, StatusIcons } from '@shared/ui/icons';
 import { IconButton, StatusBadge, type HealthTone } from '@shared/ui/primitives';
+import { PageErrorBoundary } from '@shared/ui/boundary';
 import { Readiness, useMediaQuery } from '@shared/ui/product';
 import {
   AccountMenu,
@@ -48,6 +49,7 @@ import {
   ThemeToggle,
   type MenuAction,
 } from './shell-parts';
+import { ShellSearch, useSignOut } from './shell-search';
 
 const COLLAPSE_KEY = 'uwv.sidebar.collapsed';
 
@@ -61,8 +63,7 @@ const COLLAPSE_KEY = 'uwv.sidebar.collapsed';
 export const SHELL_BREAKPOINT = '62rem';
 
 export function AppShell() {
-  const { user, logout, organizations, activeOrganization, isPlatformOperator } =
-    useAuth();
+  const { user, organizations, activeOrganization, isPlatformOperator } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -87,6 +88,7 @@ export function AppShell() {
       membership row to read a name from. */
   const organizationLabel = activeOrganization?.name ?? user?.tenant_id ?? '';
   const narrow = useMediaQuery(`(max-width: ${SHELL_BREAKPOINT})`);
+  const signOut = useSignOut(organizationLabel || 'this organization');
 
   const [collapsed, setCollapsed] = useState(
     () => window.localStorage.getItem(COLLAPSE_KEY) === '1',
@@ -127,11 +129,20 @@ export function AppShell() {
       ? [
           {
             label: isPlatformOperator ? 'Platform control plane' : 'Switch organization',
+            icon: isPlatformOperator ? EntityIcons.organization : ActionIcons.enter,
             onSelect: () => navigate(isPlatformOperator ? '/platform' : '/choose-organization'),
           },
         ]
       : []),
-    { label: 'Sign out', onSelect: () => void logout(), tone: 'danger' as const },
+    {
+      label: 'Sign out',
+      icon: ActionIcons.signOut,
+      onSelect: () => {
+        setMenuOpen(false);
+        void signOut();
+      },
+      tone: 'danger' as const,
+    },
   ];
 
   return (
@@ -207,6 +218,7 @@ export function AppShell() {
               drawer and the page's own title already answer it, and keeping it
               was what overflowed the topbar on a phone. */}
           {narrow ? <span style={{ flex: 1 }} /> : <Breadcrumb />}
+          <ShellSearch kind="app" compact={narrow} />
 
           {acting ? <OperatorMark organization={organizationLabel} compact={narrow} /> : null}
           {engineering && !narrow ? (
@@ -264,7 +276,9 @@ export function AppShell() {
             overflowX: 'hidden',
           }}
         >
-          <Outlet />
+          <PageErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </PageErrorBoundary>
         </main>
       </div>
     </div>

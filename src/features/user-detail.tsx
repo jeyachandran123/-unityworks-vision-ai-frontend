@@ -23,23 +23,20 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { useAuth } from '@app/auth/AuthProvider';
-import { roleLabel } from '@app/permissions/permissions';
+import { ROLES, roleLabel } from '@app/permissions/permissions';
 import { adminUsersApi } from '@shared/api/user-administration';
 import { PersonAccessPanel } from '@features/admin/person-access';
+import { ScopeSummary } from '@features/admin/people';
 import { isApiError } from '@shared/api/errors';
-import {
-  Badge,
-  Button,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Modal,
-  StatusBadge,
-} from '@shared/ui/primitives';
-import { Figure, GoTo, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { Callout, useToast } from '@shared/ui/feedback';
+import { ActionIcons, Icon } from '@shared/ui/icons';
+import { ConfirmDialog } from '@shared/ui/overlays';
+import { Badge, Button, EmptyState, ErrorState, LoadingState } from '@shared/ui/primitives';
+import { PageIntro, SectionRule } from '@shared/ui/product';
+import { FactList, Panel, StatusPill, initialsOf } from '@shared/ui/surfaces';
 
 function Failed({ error }: { error: unknown }) {
   return (
@@ -59,6 +56,7 @@ function when(iso: string | null): string {
 export function UserDetailPage() {
   const { userId = '' } = useParams();
   const client = useQueryClient();
+  const toast = useToast();
   const { user: actor } = useAuth();
 
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -79,13 +77,19 @@ export function UserDetailPage() {
 
   const activate = useMutation({
     mutationFn: () => adminUsersApi.activate(userId),
-    onSuccess: refresh,
+    onSuccess: (updated) => {
+      refresh();
+      toast.success(`${updated.display_name || updated.email} activated`, { description: 'They can sign in again.' });
+    },
   });
   const deactivate = useMutation({
     mutationFn: () => adminUsersApi.deactivate(userId),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setConfirmDeactivate(false);
       refresh();
+      toast.success(`${updated.display_name || updated.email} deactivated`, {
+        description: 'Signed out and refused login immediately.',
+      });
     },
   });
 
@@ -95,7 +99,7 @@ export function UserDetailPage() {
     const notFound = isApiError(userQuery.error) && userQuery.error.kind === 'not_found';
     return (
       <>
-        <PageIntro eyebrow="Organization · Administration" title="Account" />
+        <PageIntro eyebrow="People" back="/admin/people" title="Account" />
         {notFound ? (
           <EmptyState
             title="No account with that id"
@@ -110,120 +114,124 @@ export function UserDetailPage() {
 
   const user = userQuery.data;
   const isSelf = Boolean(actor && actor.subject === user.email);
+  const name = user.display_name || user.email;
 
   return (
     <>
       <PageIntro
-        eyebrow="Organization · Administration"
-        title={user.display_name || user.email}
-        standfirst={user.display_name ? user.email : undefined}
+        eyebrow="People"
+        back="/admin/people"
+        title={name}
+        mark={initialsOf(name)}
         meta={
           <>
-            {user.is_active ? (
-              <StatusBadge tone="online">Active</StatusBadge>
-            ) : (
-              <StatusBadge tone="idle">Disabled</StatusBadge>
-            )}
+            {user.is_active ? <StatusPill tone="online">Active</StatusPill> : <StatusPill tone="idle">Disabled</StatusPill>}
             {user.roles.length === 0 ? (
-              <Badge>no role assigned</Badge>
+              <Badge>No role assigned</Badge>
             ) : (
-              user.roles.map((role) => <Badge key={role}>{roleLabel(role)}</Badge>)
+              user.roles.map((role) => (
+                <Badge key={role} tone={role === ROLES.orgAdmin ? 'accent' : 'neutral'}>
+                  {roleLabel(role)}
+                </Badge>
+              ))
             )}
+            {user.display_name ? <span className="uwv-page-meta-item">{user.email}</span> : null}
           </>
         }
         actions={
-          <Link to="/admin/people" style={{ textDecoration: 'none' }}>
-            <GoTo>Back to People</GoTo>
-          </Link>
+          user.is_active ? (
+            <Button
+              variant="danger"
+              icon={<Icon icon={ActionIcons.suspend} />}
+              loading={deactivate.isPending}
+              disabled={isSelf}
+              onClick={() => {
+                deactivate.reset();
+                setConfirmDeactivate(true);
+              }}
+              title={isSelf ? 'You may not deactivate your own account' : undefined}
+            >
+              Deactivate
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              icon={<Icon icon={ActionIcons.activate} />}
+              loading={activate.isPending}
+              onClick={() => activate.mutate()}
+            >
+              Activate
+            </Button>
+          )
         }
       />
 
-      {/* ── Identity + Account (top weight) ── */}
+      {isSelf ? (
+        <Callout variant="banner" tone="neutral" title="This is your own account">
+          Its access and activation state cannot be changed from here — the server refuses self-modification.
+        </Callout>
+      ) : null}
+      {!user.is_active ? (
+        <Callout variant="banner" tone="warning" title="Deactivated">
+          This account cannot sign in. Activating it restores the roles and cameras it held.
+        </Callout>
+      ) : null}
+      {activate.isError ? <Failed error={activate.error} /> : null}
+
       <SectionRule
         lead
         order={2}
         label="Identity & account"
         detail="Who this is, and whether they can sign in right now."
       />
-      <Region order={2} style={{ marginBottom: 'var(--space-10)' }}>
-        <Plane className="uwv-figure-row" style={{ alignSelf: 'start' }}>
-          <Figure label="Email" scale="lead" value={user.email} detail="Signs in with this address" />
-          <Figure
-            label="Created"
-            scale="quiet"
-            value={when(user.created_at)}
-            detail="When the account was created"
+      <div className="uwv-arrive" data-order="2">
+        <Panel>
+          <FactList
+            items={[
+              { label: 'Email', value: user.email },
+              { label: 'Signs in', value: user.is_active ? 'Allowed' : 'Refused — deactivated' },
+              { label: 'Cameras', value: <ScopeSummary scope={user.camera_scope} /> },
+              { label: 'Created', value: when(user.created_at) },
+              { label: 'Last sign-in', value: when(user.last_login_at) },
+            ]}
           />
-          <Figure
-            label="Last sign-in"
-            scale="quiet"
-            value={when(user.last_login_at)}
-            detail="Most recent successful login"
-          />
-        </Plane>
-
-        <div style={{ marginTop: 'var(--space-6)', display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-          {user.is_active ? (
-            <Button
-              variant="danger"
-              loading={deactivate.isPending}
-              disabled={isSelf}
-              onClick={() => setConfirmDeactivate(true)}
-              title={isSelf ? 'You may not deactivate your own account' : undefined}
-            >
-              Deactivate
-            </Button>
-          ) : (
-            <Button variant="primary" loading={activate.isPending} onClick={() => activate.mutate()}>
-              Activate
-            </Button>
-          )}
-          {isSelf ? (
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-              This is your own account. Its access and activation state cannot be changed from
-              here — the server refuses self-modification.
-            </span>
-          ) : null}
-        </div>
-        {deactivate.isError ? <Failed error={deactivate.error} /> : null}
-        {activate.isError ? <Failed error={activate.error} /> : null}
-
-        <Modal
-          open={confirmDeactivate}
-          onClose={() => setConfirmDeactivate(false)}
-          title={`Deactivate ${user.email}?`}
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => setConfirmDeactivate(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                loading={deactivate.isPending}
-                onClick={() => deactivate.mutate()}
-              >
-                Deactivate
-              </Button>
-            </>
-          }
-        >
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
-            This account will be signed out and refused login immediately. It can be undone by
-            activating the account again, but if this is your organization's only administrator
-            it may leave nobody able to reverse it — check before continuing.
-          </p>
-        </Modal>
-      </Region>
+        </Panel>
+      </div>
 
       {/* ── Access: the matrix, this organization only ── */}
-      <SectionRule
-        order={3}
-        label="Access"
-        detail="What this person may do here, screen by screen, and which cameras they reach."
-      />
-      <Region order={3}>
+      <div id="access">
+        <SectionRule
+          order={3}
+          label="Access"
+          detail="What this person may do here, screen by screen, and which cameras they reach."
+        />
+      </div>
+      <section className="uwv-arrive" data-order="3">
         <PersonAccessPanel userId={user.id} isSelf={isSelf} />
-      </Region>
+      </section>
+
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title={`Deactivate ${user.email}?`}
+        confirmLabel="Deactivate"
+        tone="danger"
+        pending={deactivate.isPending}
+        error={
+          deactivate.isError
+            ? isApiError(deactivate.error)
+              ? deactivate.error.friendlyMessage
+              : 'The account could not be deactivated.'
+            : undefined
+        }
+        onConfirm={() => deactivate.mutate()}
+        onCancel={() => setConfirmDeactivate(false)}
+      >
+        <p>
+          This account will be signed out and refused login immediately. It can be undone by activating the account again,
+          but if this is your organization&apos;s only administrator it may leave nobody able to reverse it — check before
+          continuing.
+        </p>
+      </ConfirmDialog>
     </>
   );
 }

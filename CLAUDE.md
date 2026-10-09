@@ -77,6 +77,18 @@ Path aliases `@/ @app/ @shared/ @features/ @devtools/` are declared twice — `v
   `FindingReadout`). Compose from these rather than adding primitives. All iconography comes from
   `shared/ui/icons.tsx` (lucide components) — never Unicode glyphs, which rendered differently on a
   Windows workstation and a Linux kiosk.
+- **Design System 2.0 is how lists, acts and feedback work** (see the `design-system` skill for the
+  full table): `data-table.tsx` (`TableCard`, `TableToolbar`, `DataGrid`, `Pagination`, `useTableState`,
+  `useClientRows`), `overlays.tsx` (`DropdownMenu`, `ConfirmDialog`/`useConfirm`, `Popover`, `Tooltip`),
+  `feedback.tsx` (`useToast().success/error/…`, `Callout`), `forms.tsx` (`FormSection`, `FormActions`,
+  `Combobox`, `PasswordInput`…), `surfaces.tsx` (`Panel`, `MetricTile`, `ObjectTabs`, `ButtonLink`) and
+  `command.tsx` (Ctrl K palette, wired per shell in `shared/layout/shell-search.tsx`). The API has no
+  sort parameter, so **only lists the client holds whole are sortable**; server-paged lists show the
+  server's `total`. Every destructive act is a `ConfirmDialog`; every mutation ends in a toast. Sign-out
+  asks first (`useSignOut`). Each shell wraps its outlet in `PageErrorBoundary`.
+- **One typeface, self-hosted.** `@fontsource-variable/inter` (optical-size build) is imported in
+  `main.tsx` and served from this origin — never a font CDN; kitchens run on networks that cannot reach
+  one. `--font-sans` names "Inter Variable".
 - **The look lives in `styles/`.** `tokens.css` holds both themes (deep-purple navigation in *both*,
   lavender canvas and white cards in light, near-black purple in dark); the building blocks are classes
   in `global.css` (`uwv-btn`, `uwv-control`, `uwv-table`, `uwv-dialog`, `uwv-nav-*`…) because hover,

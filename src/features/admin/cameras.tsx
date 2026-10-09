@@ -29,19 +29,33 @@ import { recordersApi } from '@shared/api/recorders';
 import { PERMISSIONS } from '@app/permissions/permissions';
 import { PermissionGate, usePermissions } from '@app/permissions/guards';
 import {
-  Badge,
+  BulkActionBar,
+  DataGrid,
+  downloadCsv,
+  FilterChips,
+  Pagination,
+  TableCard,
+  TableToolbar,
+  useClientRows,
+  useTableState,
+  type FilterDefinition,
+  type GridColumn,
+} from '@shared/ui/data-table';
+import { Callout } from '@shared/ui/feedback';
+import { FormSection, Switch } from '@shared/ui/forms';
+import { ActionIcons, Icon, NavIcons } from '@shared/ui/icons';
+import { CopyButton } from '@shared/ui/overlays';
+import {
   Button,
-  type Column,
-  DataTable,
   EmptyState,
   Input,
   LoadingState,
   Modal,
   Select,
-  StatusBadge,
   useToast,
 } from '@shared/ui/primitives';
-import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { ButtonLink, MetricTile, Panel, StatusPill } from '@shared/ui/surfaces';
 
 import {
   CredentialState,
@@ -52,17 +66,18 @@ import {
   STREAM_LABEL,
   TestResult,
 } from './recorder-parts';
-import { DangerConfirm, Failed, ObjectTabs, SearchField, useDebounced, when } from './shared';
+import { DangerConfirm, Failed, ObjectTabs, when } from './shared';
 
 /* ── the list ─────────────────────────────────────────────────────────────── */
 
 export function AdminCamerasPage() {
   const { has } = usePermissions();
   const canManage = has(PERMISSIONS.manageCameras);
+  const navigate = useNavigate();
+  const client = useQueryClient();
+  const toast = useToast();
   const [editing, setEditing] = useState<Camera | null>(null);
-  const [search, setSearch] = useState('');
-  const [showing, setShowing] = useState<'all' | 'on' | 'off'>('all');
-  const q = useDebounced(search).trim().toLowerCase();
+  const table = useTableState('admin-cameras', { pageSize: 25 });
 
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
   const zones = useQuery({
@@ -76,80 +91,135 @@ export function AdminCamerasPage() {
     return (id: string) => byId.get(id) ?? '—';
   }, [zones.data]);
 
-  const rows = useMemo(() => {
-    let found = cameras.data?.cameras ?? [];
-    if (q) {
-      found = found.filter(
-        (camera) =>
-          camera.name.toLowerCase().includes(q) || camera.camera_key.toLowerCase().includes(q),
-      );
-    }
-    if (showing !== 'all') {
-      found = found.filter((camera) => (showing === 'on' ? camera.enabled : !camera.enabled));
-    }
-    return found;
-  }, [cameras.data, q, showing]);
+  const all = cameras.data?.cameras ?? [];
+  // The whole estate is on the client — the API returns it in one list — so
+  // searching, filtering, sorting and paging here are over every camera.
+  const view = useClientRows(all, table, {
+    text: (camera) => `${camera.name} ${camera.camera_key} ${camera.recorder_name ?? ''} ${zoneName(camera.zone_id)}`,
+    filterBy: {
+      streaming: (camera) => (camera.enabled ? 'on' : 'off'),
+      analysis: (camera) => (camera.analysis_enabled ? 'on' : 'off'),
+      zone: (camera) => camera.zone_id,
+      recorder: (camera) => camera.recorder_id,
+    },
+    sortBy: {
+      name: (camera) => camera.name.toLowerCase(),
+      zone: (camera) => zoneName(camera.zone_id).toLowerCase(),
+      recorder: (camera) => (camera.recorder_name ?? '').toLowerCase(),
+      channel: (camera) => camera.channel,
+      wall_fps: (camera) => (typeof camera.wall_fps === 'number' ? camera.wall_fps : null),
+    },
+  });
 
-  const columns: ReadonlyArray<Column<Camera>> = [
+  const filters: FilterDefinition[] = [
+    { id: 'streaming', label: 'Streaming', options: [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }] },
+    { id: 'analysis', label: 'AI analysis', options: [{ value: 'on', label: 'Analysed' }, { value: 'off', label: 'Not analysed' }] },
+    {
+      id: 'zone',
+      label: 'Zone',
+      options: [...new Set(all.map((camera) => camera.zone_id))].map((id) => ({ value: id, label: zoneName(id) })),
+    },
+    {
+      id: 'recorder',
+      label: 'Recorder',
+      options: [...new Map(all.map((camera) => [camera.recorder_id, camera.recorder_name || camera.recorder_id])).entries()].map(
+        ([value, label]) => ({ value, label }),
+      ),
+    },
+  ];
+
+  // Starting and stopping are acts with a reported outcome, one request per
+  // camera — the API has no batch form. The result names what did not happen.
+  const lifecycle = useMutation({
+    mutationFn: async ({ keys, act }: { keys: ReadonlyArray<string>; act: 'start' | 'stop' }) =>
+      Promise.allSettled(keys.map((key) => (act === 'start' ? camerasApi.start(key) : camerasApi.stop(key)))),
+    onSuccess: (results, { keys, act }) => {
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      const refused = results.filter(
+        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.available === false),
+      );
+      const done = keys.length - refused.length;
+      if (done > 0) toast.success(`${done} ${done === 1 ? 'camera' : 'cameras'} ${act === 'start' ? 'starting' : 'stopped'}`);
+      if (refused.length > 0) {
+        const first = refused[0]!;
+        toast.warning(`${refused.length} ${refused.length === 1 ? 'camera' : 'cameras'} did not ${act}`, {
+          description:
+            first.status === 'fulfilled' ? first.value.reason || undefined : friendly(first.reason, 'The request was refused.'),
+        });
+      }
+      table.setSelected(new Set());
+    },
+  });
+
+  const analysis = useMutation({
+    mutationFn: ({ camera, on }: { camera: Camera; on: boolean }) => camerasApi.setAnalysis(camera.camera_key, on),
+    onSuccess: (_, { camera, on }) => {
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      toast.success(on ? `${camera.name} is being analysed` : `${camera.name} streams without analysis`);
+    },
+    onError: (error) => toast.error('Analysis could not be changed', { description: friendly(error, '') || undefined }),
+  });
+
+  const columns: ReadonlyArray<GridColumn<Camera>> = [
     {
       key: 'name',
       header: 'Camera',
+      sortable: true,
       render: (camera) => (
-        <Link to={`/admin/cameras/${encodeURIComponent(camera.camera_key)}`}>{camera.name}</Link>
+        <span className="uwv-cell-primary">
+          <span className="uwv-metric-icon">
+            <Icon icon={NavIcons.cameras} size="control" />
+          </span>
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/admin/cameras/${encodeURIComponent(camera.camera_key)}`}>
+              {camera.name}
+            </Link>
+            <span className="uwv-cell-sub">{camera.camera_key}</span>
+          </span>
+        </span>
       ),
+      exportValue: (camera) => camera.name,
     },
-    { key: 'key', header: 'Key', render: (camera) => <Badge>{camera.camera_key}</Badge> },
-    { key: 'zone', header: 'Zone', render: (camera) => zoneName(camera.zone_id) },
+    { key: 'zone', header: 'Zone', sortable: true, render: (camera) => zoneName(camera.zone_id), exportValue: (camera) => zoneName(camera.zone_id) },
     // A channel number means nothing without the box it is a channel of.
     {
       key: 'recorder',
       header: 'Recorder',
+      sortable: true,
       render: (camera) => (
-        <Link to={`/admin/recorders/${encodeURIComponent(camera.recorder_id)}`}>
-          {camera.recorder_name || '—'}
-        </Link>
+        <Link to={`/admin/recorders/${encodeURIComponent(camera.recorder_id)}`}>{camera.recorder_name || '—'}</Link>
       ),
+      exportValue: (camera) => camera.recorder_name,
     },
-    { key: 'channel', header: 'Channel', render: (camera) => camera.channel },
+    { key: 'channel', header: 'Channel', numeric: true, sortable: true, render: (camera) => camera.channel, exportValue: (camera) => camera.channel },
     {
       key: 'state',
       header: 'Streaming',
-      render: (camera) => (
-        <StatusBadge tone={camera.enabled ? 'online' : 'idle'}>
-          {camera.enabled ? 'On' : 'Off'}
-        </StatusBadge>
-      ),
+      render: (camera) => <StatusPill tone={camera.enabled ? 'online' : 'idle'}>{camera.enabled ? 'On' : 'Off'}</StatusPill>,
+      exportValue: (camera) => (camera.enabled ? 'On' : 'Off'),
     },
     {
       key: 'analysis',
       header: 'Analysed',
-      render: (camera) => (camera.analysis_enabled ? 'Yes' : 'No'),
+      render: (camera) => (camera.analysis_enabled ? 'Yes' : <span className="uwv-cell-muted">No</span>),
+      exportValue: (camera) => (camera.analysis_enabled ? 'Yes' : 'No'),
     },
     {
       key: 'wall_fps',
       header: 'Live Wall',
       numeric: true,
+      sortable: true,
       // A server that does not send the rate is a rate nobody knows: a dash,
       // never "undefined fps" and never a guessed default.
       render: (camera) => (typeof camera.wall_fps === 'number' ? `${camera.wall_fps} fps` : '—'),
+      exportValue: (camera) => (typeof camera.wall_fps === 'number' ? camera.wall_fps : null),
     },
-    ...(canManage
-      ? [
-          {
-            key: 'edit',
-            header: 'Edit',
-            render: (camera: Camera) => (
-              <Button size="sm" aria-label={`Edit ${camera.name}`} onClick={() => setEditing(camera)}>
-                Edit
-              </Button>
-            ),
-          },
-        ]
-      : []),
   ];
 
-  const total = cameras.data?.cameras.length ?? 0;
+  const total = all.length;
   const on = cameras.data?.enabled ?? 0;
+  const analysed = all.filter((c) => c.enabled && c.analysis_enabled).length;
+  const selected = view.matched.filter((camera) => table.selected.has(camera.camera_key));
 
   return (
     <>
@@ -159,98 +229,199 @@ export function AdminCamerasPage() {
         standfirst="Every configured camera in this organization, whether or not it is currently switched on."
         actions={
           <PermissionGate permission={PERMISSIONS.manageCameras}>
-            <Link to="/admin/cameras/new">
-              <Button>Add a camera</Button>
-            </Link>
+            <ButtonLink to="/admin/cameras/new" variant="primary" icon={ActionIcons.add}>
+              Add a camera
+            </ButtonLink>
           </PermissionGate>
         }
       />
 
-      <Region order={2}>
-        <SectionRule label="The estate" />
-        <Plane>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(11rem, 100%), 1fr))',
-              gap: 'var(--space-6)',
-            }}
-          >
-            <Figure scale="lead" label="Configured" value={String(total)} />
-            <Figure
-              scale="lead"
-              label="Switched on"
-              value={`${on} of ${total}`}
-              detail="A camera that is off opens no connection and costs nothing."
-            />
-            <Figure
-              scale="lead"
-              label="Analysed"
-              value={String(
-                (cameras.data?.cameras ?? []).filter((c) => c.enabled && c.analysis_enabled).length,
-              )}
-              detail="Streaming and being processed by AI are two separate decisions."
-            />
-          </div>
-        </Plane>
-      </Region>
+      {cameras.data && total > 0 ? (
+        <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="The estate" style={{ marginBottom: 'var(--space-8)' }}>
+          <MetricTile label="Configured" icon={NavIcons.cameras} value={total} detail="Whether or not they are switched on" />
+          <MetricTile
+            label="Switched on"
+            icon={NavIcons.live}
+            value={on}
+            unit={`/ ${total}`}
+            detail="A camera that is off opens no connection and costs nothing."
+          />
+          <MetricTile
+            label="Analysed"
+            icon={NavIcons.modelEvaluation}
+            value={analysed}
+            detail="Streaming and being processed by AI are two separate decisions."
+          />
+        </section>
+      ) : null}
 
-      <Region order={3}>
-        <SectionRule
-          lead
-          label="Cameras"
-          actions={
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-3)',
-                alignItems: 'flex-end',
-                flexWrap: 'wrap',
-              }}
-            >
-              <SearchField
-                label="Search"
-                value={search}
-                placeholder="Name or key"
-                onChange={setSearch}
-              />
-              <Select
-                label="Showing"
-                value={showing}
-                onChange={(event) => setShowing(event.target.value as typeof showing)}
+      <section className="uwv-arrive" data-order="3" aria-label="Configured cameras">
+        <TableCard label="Cameras">
+          {total > 0 ? (
+          <TableToolbar
+            state={table}
+            searchLabel="Search cameras"
+            searchPlaceholder="Search by name, key, zone or recorder…"
+            filters={filters}
+            columns={columns}
+            actions={
+              <Button
+                variant="ghost"
+                icon={<Icon icon={ActionIcons.export} />}
+                disabled={view.matched.length === 0}
+                onClick={() => downloadCsv('cameras.csv', columns, view.matched)}
               >
-                <option value="all">All</option>
-                <option value="on">Switched on</option>
-                <option value="off">Switched off</option>
-              </Select>
-            </div>
-          }
-        />
-        <Plane>
-          {cameras.isLoading ? <LoadingState label="Reading cameras" /> : null}
-          {cameras.isError ? <Failed error={cameras.error} /> : null}
-          {cameras.data ? (
-            <DataTable
-              caption="Configured cameras"
-              columns={columns}
-              rows={rows}
-              rowKey={(camera) => camera.camera_key}
-              empty={
-                <EmptyState
-                  title={q || showing !== 'all' ? 'Nothing matches' : 'No cameras yet'}
-                  body={
-                    q || showing !== 'all'
-                      ? 'Try clearing the search or the filter.'
-                      : has(PERMISSIONS.manageCameras)
-                        ? 'Add one to start watching a kitchen.'
-                        : 'Nobody has added a camera to this organization yet.'
-                  }
-                />
-              }
+                Export
+              </Button>
+            }
+          />
+          ) : null}
+          <FilterChips filters={filters} state={table} />
+          {canManage ? (
+            <BulkActionBar count={table.selected.size} noun="cameras" onClear={() => table.setSelected(new Set())}>
+              {selected.some((c) => !c.enabled) ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Icon icon={ActionIcons.activate} />}
+                  loading={lifecycle.isPending}
+                  onClick={() => lifecycle.mutate({ keys: selected.filter((c) => !c.enabled).map((c) => c.camera_key), act: 'start' })}
+                >
+                  Start
+                </Button>
+              ) : null}
+              {selected.some((c) => c.enabled) ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Icon icon={ActionIcons.suspend} />}
+                  loading={lifecycle.isPending}
+                  onClick={() => lifecycle.mutate({ keys: selected.filter((c) => c.enabled).map((c) => c.camera_key), act: 'stop' })}
+                >
+                  Stop
+                </Button>
+              ) : null}
+              <Button size="sm" variant="secondary" onClick={() => downloadCsv('cameras-selected.csv', columns, selected)}>
+                Export CSV
+              </Button>
+            </BulkActionBar>
+          ) : null}
+          <DataGrid<Camera>
+            caption="Configured cameras"
+            columns={columns}
+            rows={view.page}
+            rowKey={(camera) => camera.camera_key}
+            hidden={table.hidden}
+            density={table.density}
+            sort={table.sort}
+            onSort={table.setSort}
+            loading={cameras.isLoading}
+            error={cameras.error}
+            onRetry={() => void cameras.refetch()}
+            narrowed={table.narrowed}
+            selection={
+              canManage
+                ? { selected: table.selected, onChange: table.setSelected, label: (camera) => `Select ${camera.name}` }
+                : undefined
+            }
+            rowActions={(camera) => [
+              {
+                id: 'view',
+                label: 'View camera',
+                icon: ActionIcons.view,
+                onSelect: () => navigate(`/admin/cameras/${encodeURIComponent(camera.camera_key)}`),
+              },
+              ...(canManage
+                ? [
+                    camera.enabled
+                      ? {
+                          id: 'stop',
+                          label: 'Stop streaming',
+                          icon: ActionIcons.suspend,
+                          onSelect: () => lifecycle.mutate({ keys: [camera.camera_key], act: 'stop' }),
+                        }
+                      : {
+                          id: 'start',
+                          label: 'Start streaming',
+                          icon: ActionIcons.activate,
+                          onSelect: () => lifecycle.mutate({ keys: [camera.camera_key], act: 'start' }),
+                        },
+                    {
+                      id: 'analysis',
+                      label: camera.analysis_enabled ? 'Stop AI analysis' : 'Analyse with AI',
+                      icon: NavIcons.modelEvaluation,
+                      onSelect: () => analysis.mutate({ camera, on: !camera.analysis_enabled }),
+                    },
+                    { id: 'sep', type: 'separator' as const },
+                    {
+                      id: 'retire',
+                      label: 'Retire…',
+                      icon: ActionIcons.remove,
+                      tone: 'danger' as const,
+                      disabled: !has(PERMISSIONS.retireCameras),
+                      hint: has(PERMISSIONS.retireCameras) ? 'Destroys its observation record' : 'Needs retire_cameras',
+                      onSelect: () => navigate(`/admin/cameras/${encodeURIComponent(camera.camera_key)}/lifecycle`),
+                    },
+                  ]
+                : []),
+            ]}
+            rowActionsLabel={(camera) => `Actions for ${camera.name}`}
+            rowInline={
+              canManage
+                ? (camera) => (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={<Icon icon={ActionIcons.edit} />}
+                      aria-label={`Edit ${camera.name}`}
+                      onClick={() => setEditing(camera)}
+                    >
+                      Edit
+                    </Button>
+                  )
+                : undefined
+            }
+            empty={
+              <EmptyState
+                title="No cameras yet"
+                body={
+                  canManage
+                    ? 'Add one to start watching a kitchen. You will need the recorder it is plugged into, and its channel.'
+                    : 'Nobody has added a camera to this organization yet.'
+                }
+                action={
+                  canManage ? (
+                    <ButtonLink to="/admin/cameras/new" variant="primary" size="sm" icon={ActionIcons.add}>
+                      Add a camera
+                    </ButtonLink>
+                  ) : undefined
+                }
+              />
+            }
+            noResults={
+              <EmptyState
+                title="Nothing matches"
+                body="Try clearing the search or the filters."
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
+              />
+            }
+          />
+          {view.total > 0 ? (
+            <Pagination
+              total={view.total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="cameras"
             />
           ) : null}
-        </Plane>
-      </Region>
+        </TableCard>
+      </section>
 
       {editing ? <EditCamera camera={editing} onClose={() => setEditing(null)} /> : null}
     </>
@@ -455,6 +626,8 @@ function EditCamera({ camera, onClose }: { camera: Camera; onClose: () => void }
 
 export function AdminCameraDetailPage() {
   const { cameraKey = '' } = useParams();
+  const { has } = usePermissions();
+  const [editing, setEditing] = useState(false);
 
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
   const camera = cameras.data?.cameras.find((c) => c.camera_key === cameraKey);
@@ -463,10 +636,10 @@ export function AdminCameraDetailPage() {
   if (cameras.isError) return <Failed error={cameras.error} />;
   if (!camera) {
     return (
-      <EmptyState
-        title="No such camera"
-        body={`Nothing in this organization is called ${cameraKey}.`}
-      />
+      <>
+        <PageIntro eyebrow="Cameras" back="/admin/cameras" title="Camera" />
+        <EmptyState title="No such camera" body={`Nothing in this organization is called ${cameraKey}.`} />
+      </>
     );
   }
 
@@ -475,38 +648,47 @@ export function AdminCameraDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Camera"
+        eyebrow="Cameras"
+        back="/admin/cameras"
         title={camera.name}
-        standfirst={
+        mark={<Icon icon={NavIcons.cameras} size="feature" />}
+        meta={
           <>
-            <Badge>{camera.camera_key}</Badge> · channel {camera.channel} ·{' '}
-            {camera.stream_type === 'main' ? 'main stream' : 'sub-stream'}
+            <StatusPill tone={camera.enabled ? 'online' : 'idle'}>{camera.enabled ? 'Streaming' : 'Off'}</StatusPill>
+            <StatusPill tone={camera.analysis_enabled ? 'online' : 'idle'}>
+              {camera.analysis_enabled ? 'Analysed' : 'Not analysed'}
+            </StatusPill>
+            <span className="uwv-page-meta-item">
+              <span className="uwv-id">{camera.camera_key}</span>
+              <CopyButton value={camera.camera_key} label="Copy camera key" />
+            </span>
+            <span className="uwv-page-meta-item">
+              Channel {camera.channel} · {camera.stream_type === 'main' ? 'main stream' : 'sub-stream'}
+            </span>
           </>
         }
-        meta={
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <StatusBadge tone={camera.enabled ? 'online' : 'idle'}>
-              {camera.enabled ? 'Streaming' : 'Off'}
-            </StatusBadge>
-            <StatusBadge tone={camera.analysis_enabled ? 'online' : 'idle'}>
-              {camera.analysis_enabled ? 'Analysed' : 'Not analysed'}
-            </StatusBadge>
-          </div>
+        actions={
+          has(PERMISSIONS.manageCameras) ? (
+            <Button variant="secondary" icon={<Icon icon={ActionIcons.edit} />} onClick={() => setEditing(true)}>
+              Edit details
+            </Button>
+          ) : null
         }
-        actions={<Link to="/admin/cameras">All cameras</Link>}
       />
 
+      <ObjectTabs
+        tabs={[
+          { to: base, label: 'Overview', end: true },
+          { to: `${base}/connection`, label: 'Connection' },
+          { to: `${base}/placement`, label: 'Placement' },
+          { to: `${base}/lifecycle`, label: 'Lifecycle' },
+        ]}
+      />
       <Region order={2}>
-        <ObjectTabs
-          tabs={[
-            { to: base, label: 'Overview', end: true },
-            { to: `${base}/connection`, label: 'Connection' },
-            { to: `${base}/placement`, label: 'Placement' },
-            { to: `${base}/lifecycle`, label: 'Lifecycle' },
-          ]}
-        />
         <CameraSection camera={camera} />
       </Region>
+
+      {editing ? <EditCamera camera={camera} onClose={() => setEditing(false)} /> : null}
     </>
   );
 }
@@ -522,6 +704,7 @@ function CameraSection({ camera }: { camera: Camera }) {
 
 function CameraOverview({ camera }: { camera: Camera }) {
   const client = useQueryClient();
+  const toast = useToast();
 
   // Starting is an act, not a setting: it opens a connection to a recorder and
   // begins processing pictures of people. The result says what happened —
@@ -533,6 +716,7 @@ function CameraOverview({ camera }: { camera: Camera }) {
     onSuccess: (result) => {
       setLifecycle(result);
       void client.invalidateQueries({ queryKey: ['cameras'] });
+      if (result.available) toast.success(`${camera.name} is starting`);
     },
   });
   const stop = useMutation({
@@ -540,75 +724,71 @@ function CameraOverview({ camera }: { camera: Camera }) {
     onSuccess: (result) => {
       setLifecycle(result);
       void client.invalidateQueries({ queryKey: ['cameras'] });
+      if (result.available) toast.success(`${camera.name} stopped`);
     },
   });
   const setAnalysis = useMutation({
     mutationFn: (on: boolean) => camerasApi.setAnalysis(camera.camera_key, on),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ['cameras'] }),
+    onSuccess: (_, on) => {
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      toast.success(on ? 'AI analysis switched on' : 'AI analysis switched off');
+    },
   });
 
   return (
-    <>
-      <SectionRule
-        lead
-        label="What this camera is doing"
-        detail="Two switches, and they are genuinely independent."
-      />
-      <Plane>
-        <div style={{ display: 'grid', gap: 'var(--space-6)', maxWidth: '38rem' }}>
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-            <div>
-              <strong>{camera.enabled ? 'Watching' : 'Not watching'}</strong>
-              <p style={{ margin: 'var(--space-1) 0 0', color: 'var(--ink-secondary)' }}>
-                {camera.enabled
-                  ? 'This camera is dialled and appears on the wall.'
-                  : 'Nothing is connected to this camera. Start it to open the stream.'}
-              </p>
+    <div className="uwv-detail-grid">
+      <div className="uwv-stack">
+        <Panel title="What this camera is doing" description="Two switches, and they are genuinely independent.">
+          <div className="uwv-stack" data-gap="md">
+            <div className="uwv-danger-row">
+              <div className="uwv-danger-row-text">
+                <p className="uwv-danger-row-title">{camera.enabled ? 'Watching' : 'Not watching'}</p>
+                <p className="uwv-danger-row-description">
+                  {camera.enabled
+                    ? 'This camera is dialled and appears on the wall.'
+                    : 'Nothing is connected to this camera. Start it to open the stream.'}
+                </p>
+              </div>
+              <PermissionGate permission={PERMISSIONS.manageCameras}>
+                {camera.enabled ? (
+                  <Button variant="secondary" icon={<Icon icon={ActionIcons.suspend} />} loading={stop.isPending} onClick={() => stop.mutate()}>
+                    Stop
+                  </Button>
+                ) : (
+                  <Button variant="primary" icon={<Icon icon={ActionIcons.activate} />} loading={start.isPending} onClick={() => start.mutate()}>
+                    Start watching
+                  </Button>
+                )}
+              </PermissionGate>
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-              {camera.enabled ? (
-                <Button variant="secondary" disabled={stop.isPending} onClick={() => stop.mutate()}>
-                  {stop.isPending ? 'Stopping…' : 'Stop'}
-                </Button>
-              ) : (
-                <Button disabled={start.isPending} onClick={() => start.mutate()}>
-                  {start.isPending ? 'Starting…' : 'Start watching'}
-                </Button>
-              )}
+            {lifecycle && lifecycle.reason ? (
+              <Callout tone={lifecycle.available ? 'info' : 'warning'} live>
+                {lifecycle.reason}
+              </Callout>
+            ) : null}
+            <div className="uwv-danger-row">
+              <Toggle
+                title="Analyse the video with AI"
+                body="When on, frames are processed and findings are produced. A camera can stream without this — a corridor is worth watching and not worth paying detection for."
+                checked={camera.analysis_enabled}
+                pending={setAnalysis.isPending}
+                onChange={(next) => setAnalysis.mutate(next)}
+              />
             </div>
-            {lifecycle && !lifecycle.available ? (
-              <p role="status" style={{ margin: 0, color: 'var(--health-degraded, inherit)' }}>
-                {lifecycle.reason}
-              </p>
+            {camera.enabled && !camera.analysis_enabled ? (
+              <Callout tone="neutral">
+                This camera streams to the wall and raises nothing. That is a deliberate state, not a fault.
+              </Callout>
             ) : null}
-            {lifecycle && lifecycle.available && lifecycle.reason ? (
-              <p role="status" style={{ margin: 0, color: 'var(--ink-secondary)' }}>
-                {lifecycle.reason}
-              </p>
-            ) : null}
+            {start.isError ? <Failed error={start.error} /> : null}
+            {stop.isError ? <Failed error={stop.error} /> : null}
+            {setAnalysis.isError ? <Failed error={setAnalysis.error} /> : null}
           </div>
-          <Toggle
-            title="Analyse the video with AI"
-            body="When on, frames are processed and findings are produced. A camera can stream without this — a corridor is worth watching and not worth paying detection for."
-            checked={camera.analysis_enabled}
-            pending={setAnalysis.isPending}
-            onChange={(next) => setAnalysis.mutate(next)}
-          />
-          {camera.enabled && !camera.analysis_enabled ? (
-            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
-              This camera streams to the wall and raises nothing. That is a deliberate state, not
-              a fault.
-            </p>
-          ) : null}
-          {start.isError ? <Failed error={start.error} /> : null}
-          {stop.isError ? <Failed error={stop.error} /> : null}
-          {setAnalysis.isError ? <Failed error={setAnalysis.error} /> : null}
-        </div>
-      </Plane>
+        </Panel>
+      </div>
 
-      <div style={{ marginTop: 'var(--space-8)' }}>
-        <SectionRule label="Identity" />
-        <Plane>
+      <div className="uwv-stack">
+        <Panel title="Identity" description="What it is called, and how the platform tells it apart.">
           <Facts
             rows={[
               ['Name', camera.name],
@@ -616,16 +796,10 @@ function CameraOverview({ camera }: { camera: Camera }) {
               [
                 'Runtime id',
                 <>
-                  <code>{camera.runtime_id}</code>
-                  <span
-                    style={{
-                      display: 'block',
-                      color: 'var(--ink-tertiary)',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  >
-                    Globally unique. Two organizations may each have a <code>cam-01</code>; this
-                    is what keeps them apart everywhere it matters.
+                  <span className="uwv-id">{camera.runtime_id}</span>
+                  <span className="uwv-type-caption" style={{ display: 'block', marginTop: 'var(--space-1)' }}>
+                    Globally unique. Two organizations may each have a <code>cam-01</code>; this is what keeps them apart
+                    everywhere it matters.
                   </span>
                 </>,
               ],
@@ -635,9 +809,9 @@ function CameraOverview({ camera }: { camera: Camera }) {
               ['Last changed', when(camera.updated_at)],
             ]}
           />
-        </Plane>
+        </Panel>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -904,12 +1078,12 @@ function CameraLifecycle({ camera }: { camera: Camera }) {
 
   return (
     <>
-      <SectionRule
-        lead
-        label="Retire this camera"
-        detail="Irreversible, and it destroys more than the camera."
-      />
-      <Plane>
+      <SectionRule lead label="Lifecycle" detail="What ends a camera, and what that costs." />
+      <FormSection
+        tone="danger"
+        title="Retire this camera"
+        description="Irreversible, and it destroys more than the camera."
+      >
         <PermissionGate
           permission={PERMISSIONS.retireCameras}
           fallback={
@@ -946,7 +1120,7 @@ function CameraLifecycle({ camera }: { camera: Camera }) {
             </div>
           ) : null}
         </PermissionGate>
-      </Plane>
+      </FormSection>
     </>
   );
 }
@@ -970,43 +1144,29 @@ function Toggle({
     <PermissionGate
       permission={PERMISSIONS.manageCameras}
       fallback={
-        <div>
-          <strong style={{ display: 'block' }}>{title}</strong>
-          <StatusBadge tone={checked ? 'online' : 'idle'}>{checked ? 'On' : 'Off'}</StatusBadge>
+        <div className="uwv-switch-row" style={{ width: '100%' }}>
+          <span className="uwv-check-text">
+            <span className="uwv-check-label">{title}</span>
+            <span className="uwv-check-description">{body}</span>
+          </span>
+          <StatusPill tone={checked ? 'online' : 'idle'}>{checked ? 'On' : 'Off'}</StatusPill>
         </div>
       }
     >
-      <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={pending}
-          onChange={(event) => onChange(event.target.checked)}
-          style={{ marginTop: '0.3rem' }}
-        />
-        <span>
-          <strong style={{ display: 'block' }}>{title}</strong>
-          <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>{body}</span>
-        </span>
-      </label>
+      <div style={{ width: '100%' }}>
+        <Switch label={title} description={body} checked={checked} disabled={pending} onChange={onChange} />
+      </div>
     </PermissionGate>
   );
 }
 
 function Facts({ rows }: { rows: ReadonlyArray<[string, React.ReactNode]> }) {
   return (
-    <dl
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)',
-        gap: 'var(--space-3) var(--space-6)',
-        margin: 0,
-      }}
-    >
+    <dl className="uwv-fact-rows">
       {rows.map(([term, value]) => (
-        <div key={term} style={{ display: 'contents' }}>
-          <dt style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>{term}</dt>
-          <dd style={{ margin: 0, minWidth: 0 }}>{value}</dd>
+        <div key={term}>
+          <dt>{term}</dt>
+          <dd>{value}</dd>
         </div>
       ))}
     </dl>

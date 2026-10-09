@@ -20,8 +20,10 @@
  * statement of what the product is. Whatever impression the application makes,
  * it made it here first, and it was making none.
  *
- * It is now a two-panel composition. The right panel is the form, unchanged in
- * behaviour and unchanged in what it discloses. The left panel is the product
+ * It is a two-panel composition. The right panel is the form, unchanged in
+ * behaviour and unchanged in what it discloses — now a card with a theme
+ * switch, a password that can be read back, and a Caps Lock warning. The left
+ * panel sits on the navigation's deep purple in both themes, and is the product
  * saying what it is — and it says it with the one thing that genuinely
  * distinguishes this platform from a monitoring dashboard: that it reports four
  * observation states rather than two, and that "the camera could not see this"
@@ -36,8 +38,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, type LoginFailure } from '@app/auth/AuthProvider';
 import { STATES, type ObservationState } from '@shared/semantics/observation';
+import { ThemeToggle } from '@shared/layout/shell-parts';
+import { Callout } from '@shared/ui/feedback';
+import { PasswordInput } from '@shared/ui/forms';
+import { Icon, StateIcons, StatusIcons } from '@shared/ui/icons';
 import { Button, Input, LoadingState } from '@shared/ui/primitives';
-import { Icon, StateIcons } from '@shared/ui/icons';
 
 /** The order the platform itself lists them in: decided first, then not. */
 const LEGEND: ObservationState[] = ['present', 'absent', 'not_visible', 'unknown'];
@@ -110,183 +115,92 @@ export function LoginPage() {
   }
 
   return (
-    <div className="uwv-auth">
+    <div className="uwv-signin">
       {/* ── The statement ─────────────────────────────────────────────────── */}
-      <section className="uwv-auth-statement uwv-arrive" data-order="1">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <Aperture size={40} />
-          <div>
-            <div
-              style={{
-                fontSize: 'var(--text-lg)',
-                fontWeight: 'var(--weight-semibold)',
-                letterSpacing: 'var(--tracking-tight)',
-              }}
-            >
-              UnityWorks Vision AI
-            </div>
-            <div
-              style={{
-                fontWeight: 'var(--weight-semibold)',
-                fontSize: 'var(--text-2xs)',
-                letterSpacing: 'var(--tracking-wider)',
-                textTransform: 'uppercase',
-                color: 'var(--ink-tertiary)',
-                marginTop: 2,
-              }}
-            >
-              Kitchen safety monitoring
-            </div>
-          </div>
+      <aside className="uwv-signin-brand" aria-label="About UnityWorks Vision AI">
+        <div className="uwv-signin-brand-top">
+          <span className="uwv-signin-mark">
+            <Aperture size={22} />
+          </span>
+          <span className="uwv-signin-brand-name">
+            <span>UnityWorks Vision AI</span>
+            <span className="uwv-signin-brand-sub">Kitchen safety monitoring</span>
+          </span>
         </div>
 
-        <p
-          style={{
-            marginTop: 'var(--space-12)',
-            fontSize: 'clamp(1.5rem, 0.9rem + 2vw, var(--text-3xl))',
-            lineHeight: 1.25,
-            letterSpacing: 'var(--tracking-display)',
-            fontWeight: 'var(--weight-semibold)',
-            maxWidth: '18ch',
-            textWrap: 'balance',
-          }}
-        >
-          A camera that could not see is not a camera that saw nothing.
-        </p>
+        <div className="uwv-signin-brand-body uwv-arrive" data-order="1">
+          <p className="uwv-signin-headline">
+            A camera that could not see is not a camera that saw <em>nothing</em>.
+          </p>
+          <p className="uwv-signin-lede">
+            Vision AI reports four observation states, not two, and never collapses them — so “the camera could not
+            see this” can never read as “this was not there”.
+          </p>
 
-        <p
-          style={{
-            marginTop: 'var(--space-5)',
-            maxWidth: 'var(--measure-tight)',
-            color: 'var(--ink-secondary)',
-            lineHeight: 'var(--leading-relaxed)',
-          }}
-        >
-          This platform reports four observation states, not two, and never
-          collapses them. Every figure it shows carries the coverage behind it.
-        </p>
+          <ul className="uwv-signin-states" aria-label="Observation states">
+            {LEGEND.map((key) => {
+              const descriptor = STATES[key];
+              return (
+                <li key={key} className="uwv-signin-state" style={{ ['--state-tone' as string]: descriptor.colorVar }}>
+                  <span className="uwv-signin-state-icon" aria-hidden="true">
+                    <Icon icon={StateIcons[key]} size="control" />
+                  </span>
+                  <span className="uwv-signin-state-text">
+                    <span className="uwv-signin-state-label">{descriptor.label}</span>
+                    <span className="uwv-signin-state-description">{descriptor.description}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
 
-        <ul
-          aria-label="Observation states"
-          style={{
-            marginTop: 'var(--space-10)',
-            display: 'grid',
-            gap: 'var(--space-3)',
-            maxWidth: '30rem',
-          }}
-        >
-          {LEGEND.map((key) => {
-            const descriptor = STATES[key];
-            return (
-              <li
-                key={key}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.25rem 7.5rem 1fr',
-                  alignItems: 'baseline',
-                  gap: 'var(--space-3)',
-                  paddingTop: 'var(--space-3)',
-                  borderTop: '1px solid var(--line-subtle)',
-                  fontSize: 'var(--text-xs)',
-                }}
-              >
-                <span
-                  style={{ color: descriptor.colorVar, display: 'flex', flexShrink: 0, alignSelf: 'center' }}
-                >
-                  <Icon icon={StateIcons[key]} size="inline" />
-                </span>
-                <span
-                  style={{
-                    fontWeight: 'var(--weight-semibold)',
-                    fontSize: 'var(--text-2xs)',
-                    letterSpacing: 'var(--tracking-wide)',
-                    textTransform: 'uppercase',
-                    color: descriptor.colorVar,
-                  }}
-                >
-                  {descriptor.label}
-                </span>
-                <span style={{ color: 'var(--ink-tertiary)' }}>{descriptor.description}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+        <p className="uwv-signin-brand-foot">Every figure it shows carries the coverage behind it.</p>
+      </aside>
 
       {/* ── The form ──────────────────────────────────────────────────────── */}
-      <main className="uwv-auth-form uwv-arrive" data-order="2">
-        <div style={{ width: 'min(23rem, 100%)' }}>
+      <main className="uwv-signin-main">
+        <div className="uwv-signin-toolbar">
           {/* At narrow widths the statement panel is gone, so the mark has to
               be here instead — a sign-in screen with nothing on it that names
               the product is a sign-in screen a user cannot trust. */}
-          <div className="uwv-auth-compact-mark">
-            <Aperture size={32} />
-            <h1
-              style={{
-                fontSize: 'var(--text-md)',
-                fontWeight: 'var(--weight-semibold)',
-                letterSpacing: 'var(--tracking-tight)',
-              }}
-            >
-              UnityWorks Vision AI
-            </h1>
-          </div>
+          <span className="uwv-signin-compact">
+            <span className="uwv-signin-mark" data-size="sm">
+              <Aperture size={16} />
+            </span>
+            <span>UnityWorks Vision AI</span>
+          </span>
+          <ThemeToggle />
+        </div>
 
-          <div className="uwv-auth-wide-title">
-            <h1
-              style={{
-                fontSize: 'var(--text-xl)',
-                letterSpacing: 'var(--tracking-tight)',
-                marginBottom: 'var(--space-1)',
-              }}
-            >
-              Sign in
-            </h1>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-tertiary)' }}>
-              Use the account your organization issued you.
-            </p>
-          </div>
+        <div className="uwv-signin-card uwv-arrive" data-order="2">
+          <h1 className="uwv-signin-title">Sign in</h1>
+          <p className="uwv-signin-subtitle">Use the account your organization issued you.</p>
 
           {endedReason ? (
-            <div
-              role="status"
-              style={{
-                marginTop: 'var(--space-6)',
-                padding: 'var(--space-3) var(--space-4)',
-                border: '1px solid var(--health-degraded)',
-                background: 'var(--health-degraded-wash)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 'var(--text-sm)',
-              }}
-            >
-              {endedReason === 'expired'
-                ? 'Your session ended. Sign in to continue.'
-                : 'Your access changed. Sign in again to continue.'}
+            <div className="uwv-signin-notice">
+              <Callout tone="warning" live>
+                {endedReason === 'expired'
+                  ? 'Your session ended. Sign in to continue.'
+                  : 'Your access changed. Sign in again to continue.'}
+              </Callout>
             </div>
           ) : null}
 
-          <form
-            onSubmit={onSubmit}
-            style={{
-              marginTop: 'var(--space-6)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-4)',
-            }}
-          >
+          <form onSubmit={onSubmit} className="uwv-signin-form">
             <Input
               label="Email"
               type="email"
               name="email"
               autoComplete="username"
+              placeholder="name@company.com"
               required
               autoFocus
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
-            <Input
+            <PasswordInput
               label="Password"
-              type="password"
               name="password"
               autoComplete="current-password"
               required
@@ -294,45 +208,27 @@ export function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
             />
 
+            {/* \`role="alert"\` so a screen reader is told immediately. A visual
+                message a blind user never hears is not an error message. */}
             {failure ? (
-              <div
-                // `role="alert"` so a screen reader is told immediately. A visual
-                // message a blind user never hears is not an error message.
-                role="alert"
-                style={{
-                  padding: 'var(--space-3) var(--space-4)',
-                  border: '1px solid var(--state-absent)',
-                  background: 'var(--state-absent-wash)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 'var(--text-sm)',
-                  color: 'var(--state-absent)',
-                }}
-              >
+              <Callout tone="error" live>
                 {failure.message}
-              </div>
+              </Callout>
             ) : null}
 
             {/* type=submit so Enter works from either field, without a keydown handler. */}
-            <Button
-              type="submit"
-              variant="primary"
-              loading={busy}
-              style={{ width: '100%', marginTop: 'var(--space-2)' }}
-            >
+            <Button type="submit" variant="primary" loading={busy} className="uwv-signin-submit">
               {busy ? 'Signing in' : 'Sign in'}
             </Button>
           </form>
 
-          <p
-            style={{
-              marginTop: 'var(--space-8)',
-              fontSize: 'var(--text-xs)',
-              color: 'var(--ink-tertiary)',
-            }}
-          >
-            Access is granted by your organization administrator.
+          <p className="uwv-signin-help">
+            <Icon icon={StatusIcons.guarantee} size="inline" />
+            Access is granted by your organization administrator — ask them if you cannot sign in.
           </p>
         </div>
+
+        <p className="uwv-signin-legal">UnityWorks Vision AI</p>
       </main>
     </div>
   );
@@ -342,25 +238,14 @@ export function LoginPage() {
  * The mark, at sign-in scale.
  *
  * Four viewfinder ticks around a lit centre — the same device the camera tiles
- * carry, and the same one in the corner of the shell. One idea, three sizes.
+ * carry, and the same one in the corner of the shell and in the browser tab.
+ * One idea, every size.
  */
 function Aperture({ size }: { size: number }) {
   return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 20 20"
-      fill="none"
-      style={{ flexShrink: 0, display: 'block' }}
-    >
-      <path
-        d="M1 6V1h5M14 1h5v5M19 14v5h-5M6 19H1v-5"
-        stroke="var(--accent)"
-        strokeWidth="1.6"
-        strokeLinecap="square"
-      />
-      <circle cx="10" cy="10" r="2.6" fill="var(--accent)" />
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0, display: 'block' }}>
+      <path d="M1 6V1h5M14 1h5v5M19 14v5h-5M6 19H1v-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+      <circle cx="10" cy="10" r="2.6" fill="currentColor" />
     </svg>
   );
 }

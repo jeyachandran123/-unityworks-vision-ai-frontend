@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom';
 
 import { roleLabel } from '@app/permissions/permissions';
 import type { ActivityDay, ActivityRow, FleetRow } from '@shared/api/platform';
-import { AttentionIcons, ControlIcons, Icon, PlatformIcons, type LucideIcon } from '@shared/ui/icons';
+import { AttentionIcons, ControlIcons, DataIcons, Icon, PlatformIcons, type LucideIcon } from '@shared/ui/icons';
 import { Button, EmptyState, StatusBadge, type HealthTone } from '@shared/ui/primitives';
 import { GoTo } from '@shared/ui/product';
 
@@ -83,6 +83,58 @@ export function AttentionList({ items }: { items: QueueItem[] }) {
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * What to do when nothing needs doing: the platform's own first acts, each a
+ * road to the page that does it. Shown in the attention panel's empty half
+ * only when the queue is clear — never beside a queue that has rows.
+ */
+export function QuickActions({ onSearch }: { onSearch: () => void }) {
+  const items = [
+    { to: '/platform/organizations?new=1', title: 'Create an organization', detail: 'Onboard a customer. It starts active and empty.', icon: PlatformIcons.created },
+    { to: '/platform/people/new', title: 'Add a person', detail: 'An account, its home, and what it may do — reviewed first.', icon: PlatformIcons.memberAdded },
+    { to: '/platform/roles', title: 'Create an Organization Admin', detail: 'The person who runs a customer, in one step.', icon: PlatformIcons.adminCreated },
+  ];
+  return (
+    <div>
+      <div className="uwv-mini-label" style={{ marginBottom: 'var(--space-3)' }}>
+        Shortcuts
+      </div>
+      <ul className="uwv-queue">
+        {items.map((item) => (
+          <li key={item.to}>
+            <Road to={item.to} className="uwv-queue-row">
+              <span style={{ color: 'var(--accent)', display: 'flex', flexShrink: 0 }}>
+                <Icon icon={item.icon} size="inline" />
+              </span>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span className="uwv-queue-title">{item.title}</span>
+                <span className="uwv-queue-detail">{item.detail}</span>
+              </span>
+              <span className="uwv-queue-go" aria-hidden="true">
+                <Icon icon={ControlIcons.goTo} size="inline" />
+              </span>
+            </Road>
+          </li>
+        ))}
+        <li>
+          <button type="button" className="uwv-queue-row" onClick={onSearch} style={{ width: '100%', border: 0, background: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+            <span style={{ color: 'var(--accent)', display: 'flex', flexShrink: 0 }}>
+              <Icon icon={DataIcons.search} size="inline" />
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span className="uwv-queue-title">Find a customer or a person</span>
+              <span className="uwv-queue-detail">Search everything — Ctrl K from any page.</span>
+            </span>
+            <span className="uwv-queue-go" aria-hidden="true">
+              <Icon icon={ControlIcons.goTo} size="inline" />
+            </span>
+          </button>
+        </li>
+      </ul>
     </div>
   );
 }
@@ -194,7 +246,7 @@ export function RingGauge({ value, total, label }: { value: number; total: numbe
         y="31"
         textAnchor="middle"
         style={{
-          fontFamily: 'var(--font-mono)',
+          fontFamily: 'var(--font-sans)',
           fontSize: '10px',
           fontWeight: 600,
           fill: 'var(--ink-secondary)',
@@ -295,7 +347,7 @@ function LiveShare({ row }: { row: FleetRow }) {
   const share = row.cameras_live / row.cameras_enabled;
   return (
     <span style={{ display: 'grid', gap: 6, minWidth: '7.5rem' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
         <strong style={{ color: 'var(--ink-primary)', fontWeight: 'var(--weight-semibold)' }}>{row.cameras_live}</strong>
         <span className="uwv-quiet-ink"> / {row.cameras_enabled} live</span>
       </span>
@@ -354,7 +406,7 @@ export function FleetTable({ rows, now }: { rows: FleetRow[]; now: Date }) {
                         {row.name}
                       </Link>
                       <span style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <span className="uwv-quiet-ink" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)' }}>
+                        <span className="uwv-quiet-ink">
                           {row.slug}
                         </span>
                         {flags.map((flag) => (

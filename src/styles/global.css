@@ -1139,49 +1139,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-fill); 
    the accessibility tree either.
    ──────────────────────────────────────────────────────────────────────────── */
 
-.uwv-auth {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  background: var(--ground);
-}
-.uwv-auth-statement { display: none; }
-.uwv-auth-form {
-  display: grid;
-  place-items: center;
-  padding: var(--space-8) var(--space-6);
-  background: var(--surface-base);
-}
-.uwv-auth-compact-mark {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-8);
-}
-.uwv-auth-wide-title { display: none; }
-
-@media (min-width: 62rem) {
-  .uwv-auth { grid-template-columns: minmax(0, 1.15fr) minmax(26rem, 0.85fr); }
-  .uwv-auth-statement {
-    /* Fills the column and centres its own content, rather than being a
-       centred box. A centred box let the panel's gradient end mid-screen and
-       painted two hard bands of --ground above and below it. */
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: var(--space-16) var(--space-12);
-    background: var(--atmosphere);
-    min-width: 0;
-  }
-  .uwv-auth-form {
-    background: var(--surface-raised);
-    border-left: 1px solid var(--line-default);
-    justify-items: start;
-    padding: var(--space-16) var(--space-12);
-  }
-  .uwv-auth-compact-mark { display: none; }
-  .uwv-auth-wide-title { display: block; }
-}
+/* The sign-in screen moved to `components.css` (`uwv-signin*`) with its 2026-10 redesign. */
 
 
 /* ────────────────────────────────────────────────────────────────────────────

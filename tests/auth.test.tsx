@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppRouter } from '@app/router/AppRouter';
 import { api, getAccessToken, refreshAccessToken, __resetClient } from '@shared/api/client';
@@ -137,8 +137,30 @@ describe('logout', () => {
     await user.click(screen.getByRole('button', { name: /dev user/i }));
     await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
 
+    // Asked first: on a shared kitchen screen an accidental sign-out costs the
+    // next person a password they may not have.
+    const dialog = await screen.findByRole('alertdialog', { name: 'Sign out?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Sign out' }));
+
     await waitFor(() => expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument());
     expect(getAccessToken()).toBeNull();
+  });
+
+  it('keeps the session when the question is cancelled', async () => {
+    installFetch();
+    const user = userEvent.setup();
+
+    renderApp(<AppRouter />, '/dashboard');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /dev user/i }));
+    await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Sign out?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument();
+    expect(getAccessToken()).not.toBeNull();
   });
 });
 

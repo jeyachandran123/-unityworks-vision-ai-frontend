@@ -68,7 +68,9 @@ import {
   StatusBadge,
   type HealthTone,
 } from '@shared/ui/primitives';
-import { Icon, ControlIcons } from '@shared/ui/icons';
+import { ActionIcons, Icon, ControlIcons } from '@shared/ui/icons';
+import { BrandMark, ThemeToggle } from '@shared/layout/shell-parts';
+import { useSignOut } from '@shared/layout/shell-search';
 
 const TONE: Record<string, HealthTone> = {
   active: 'online',
@@ -172,25 +174,10 @@ export function OrganizationChooser() {
         }}
       >
         <header style={{ marginBottom: 'var(--space-8)' }}>
-          <div
-            style={{
-              fontWeight: 'var(--weight-semibold)',
-              fontSize: 'var(--text-2xs)',
-              letterSpacing: 'var(--tracking-wider)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-tertiary)',
-            }}
-          >
-            Platform
-          </div>
-          <h1
-            style={{
-              margin: 'var(--space-2) 0 0',
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--weight-semibold)',
-              letterSpacing: 'var(--tracking-tight)',
-            }}
-          >
+          {/* Not "Platform": most people here are members choosing between their
+              own organizations, and the control plane is a different place. */}
+          <span className="uwv-area-label">Your organizations</span>
+          <h1 className="uwv-page-title" style={{ marginTop: 'var(--space-1)' }}>
             Choose an organization
           </h1>
           <p
@@ -343,8 +330,7 @@ function OrganizationCard({
           <div
             style={{
               marginTop: 2,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--text-2xs)',
+              fontSize: 'var(--text-xs)',
               color: 'var(--ink-tertiary)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -393,23 +379,20 @@ function OrganizationCard({
           gap: 'var(--space-3)',
         }}
       >
-        <Button onClick={onOpen} disabled={disabled || archived} size="sm">
-          {busy ? 'Opening…' : active ? 'Continue' : 'Enter organization'}
+        <Button
+          onClick={onOpen}
+          disabled={disabled || archived}
+          loading={busy}
+          size="sm"
+          variant={active ? 'primary' : 'secondary'}
+          icon={<Icon icon={ActionIcons.enter} />}
+        >
+          {active ? 'Continue' : 'Enter organization'}
         </Button>
         {/* Said before the click, not discovered after it: the Platform Admin
             goes in with full access, and the organization's trail records it. */}
         {operator && !archived ? (
-          <span
-            style={{
-              fontWeight: 'var(--weight-semibold)',
-              fontSize: 'var(--text-2xs)',
-              letterSpacing: 'var(--tracking-wide)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-tertiary)',
-            }}
-          >
-            Full access · recorded
-          </span>
+          <span className="uwv-type-caption">Full access · recorded</span>
         ) : null}
       </div>
     </li>
@@ -419,15 +402,7 @@ function OrganizationCard({
 function Count({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <dt
-        style={{
-          fontWeight: 'var(--weight-semibold)',
-          fontSize: 'var(--text-2xs)',
-          letterSpacing: 'var(--tracking-wider)',
-          textTransform: 'uppercase',
-          color: 'var(--ink-tertiary)',
-        }}
-      >
+      <dt className="uwv-type-label" style={{ color: 'var(--ink-tertiary)' }}>
         {label}
       </dt>
       <dd
@@ -446,7 +421,8 @@ function Count({ label, value }: { label: string; value: number }) {
 
 /** The identity bar. No navigation on it — there is nowhere to navigate yet. */
 function Masthead() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const signOut = useSignOut('your organizations');
   return (
     <header
       style={{
@@ -459,14 +435,13 @@ function Masthead() {
         background: 'var(--surface-raised)',
       }}
     >
-      <span
-        style={{
-          fontSize: 'var(--text-sm)',
-          fontWeight: 'var(--weight-semibold)',
-          letterSpacing: 'var(--tracking-tight)',
-        }}
-      >
-        UnityWorks Vision AI
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+        <span className="uwv-chooser-mark" aria-hidden="true">
+          <BrandMark />
+        </span>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', letterSpacing: 'var(--tracking-tight)' }}>
+          UnityWorks Vision AI
+        </span>
       </span>
       <span style={{ flex: 1 }} />
       <span
@@ -481,7 +456,8 @@ function Masthead() {
       >
         {user?.display_name || user?.subject}
       </span>
-      <Button variant="ghost" size="sm" onClick={() => void logout()}>
+      <ThemeToggle />
+      <Button variant="ghost" size="sm" icon={<Icon icon={ActionIcons.signOut} />} onClick={() => void signOut()}>
         Sign out
       </Button>
     </header>

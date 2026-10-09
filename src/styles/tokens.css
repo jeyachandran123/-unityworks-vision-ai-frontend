@@ -161,12 +161,15 @@
 
   /* ── Type ── */
   /**
-   * No webfont, deliberately. This product runs inside restaurants, often on a
-   * network that cannot reach a font CDN and sometimes on one that must not.
-   * Inter where the machine has it, then the platform's own best UI face.
+   * One face: Inter, self-hosted. It is bundled from `@fontsource-variable/inter`
+   * (imported in `main.tsx`) and served from this origin, never a font CDN —
+   * this product runs inside restaurants, on networks that often cannot reach
+   * one and sometimes must not. The optical-size axis is loaded too, so a page
+   * title gets Inter's display cut and a table cell its text cut from the same
+   * file. The platform faces after it are only a fallback for the first paint.
    */
-  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: "Inter Display", "Inter", "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Cascadia Code", Menlo, Consolas, monospace;
 
   --text-2xs: 0.6875rem;
@@ -262,6 +265,36 @@
    * Repeated in `AppShell`'s matchMedia call; a test asserts the two agree.
    */
   --shell-breakpoint: 62rem;
+
+  /**
+   * Feedback tones: what a toast, a callout or a confirmation is saying. Named
+   * for the message, pointed at the colours that already mean it — success is
+   * the healthy green, danger the absent red, warning the degraded amber, and
+   * information the brand — so a theme re-pointing those re-points these.
+   */
+  --feedback-success: var(--health-online);
+  --feedback-success-wash: color-mix(in srgb, var(--health-online) 12%, transparent);
+  --feedback-warning: var(--health-degraded);
+  --feedback-warning-wash: var(--health-degraded-wash);
+  --feedback-danger: var(--state-absent);
+  --feedback-danger-wash: var(--state-absent-wash);
+  --feedback-info: var(--accent);
+  --feedback-info-wash: var(--accent-wash);
+
+  /** The solid destructive button: white on red at 4.5:1 in both themes. */
+  --danger-fill: #d4314b;
+  --danger-fill-hover: #c02640;
+
+  /** Type roles beyond the page title: the scale every surface draws from. */
+  --type-display: clamp(2rem, 1.4rem + 1.8vw, 2.5rem);
+  --type-h3: 0.9375rem;
+  --type-h4: 0.8125rem;
+  --type-body-lg: 0.9375rem;
+  --type-body: 0.875rem;
+  --type-body-sm: 0.8125rem;
+  --type-label: 0.75rem;
+  --type-caption: 0.75rem;
+  --type-table: 0.8125rem;
 
   /** Focus. One ring everywhere, drawn as an outline so it follows the radius. */
   --focus-ring-color: var(--accent);

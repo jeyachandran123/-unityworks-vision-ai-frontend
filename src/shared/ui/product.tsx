@@ -36,10 +36,12 @@
  */
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, type HealthTone, type Severity } from './primitives';
 import {
   AttentionIcons,
   ControlIcons,
+  DataIcons,
   Icon,
   SeverityIcons,
   StatusIcons,
@@ -84,10 +86,11 @@ export function Eyebrow({
 /**
  * A page opening. Every page in the product opens this way.
  *
- * The area the page belongs to, then the title at display scale, then the
- * meta on its own line; the standfirst and the page's actions sit beside the
- * title on a wide screen and follow it on a narrow one, which is the correct
- * reading order — the sentence explains the title.
+ * Identity on the left — the area (or, on an object's page, the list it came
+ * from, as a link back), the title, and any mark that identifies the object —
+ * and the page's acts on the right, level with the title: one primary act,
+ * the rest quieter, anything further behind "•••". The sentence that explains
+ * the title follows it, then the facts (status, id, dates) on one line.
  */
 export function PageIntro({
   eyebrow,
@@ -95,73 +98,44 @@ export function PageIntro({
   standfirst,
   meta,
   actions,
+  back,
+  mark,
 }: {
   eyebrow: string;
   title: string;
   standfirst?: ReactNode;
   meta?: ReactNode;
   actions?: ReactNode;
+  /** On an object's page: the list it belongs to. Makes the area label a way back. */
+  back?: string;
+  /** A mark identifying the object — initials, an icon — beside the title. */
+  mark?: ReactNode;
 }) {
   return (
-    <header
-      className="uwv-section-head uwv-arrive"
-      data-lead="true"
-      data-order="1"
-      style={{ marginBottom: 'var(--space-8)' }}
-    >
-      {/* 'start', not 'end': a grid row's 'end' bottom-aligns both columns to
-          whichever is taller, and a long standfirst would push the title down
-          with it. The title is always flush with the top of the opening. */}
-      <div className="uwv-lead" style={{ alignItems: 'start' }}>
-        <div style={{ minWidth: 0 }}>
-          <span className="uwv-area-label">{eyebrow}</span>
-          <h1 className="uwv-page-title" style={{ marginTop: 'var(--space-2)' }}>
-            {title}
-          </h1>
-          {meta ? (
-            <div
-              style={{
-                marginTop: 'var(--space-4)',
-                display: 'flex',
-                gap: 'var(--space-2) var(--space-4)',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
-            >
-              {meta}
-            </div>
+    <header className="uwv-section-head uwv-arrive uwv-page-header" data-lead="true" data-order="1">
+      <div className="uwv-page-header-top">
+        <div className="uwv-page-header-identity">
+          {mark ? (
+            <span className="uwv-page-mark" aria-hidden="true">
+              {mark}
+            </span>
           ) : null}
-        </div>
-
-        {standfirst || actions ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: 'var(--space-4)',
-              minWidth: 0,
-              paddingTop: 'var(--space-1)',
-            }}
-          >
-            {standfirst ? (
-              <p
-                style={{
-                  maxWidth: 'var(--measure-tight)',
-                  color: 'var(--ink-secondary)',
-                  fontSize: 'var(--text-sm)',
-                  lineHeight: 'var(--leading-relaxed)',
-                }}
-              >
-                {standfirst}
-              </p>
-            ) : null}
-            {actions ? (
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div>
-            ) : null}
+          <div className="uwv-page-header-titles">
+            {back ? (
+              <Link to={back} className="uwv-area-label uwv-back-link">
+                <Icon icon={DataIcons.previous} size="inline" />
+                {eyebrow}
+              </Link>
+            ) : (
+              <span className="uwv-area-label">{eyebrow}</span>
+            )}
+            <h1 className="uwv-page-title">{title}</h1>
           </div>
-        ) : null}
+        </div>
+        {actions ? <div className="uwv-page-header-actions">{actions}</div> : null}
       </div>
+      {standfirst ? <p className="uwv-page-standfirst">{standfirst}</p> : null}
+      {meta ? <div className="uwv-page-meta">{meta}</div> : null}
     </header>
   );
 }

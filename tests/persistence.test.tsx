@@ -186,7 +186,9 @@ describe('the incident queue', () => {
     await screen.findByRole('heading', { name: 'Incidents' });
     // The empty state must say why an empty queue might not mean what it looks
     // like. "No violations" and "not watching" must never look the same.
-    expect(screen.getByText(/nothing was observed rather than nothing happened/i)).toBeInTheDocument();
+    // The heading arrives before the queue does (the page shows skeleton rows
+    // while it reads), so the empty state is waited for rather than assumed.
+    expect(await screen.findByText(/nothing was observed rather than nothing happened/i)).toBeInTheDocument();
   });
 
   it('shows evidence as a count, never as a thumbnail that loads itself', async () => {

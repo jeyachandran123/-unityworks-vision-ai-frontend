@@ -126,12 +126,12 @@ describe('user detail: identity and account', () => {
     await screen.findByRole('heading', { name: /manager/i });
     await user.click(screen.getByRole('button', { name: 'Deactivate' }));
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(/signed out and refused login immediately/i)).toBeInTheDocument();
     expect(calls.some((c) => c.includes('/deactivate'))).toBe(false);
 
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(calls.some((c) => c.includes('/deactivate'))).toBe(false);
   });
 
@@ -148,7 +148,7 @@ describe('user detail: identity and account', () => {
 
     await screen.findByRole('heading', { name: /manager/i });
     await user.click(screen.getByRole('button', { name: 'Deactivate' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
 
     await waitFor(() =>

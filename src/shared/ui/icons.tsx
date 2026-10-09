@@ -36,6 +36,27 @@
 import type { CSSProperties } from 'react';
 import {
   Activity,
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronLeft,
+  Columns3,
+  Copy,
+  CirclePause,
+  CirclePlay,
+  Ellipsis,
+  Eye,
+  ListFilter,
+  LogOut,
+  Plus,
+  Rows3,
+  Search,
+  Trash2,
+  CornerDownLeft,
+  Download,
+  UserRound,
   Armchair,
   ArrowRight,
   Ban,
@@ -405,4 +426,86 @@ export const PlatformIcons = {
   down: TrendingDown,
   /** The same as the week before. */
   level: Minus,
+} as const;
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Working with data
+
+   The controls every list shares — find, narrow, sort, choose columns, page —
+   and the acts a row offers. One icon per verb, so the same act looks the same
+   on every table in the product.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export const DataIcons = {
+  /** Find within a list, or across the product. */
+  search: Search,
+  /** Narrow a list by a property. */
+  filter: ListFilter,
+  /** Choose which columns a table shows. */
+  columns: Columns3,
+  /** How tightly rows are packed. */
+  density: Rows3,
+  /** More acts on this row or this object. */
+  more: Ellipsis,
+  /** A column that can be sorted, not sorted yet. */
+  sortable: ArrowUpDown,
+  /** Sorted, smallest first. */
+  ascending: ArrowUp,
+  /** Sorted, largest first. */
+  descending: ArrowDown,
+  /** Back one page. */
+  previous: ChevronLeft,
+  /** On one page. */
+  next: ChevronRight,
+  /** A control that opens a list of choices. */
+  expand: ChevronDown,
+  /** Take a filter away, or clear a field. */
+  clear: X,
+  /** Choose the highlighted result. */
+  enter: CornerDownLeft,
+}  as const;
+
+export const ActionIcons = {
+  /** Create a new thing. */
+  add: Plus,
+  /** Open an object's own page. Also: show a password. */
+  view: Eye,
+  /** Hide a password that is being shown. */
+  hide: EyeOff,
+  /** Change a name or a field. */
+  edit: PencilLine,
+  /** Put the value on the clipboard. */
+  copy: Copy,
+  /** Copied — the clipboard holds it now. */
+  copied: Check,
+  /** Pause something that can be resumed: suspend an organization. */
+  suspend: CirclePause,
+  /** Resume it. */
+  activate: CirclePlay,
+  /** Retire it, keeping everything: archive. */
+  archive: Archive,
+  /** Remove it. Always behind a confirmation. */
+  remove: Trash2,
+  /** Enter an organization. */
+  enter: LogIn,
+  /** End the session. */
+  signOut: LogOut,
+  /** Read again. */
+  refresh: RefreshCw,
+  /** Write the rows to a file. */
+  export: Download,
+} as const;
+
+/** The kinds of object a search can find. */
+export const EntityIcons = {
+  person: UserRound,
+  organization: Building2,
+} as const;
+
+/** The four tones a notification or a callout can carry, each with its own shape. */
+export const FeedbackIcons = {
+  success: CircleCheck,
+  error: CircleX,
+  warning: TriangleAlert,
+  info: Info,
 } as const;

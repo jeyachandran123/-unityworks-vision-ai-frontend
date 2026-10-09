@@ -35,9 +35,8 @@
  * badge here would be describing plumbing that does not exist.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 
 import {
   evidenceApi,
@@ -52,17 +51,21 @@ import {
   failedConditions,
   observedAt,
 } from '@shared/semantics/finding';
+import { BulkActionBar } from '@shared/ui/data-table';
+import { useToast } from '@shared/ui/feedback';
+import { Checkbox, SearchInput } from '@shared/ui/forms';
 import {
   Button,
-  Card,
   EmptyState,
   ErrorState,
   LoadingState,
   SeverityBadge,
   Spinner,
-  StatusBadge,
+  Tabs,
+  type Severity,
 } from '@shared/ui/primitives';
-import { Icon, StatusIcons } from '@shared/ui/icons';
+import { ActionIcons, AttentionIcons, Icon, SeverityIcons, StatusIcons } from '@shared/ui/icons';
+import { ButtonLink, MetricTile, StatusPill } from '@shared/ui/surfaces';
 import {
   PageIntro,
 } from '@shared/ui/product';
@@ -380,130 +383,147 @@ export function EvidenceExhibit({ evidenceRef }: { evidenceRef: string }) {
 
 /* ── one alert ────────────────────────────────────────────────────────────── */
 
-function AlertCard({ incident }: { incident: Incident }) {
+function sinceLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (Number.isNaN(minutes)) return null;
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} d ago`;
+}
+
+function AlertCard({
+  incident,
+  selected,
+  onSelect,
+}: {
+  incident: Incident;
+  selected: boolean;
+  onSelect: (next: boolean) => void;
+}) {
   const client = useQueryClient();
+  const toast = useToast();
   const [showEvidence, setShowEvidence] = useState(false);
+  const titleId = useId();
 
   const acknowledge = useMutation({
     mutationFn: () => incidentsApi.acknowledge(incident.id),
     // Refetched rather than patched locally: the durable status lives on the
     // server, and a card that only looks acknowledged would lie after a reload.
-    onSuccess: () => client.invalidateQueries({ queryKey: ['alerts'] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['alerts'] });
+      toast.success('Alert acknowledged', { description: `${cameraLabel(incident.camera_key)} — it stays in the queue until resolved.` });
+    },
+    onError: (error) =>
+      toast.error('The alert could not be acknowledged', {
+        description: isApiError(error) ? error.friendlyMessage : undefined,
+      }),
   });
 
   const failed = failedConditions(incident);
   const evidenceRef = incident.evidence_refs[0];
+  const severity = (['critical', 'high', 'medium', 'low', 'info'].includes(incident.severity) ? incident.severity : 'info') as Severity;
+  const title = failed.length
+    ? failed.map((c) => `Missing ${attributeLabel(c.attribute).toLowerCase()}`).join(' · ')
+    : incident.summary || 'PPE violation';
+  const since = sinceLabel(incident.observed_at);
 
   return (
-    <Card>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-        <div
-          style={{
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-            gap: 'var(--space-3)', flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 'var(--text-base)', fontWeight: 600,
-                color: 'var(--ink-primary)',
-              }}
-            >
-              {failed.length
-                ? failed.map((c) => `Missing ${attributeLabel(c.attribute).toLowerCase()}`).join(' · ')
-                : incident.summary || 'PPE violation'}
-            </div>
-            <div
-              style={{
-                marginTop: 'var(--space-1)', fontSize: 'var(--text-sm)',
-                color: 'var(--ink-secondary)',
-              }}
-            >
-              {cameraLabel(incident.camera_key)} · {observedAt(incident)}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-            <SeverityBadge severity={incident.severity as never} />
-            <StatusBadge tone={incident.status === 'active' ? 'offline' : 'degraded'}>
+    <li className="uwv-alert" data-severity={severity} data-status={incident.status} data-selected={selected ? 'true' : undefined}>
+      <div className="uwv-alert-select">
+        <Checkbox label="Select alert" hideLabel checked={selected} onChange={onSelect} aria-describedby={titleId} />
+      </div>
+      <span className="uwv-alert-icon" aria-hidden="true">
+        <Icon icon={SeverityIcons[severity]} size="control" />
+      </span>
+      <div className="uwv-alert-main">
+        <div className="uwv-alert-head">
+          <p className="uwv-alert-title" id={titleId}>
+            {title}
+          </p>
+          <span className="uwv-alert-badges">
+            <SeverityBadge severity={severity} />
+            <StatusPill tone={incident.status === 'active' ? 'offline' : 'degraded'}>
               {incident.status === 'active' ? 'Active' : 'Acknowledged'}
-            </StatusBadge>
-          </div>
+            </StatusPill>
+          </span>
         </div>
+        <p className="uwv-alert-meta">
+          {cameraLabel(incident.camera_key)} · {observedAt(incident)}
+          {since ? <span className="uwv-alert-since"> · open {since}</span> : null}
+        </p>
 
         {failed.length > 0 && (
-          <div
-            style={{
-              display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)',
-              fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
+          <div className="uwv-alert-conditions">
             {failed.map((c) => (
-              <span
-                key={c.attribute}
-                style={{
-                  padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                  background: 'var(--surface-sunken, rgb(0 0 0 / 0.06))',
-                }}
-              >
+              <span key={c.attribute} className="uwv-permission-chip">
                 {c.attribute} = {c.observed}
               </span>
             ))}
           </div>
         )}
 
-        {showEvidence && evidenceRef ? <EvidenceExhibit evidenceRef={evidenceRef} /> : null}
+        {showEvidence && evidenceRef ? (
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <EvidenceExhibit evidenceRef={evidenceRef} />
+          </div>
+        ) : null}
 
-        <div
-          style={{
-            display: 'flex', gap: 'var(--space-2)', alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          {evidenceRef ? (
-            <Button size="sm" variant="secondary" onClick={() => setShowEvidence((v) => !v)}>
-              {showEvidence ? 'Hide evidence' : 'View evidence'}
-            </Button>
-          ) : (
-            // Said plainly rather than shown as a broken image. A violation
-            // without a frame is still a violation to act on.
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-              No evidence image was captured
-            </span>
-          )}
-
-          <Link to="/incidents" style={{ textDecoration: 'none' }}>
-            <Button size="sm" variant="secondary">View incident</Button>
-          </Link>
-
+        <div className="uwv-alert-actions">
           {incident.status === 'active' && (
             <Button
               size="sm"
+              variant="primary"
+              icon={<Icon icon={StatusIcons.guarantee} />}
               loading={acknowledge.isPending}
               onClick={() => acknowledge.mutate()}
             >
               Acknowledge
             </Button>
           )}
+          {evidenceRef ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Icon icon={ActionIcons.view} />}
+              aria-expanded={showEvidence}
+              onClick={() => setShowEvidence((v) => !v)}
+            >
+              {showEvidence ? 'Hide evidence' : 'View evidence'}
+            </Button>
+          ) : (
+            // Said plainly rather than shown as a broken image. A violation
+            // without a frame is still a violation to act on.
+            <span className="uwv-type-caption">No evidence image was captured</span>
+          )}
 
-          <span
-            style={{
-              marginLeft: 'auto', fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--text-2xs)', color: 'var(--ink-tertiary)',
-            }}
-          >
+          <ButtonLink to={`/incidents/${encodeURIComponent(incident.id)}`} size="sm" variant="ghost">
+            Open incident
+          </ButtonLink>
+
+          <span className="uwv-alert-ref">
             {incident.rule_id} · {incident.id.slice(0, 8)}
           </span>
         </div>
       </div>
-    </Card>
+    </li>
   );
 }
 
 /* ── the page ─────────────────────────────────────────────────────────────── */
 
+type View = 'all' | 'active' | 'acknowledged';
+
 export function AlertsPage() {
+  const client = useQueryClient();
+  const toast = useToast();
+  const [view, setView] = useState<View>('all');
+  const [severities, setSeverities] = useState<ReadonlySet<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+
   const alerts = useQuery({
     queryKey: ['alerts'],
     // Active and acknowledged both need attention; only a resolved incident
@@ -529,6 +549,31 @@ export function AlertsPage() {
     });
   }, [alerts.data]);
 
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return ordered.filter((incident) => {
+      if (view !== 'all' && incident.status !== view) return false;
+      if (severities.size > 0 && !severities.has(incident.severity)) return false;
+      if (!needle) return true;
+      const words = `${cameraLabel(incident.camera_key)} ${incident.camera_key} ${incident.summary} ${failedConditions(incident)
+        .map((c) => `${c.attribute} ${attributeLabel(c.attribute)}`)
+        .join(' ')}`.toLowerCase();
+      return words.includes(needle);
+    });
+  }, [ordered, view, severities, search]);
+
+  const acknowledgeMany = useMutation({
+    mutationFn: async (ids: ReadonlyArray<string>) => Promise.allSettled(ids.map((id) => incidentsApi.acknowledge(id))),
+    onSuccess: (results) => {
+      void client.invalidateQueries({ queryKey: ['alerts'] });
+      const done = results.filter((r) => r.status === 'fulfilled').length;
+      const failedCount = results.length - done;
+      if (done > 0) toast.success(`${done} ${done === 1 ? 'alert' : 'alerts'} acknowledged`);
+      if (failedCount > 0) toast.error(`${failedCount} could not be acknowledged`);
+      setSelected(new Set());
+    },
+  });
+
   const retry = useCallback(() => void alerts.refetch(), [alerts]);
 
   if (alerts.isPending) return <LoadingState label="Loading alerts" />;
@@ -543,6 +588,14 @@ export function AlertsPage() {
   }
 
   const active = ordered.filter((i) => i.status === 'active').length;
+  const acknowledged = ordered.length - active;
+  const urgent = ordered.filter((i) => i.severity === 'critical' || i.severity === 'high').length;
+  const oldest = ordered.reduce<string | null>(
+    (min, incident) => (incident.observed_at && (!min || incident.observed_at < min) ? incident.observed_at : min),
+    null,
+  );
+  const selectedActive = shown.filter((i) => selected.has(i.id) && i.status === 'active');
+  const severityOptions = ['critical', 'high', 'medium', 'low'].filter((s) => ordered.some((i) => i.severity === s));
 
   return (
     <>
@@ -551,9 +604,11 @@ export function AlertsPage() {
         title="Alerts"
         standfirst="Open compliance violations, most urgent first. An alert is raised only when a covering was positively observed to be missing — never when a camera could not see."
         meta={
-          <StatusBadge tone={active > 0 ? 'offline' : 'online'}>
-            {active} active
-          </StatusBadge>
+          <>
+            <StatusPill tone={active > 0 ? 'offline' : 'online'}>{active} active</StatusPill>
+            {acknowledged > 0 ? <StatusPill tone="degraded">{acknowledged} acknowledged</StatusPill> : null}
+            <span className="uwv-page-meta-item">Refreshes every {ALERT_POLL_MS / 1000} seconds</span>
+          </>
         }
       />
 
@@ -563,11 +618,102 @@ export function AlertsPage() {
           body="No compliance violation is currently open. This is a real reading of the incident queue, refreshed every few seconds — not a placeholder."
         />
       ) : (
-        <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-          {ordered.map((incident) => (
-            <AlertCard key={incident.id} incident={incident} />
-          ))}
-        </div>
+        <>
+          <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="The queue" style={{ marginBottom: 'var(--space-6)' }}>
+            <MetricTile label="Waiting for acknowledgement" icon={AttentionIcons.critical} value={active} detail="Nobody has said they have seen these" detailTone={active > 0 ? 'danger' : 'success'} />
+            <MetricTile label="Acknowledged, open" icon={StatusIcons.guarantee} value={acknowledged} detail="Seen, not yet resolved" />
+            <MetricTile label="Critical or high" icon={SeverityIcons.high} value={urgent} detail="Across both" detailTone={urgent > 0 ? 'warning' : undefined} />
+            <MetricTile label="Oldest open" icon={StatusIcons.awaiting} value={sinceLabel(oldest) ?? null} unavailableReason="No observation time recorded" detail="Since it was observed" />
+          </section>
+
+          <section className="uwv-datatable uwv-arrive" data-order="3" aria-label="Open alerts">
+            <div className="uwv-datatable-toolbar">
+              <Tabs
+                label="Which alerts"
+                active={view}
+                onChange={(next) => {
+                  setView(next as View);
+                  setSelected(new Set());
+                }}
+                tabs={[
+                  { id: 'all', label: `All · ${ordered.length}` },
+                  { id: 'active', label: `Unacknowledged · ${active}` },
+                  { id: 'acknowledged', label: `Seen · ${acknowledged}` },
+                ]}
+              />
+              <div className="uwv-datatable-search">
+                <SearchInput label="Search alerts" placeholder="Camera or attribute…" value={search} onChange={setSearch} />
+              </div>
+              {severityOptions.length > 1 ? (
+                <div role="group" aria-label="Severity" className="uwv-severity-chips">
+                  {severityOptions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className="uwv-chip"
+                      aria-pressed={severities.has(s)}
+                      onClick={() => {
+                        const next = new Set(severities);
+                        if (next.has(s)) next.delete(s);
+                        else next.add(s);
+                        setSeverities(next);
+                      }}
+                    >
+                      {s[0]!.toUpperCase() + s.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {selected.size > 0 ? (
+              <BulkActionBar count={selected.size} noun="alerts" onClear={() => setSelected(new Set())}>
+                {selectedActive.length > 0 ? (
+                  <Button size="sm" variant="primary" loading={acknowledgeMany.isPending} onClick={() => acknowledgeMany.mutate(selectedActive.map((i) => i.id))}>
+                    Mark {selectedActive.length} as seen
+                  </Button>
+                ) : (
+                  <span className="uwv-type-caption">Every selected alert is already acknowledged.</span>
+                )}
+              </BulkActionBar>
+            ) : null}
+            {shown.length === 0 ? (
+              <div className="uwv-datatable-state">
+                <EmptyState
+                  title="Nothing in this view"
+                  body="Every open alert is filtered out. Clear the search or the severity to see them."
+                  action={
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSearch('');
+                        setSeverities(new Set());
+                        setView('all');
+                      }}
+                    >
+                      Show every open alert
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <ol className="uwv-alert-list" aria-label="Open alerts, most urgent first">
+                {shown.map((incident) => (
+                  <AlertCard
+                    key={incident.id}
+                    incident={incident}
+                    selected={selected.has(incident.id)}
+                    onSelect={(on) => {
+                      const next = new Set(selected);
+                      if (on) next.add(incident.id);
+                      else next.delete(incident.id);
+                      setSelected(next);
+                    }}
+                  />
+                ))}
+              </ol>
+            )}
+          </section>
+        </>
       )}
     </>
   );

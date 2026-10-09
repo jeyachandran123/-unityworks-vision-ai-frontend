@@ -40,8 +40,19 @@ import {
   recordersApi,
 } from '@shared/api/recorders';
 import {
+  DataGrid,
+  Pagination,
+  TableCard,
+  TableToolbar,
+  useTableState,
+  type GridColumn,
+} from '@shared/ui/data-table';
+import { Callout } from '@shared/ui/feedback';
+import { FormSection } from '@shared/ui/forms';
+import { ActionIcons, Icon, NavIcons } from '@shared/ui/icons';
+import { ConfirmDialog } from '@shared/ui/overlays';
+import {
   Button,
-  type Column,
   EmptyState,
   Input,
   KeyValue,
@@ -52,7 +63,7 @@ import {
   useToast,
 } from '@shared/ui/primitives';
 import { PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
-import { PAGE_SIZE, PagedTable } from '@shared/ui/table';
+import { PAGE_SIZE } from '@shared/ui/table';
 
 import {
   type AddressDraft,
@@ -84,50 +95,84 @@ const ACTIONS = { display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alig
 
 export function RecordersPage() {
   const navigate = useNavigate();
+  const client = useQueryClient();
+  const toast = useToast();
   const organization = useOrganizationName();
-  const [offset, setOffset] = useState(0);
+  const { has } = usePermissions();
+  const canManage = has(PERMISSIONS.manageCameras);
+  const table = useTableState('admin-recorders', { pageSize: PAGE_SIZE });
+  const [removing, setRemoving] = useState<Recorder | null>(null);
+
   const recorders = useQuery({
-    queryKey: ['recorders', offset],
-    queryFn: () => recordersApi.list({ limit: PAGE_SIZE, offset }),
+    queryKey: ['recorders', table.offset, table.pageSize],
+    queryFn: () => recordersApi.list({ limit: table.pageSize, offset: table.offset }),
+    placeholderData: (previous) => previous,
   });
 
-  const columns: ReadonlyArray<Column<Recorder>> = [
+  const toggle = useMutation({
+    mutationFn: (recorder: Recorder) =>
+      recorder.is_active ? recordersApi.deactivate(recorder.id) : recordersApi.activate(recorder.id),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ['recorders'] });
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      toast.success(result.is_active ? `${result.name} is active` : `${result.name} is deactivated`, {
+        description: result.is_active
+          ? 'Its switched-on cameras are starting.'
+          : 'Its cameras have stopped and keep their settings.',
+      });
+    },
+    onError: (error) => toast.error(friendly(error, 'That did not work. Try again.')),
+  });
+
+  const remove = useMutation({
+    mutationFn: (recorder: Recorder) => recordersApi.remove(recorder.id),
+    onSuccess: (_, recorder) => {
+      void client.invalidateQueries({ queryKey: ['recorders'] });
+      setRemoving(null);
+      toast.success(`${recorder.name} removed`);
+    },
+  });
+
+  const columns: ReadonlyArray<GridColumn<Recorder>> = [
     {
       key: 'name',
       header: 'Recorder',
       render: (recorder) => (
-        <div style={{ display: 'grid', gap: '0.1rem' }}>
-          <Link to={`/admin/recorders/${encodeURIComponent(recorder.id)}`}>{recorder.name}</Link>
-          <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>
-            {recorder.brand_label}
+        <span className="uwv-cell-primary">
+          <span className="uwv-metric-icon">
+            <Icon icon={NavIcons.integrations} size="control" />
           </span>
-        </div>
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/admin/recorders/${encodeURIComponent(recorder.id)}`}>
+              {recorder.name}
+            </Link>
+            <span className="uwv-cell-sub">{recorder.brand_label}</span>
+          </span>
+        </span>
       ),
     },
-    {
-      key: 'address',
-      header: 'Address',
-      render: (recorder) => <RecorderAddress recorder={recorder} />,
-    },
+    { key: 'address', header: 'Address', render: (recorder) => <RecorderAddress recorder={recorder} /> },
     {
       key: 'cameras',
       header: 'Cameras',
       render: (recorder) =>
-        recorder.camera_count === 0
-          ? 'None yet'
-          : `${recorder.camera_count} · ${recorder.cameras_on} on`,
+        recorder.camera_count === 0 ? (
+          <span className="uwv-cell-muted">None yet</span>
+        ) : (
+          `${recorder.camera_count} · ${recorder.cameras_on} on`
+        ),
     },
     { key: 'password', header: 'Password', render: (recorder) => <CredentialState recorder={recorder} /> },
     { key: 'status', header: 'Status', render: (recorder) => <RecorderStatus active={recorder.is_active} /> },
   ];
 
-  if (recorders.isLoading) return <LoadingState label="Reading recorders" />;
-  if (recorders.isError) return <Failed error={recorders.error} />;
+  if (recorders.isError && !recorders.data) return <Failed error={recorders.error} />;
 
   const page = recorders.data;
+  const total = page?.total ?? 0;
   const add = (
     <PermissionGate permission={PERMISSIONS.manageCameras}>
-      <Button variant="primary" onClick={() => navigate('/admin/recorders/new')}>
+      <Button variant="primary" icon={<Icon icon={ActionIcons.add} />} onClick={() => navigate('/admin/recorders/new')}>
         Add recorder
       </Button>
     </PermissionGate>
@@ -141,24 +186,88 @@ export function RecordersPage() {
         standfirst={`A recorder is the DVR or NVR your cameras are plugged into. Add it once with the details you use to sign in to it, then choose which of its cameras to watch.${organization ? ` These are ${organization}’s recorders; no other organization can see or use them.` : ''}`}
         actions={add}
       />
-      <Region order={2}>
-        <PagedTable<Recorder>
-          columns={columns}
-          rows={page?.recorders ?? []}
-          rowKey={(recorder) => recorder.id}
-          caption="Recorders in this organization"
-          paging={{ limit: PAGE_SIZE, offset, total: page?.total ?? 0 }}
-          onPage={setOffset}
-          busy={recorders.isFetching}
-          empty={
-            <EmptyState
-              title="No recorders yet"
-              body="Add the DVR or NVR your cameras plug into. You will need its IP address or domain, and the username and password you use to sign in to it."
-              action={add}
+      <section className="uwv-arrive" data-order="2" aria-label="Recorders in this organization">
+        <TableCard label="Recorders">
+          {total > 0 ? <TableToolbar state={table} columns={columns} /> : null}
+          <DataGrid<Recorder>
+            caption="Recorders in this organization"
+            columns={columns}
+            rows={page?.recorders ?? []}
+            rowKey={(recorder) => recorder.id}
+            hidden={table.hidden}
+            density={table.density}
+            loading={recorders.isLoading}
+            onRowOpen={(recorder) => navigate(`/admin/recorders/${encodeURIComponent(recorder.id)}`)}
+            rowActions={(recorder) => [
+              {
+                id: 'view',
+                label: 'View recorder',
+                icon: ActionIcons.view,
+                onSelect: () => navigate(`/admin/recorders/${encodeURIComponent(recorder.id)}`),
+              },
+              ...(canManage
+                ? [
+                    recorder.is_active
+                      ? {
+                          id: 'deactivate',
+                          label: 'Deactivate',
+                          icon: ActionIcons.suspend,
+                          hint: 'Stops its cameras, keeps their settings',
+                          onSelect: () => toggle.mutate(recorder),
+                        }
+                      : { id: 'activate', label: 'Activate', icon: ActionIcons.activate, onSelect: () => toggle.mutate(recorder) },
+                    { id: 'sep', type: 'separator' as const },
+                    {
+                      id: 'remove',
+                      label: 'Remove…',
+                      icon: ActionIcons.remove,
+                      tone: 'danger' as const,
+                      disabled: recorder.camera_count > 0,
+                      hint: recorder.camera_count > 0 ? 'It has cameras — deactivate it instead' : undefined,
+                      onSelect: () => {
+                        remove.reset();
+                        setRemoving(recorder);
+                      },
+                    },
+                  ]
+                : []),
+            ]}
+            rowActionsLabel={(recorder) => `Actions for ${recorder.name}`}
+            empty={
+              <EmptyState
+                title="No recorders yet"
+                body="Add the DVR or NVR your cameras plug into. You will need its IP address or domain, and the username and password you use to sign in to it."
+                action={add}
+              />
+            }
+          />
+          {total > 0 ? (
+            <Pagination
+              total={total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="recorders"
+              busy={recorders.isFetching}
             />
-          }
-        />
-      </Region>
+          ) : null}
+        </TableCard>
+      </section>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.name ?? ''}?`}
+        confirmLabel="Remove recorder"
+        tone="danger"
+        requireText={removing?.name}
+        pending={remove.isPending}
+        error={remove.isError ? friendly(remove.error, 'The recorder could not be removed.') : undefined}
+        onConfirm={() => removing && remove.mutate(removing)}
+        onCancel={() => setRemoving(null)}
+      >
+        <p>It has no cameras, so nothing else is lost. Its saved password is deleted with it.</p>
+      </ConfirmDialog>
     </>
   );
 }
@@ -209,34 +318,50 @@ function RecorderView({ recorder }: { recorder: RecorderDetail }) {
     <>
       <PageIntro
         eyebrow={organization ? `CCTV · ${organization} · Recorder` : 'CCTV · Recorder'}
+        back="/admin/recorders"
         title={recorder.name}
-        standfirst={`${recorder.brand_label} · ${recorder.address || 'no address'} : ${recorder.rtsp_port}`}
-        meta={<RecorderStatus active={recorder.is_active} />}
+        mark={<Icon icon={NavIcons.integrations} size="feature" />}
+        meta={
+          <>
+            <RecorderStatus active={recorder.is_active} />
+            <span className="uwv-page-meta-item">{recorder.brand_label}</span>
+            <span className="uwv-page-meta-item">
+              <span className="uwv-id">
+                {recorder.address || 'no address'}:{recorder.rtsp_port}
+              </span>
+            </span>
+            <span className="uwv-page-meta-item">
+              {recorder.cameras.length} camera{recorder.cameras.length === 1 ? '' : 's'}
+            </span>
+          </>
+        }
         actions={
           canManage ? (
-            <div style={ACTIONS}>
-              <Button onClick={() => setEditing((open) => !open)}>{editing ? 'Close' : 'Edit'}</Button>
+            <>
+              <Button
+                variant="secondary"
+                icon={<Icon icon={ActionIcons.edit} />}
+                onClick={() => setEditing((open) => !open)}
+              >
+                {editing ? 'Close' : 'Edit'}
+              </Button>
               <Button
                 variant={recorder.is_active ? 'secondary' : 'primary'}
+                icon={<Icon icon={recorder.is_active ? ActionIcons.suspend : ActionIcons.activate} />}
                 loading={toggle.isPending}
                 onClick={() => toggle.mutate()}
               >
                 {recorder.is_active ? 'Deactivate' : 'Activate'}
               </Button>
-            </div>
+            </>
           ) : null
         }
       />
 
       {!recorder.is_active ? (
-        <Region order={2}>
-          <Plane>
-            <p style={{ margin: 0 }} role="status">
-              <strong>This recorder is deactivated.</strong> None of its cameras will start until you
-              activate it. Their settings are kept exactly as they are.
-            </p>
-          </Plane>
-        </Region>
+        <Callout variant="banner" tone="warning" title="This recorder is deactivated." live>
+          None of its cameras will start until you activate it. Their settings are kept exactly as they are.
+        </Callout>
       ) : null}
 
       <Region order={2}>
@@ -884,9 +1009,12 @@ function RemoveRecorder({ recorder }: { recorder: RecorderDetail }) {
   });
 
   return (
-    <Region order={5}>
-      <SectionRule label="Remove" />
-      <Plane>
+    <div style={{ marginTop: 'var(--space-10)' }}>
+      <FormSection
+        tone={recorder.cameras.length > 0 ? undefined : 'danger'}
+        title="Remove"
+        description="A recorder with cameras is part of how they are reached, so it is deactivated rather than removed."
+      >
         {recorder.cameras.length > 0 ? (
           <p style={NOTE}>
             This recorder has {recorder.cameras.length} camera{recorder.cameras.length === 1 ? '' : 's'},
@@ -903,7 +1031,7 @@ function RemoveRecorder({ recorder }: { recorder: RecorderDetail }) {
             onConfirm={() => remove.mutate()}
           />
         )}
-      </Plane>
-    </Region>
+      </FormSection>
+    </div>
   );
 }

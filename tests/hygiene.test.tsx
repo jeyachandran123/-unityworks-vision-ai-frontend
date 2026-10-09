@@ -149,6 +149,20 @@ describe('staff hygiene tells the truth about absence', () => {
     expect(await screen.findByText(/your account reaches no camera/i)).toBeInTheDocument();
   });
 
+  it('shows no zero for a count nothing was watching', async () => {
+    installFetch({
+      session: identity(),
+      observations: page([], { cameras_queried: [] }),
+    });
+    renderApp(<AppRouter />, '/hygiene');
+
+    await screen.findByText(/your account reaches no camera/i);
+    // A 0 here would read as a clean shift. Nothing was watched, so it is a dash
+    // with the reason — the same rule StatCard keeps for any number it lacks.
+    expect(screen.getByText('No camera in scope — nothing was watched')).toBeInTheDocument();
+    expect(screen.getByText('No camera in scope — nothing was read')).toBeInTheDocument();
+  });
+
   it('states when the window was only partly observable', async () => {
     installFetch({
       session: identity(),

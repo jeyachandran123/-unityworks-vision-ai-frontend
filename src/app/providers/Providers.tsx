@@ -1,7 +1,7 @@
 /**
  * Provider composition, ordered by dependency.
  *
- *   Query → Toast → Auth → Connection → Router
+ *   Query → Toast → Confirm → Auth → Connection → Router
  *
  * Auth needs the query client for nothing, but Connection needs Auth (it only
  * opens a socket for an authenticated user who may view live), and the router's
@@ -14,6 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '@app/auth/AuthProvider';
 import { ConnectionProvider } from '@shared/realtime/useConnection';
+import { ConfirmProvider } from '@shared/ui/overlays';
 import { ToastProvider } from '@shared/ui/primitives';
 
 export function createQueryClient(): QueryClient {
@@ -47,11 +48,13 @@ export function Providers({
   return (
     <QueryClientProvider client={client ?? createQueryClient()}>
       <ToastProvider>
-        <AuthProvider>
-          <ConnectionProvider>
-            <BrowserRouter>{children}</BrowserRouter>
-          </ConnectionProvider>
-        </AuthProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <ConnectionProvider>
+              <BrowserRouter>{children}</BrowserRouter>
+            </ConnectionProvider>
+          </AuthProvider>
+        </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

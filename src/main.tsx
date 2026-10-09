@@ -3,7 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { Providers } from '@app/providers/Providers';
 import { AppRouter } from '@app/router/AppRouter';
 import { initTheme } from '@shared/theme/theme';
+// The one typeface, bundled and served from this origin (see tokens.css). The
+// optical-size build: one file gives titles the display cut and text the text cut.
+import '@fontsource-variable/inter/opsz.css';
 import './styles/global.css';
+import './styles/components.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root is missing from index.html');

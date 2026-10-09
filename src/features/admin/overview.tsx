@@ -31,9 +31,11 @@ import { adminUsersApi } from '@shared/api/user-administration';
 import { PERMISSIONS, ROLES, roleLabel, type Permission } from '@app/permissions/permissions';
 import { usePermissions } from '@app/permissions/guards';
 import { useAuth } from '@app/auth/AuthProvider';
-import { Icon, PermissionIcons } from '@shared/ui/icons';
-import { Badge, LoadingState, StatusBadge } from '@shared/ui/primitives';
-import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+import { Callout } from '@shared/ui/feedback';
+import { EntityIcons, Icon, NavIcons, PermissionIcons, PlatformIcons } from '@shared/ui/icons';
+import { LoadingState } from '@shared/ui/primitives';
+import { PageIntro, SectionRule } from '@shared/ui/product';
+import { AvatarGroup, ButtonLink, MetricTile, Panel, StatusPill } from '@shared/ui/surfaces';
 
 import { Failed } from './shared';
 
@@ -66,9 +68,10 @@ export function AdminOverviewPage() {
     {
       to: '/admin/zones',
       label: 'Zones',
-      body: 'The places this organization operates, and the zones inside them.',
+      body: 'The areas cameras are placed in — the kitchen, the dine hall, billing.',
       permission: PERMISSIONS.viewZones,
       count: zones.data?.total,
+      icon: NavIcons.administration,
     },
     {
       to: '/admin/recorders',
@@ -76,6 +79,7 @@ export function AdminOverviewPage() {
       body: 'The DVRs and NVRs your cameras plug into, and how to sign in to them.',
       permission: PERMISSIONS.viewCameras,
       count: recorders.data?.total,
+      icon: NavIcons.integrations,
     },
     {
       to: '/admin/cameras',
@@ -83,6 +87,7 @@ export function AdminOverviewPage() {
       body: 'What is watching, where it is, and whether it is switched on.',
       permission: PERMISSIONS.viewCameras,
       count: cameras.data?.total,
+      icon: NavIcons.cameras,
     },
     {
       to: '/admin/people',
@@ -90,6 +95,7 @@ export function AdminOverviewPage() {
       body: 'Who has an account, what they hold, and which cameras they reach.',
       permission: PERMISSIONS.viewUsers,
       count: people.data?.total,
+      icon: EntityIcons.person,
     },
     {
       to: '/admin/access',
@@ -97,8 +103,23 @@ export function AdminOverviewPage() {
       body: 'What each role carries, and how an individual can differ from it.',
       permission: PERMISSIONS.viewUsers,
       count: undefined,
+      icon: PlatformIcons.access,
     },
   ].filter((surface) => has(surface.permission));
+
+  // What is missing, said as the next step. Each is a reading of a real count,
+  // and only offered to somebody who could act on it.
+  const nextSteps: ReadonlyArray<{ title: string; body: string; to: string; label: string }> = [
+    ...(zones.data && zones.data.total === 0 && has(PERMISSIONS.manageZones)
+      ? [{ title: 'No zones yet', body: 'A camera is placed in a zone, so add one first.', to: '/admin/zones', label: 'Add a zone' }]
+      : []),
+    ...(recorders.data && recorders.data.total === 0 && has(PERMISSIONS.manageCameras)
+      ? [{ title: 'No recorder yet', body: 'Cameras are reached through the DVR or NVR they plug into.', to: '/admin/recorders/new', label: 'Add a recorder' }]
+      : []),
+    ...(cameras.data && cameras.data.total > 0 && cameras.data.enabled === 0 && has(PERMISSIONS.manageCameras)
+      ? [{ title: 'Every camera is switched off', body: 'Nothing is being watched until one is started.', to: '/admin/cameras', label: 'Open cameras' }]
+      : []),
+  ];
 
   return (
     <>
@@ -108,126 +129,98 @@ export function AdminOverviewPage() {
         standfirst="How this organization is set up: where it operates, what is watching, and who can see it."
       />
 
-      <Region order={2}>
-        <SectionRule
-          lead
-          label="This organization"
-          detail="The three numbers that say whether it is configured at all."
-        />
-        <Plane>
-          {zones.isError ? <Failed error={zones.error} /> : null}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(11rem, 100%), 1fr))',
-              gap: 'var(--space-6)',
-            }}
-          >
-            {has(PERMISSIONS.viewZones) ? (
-              <Figure
-                scale="lead"
-                label="Zones"
-                value={zones.data ? String(zones.data.total) : null}
-                unavailableReason={zones.isLoading ? 'Reading' : undefined}
-              />
-            ) : null}
-            {has(PERMISSIONS.viewCameras) ? (
-              <>
-                <Figure
-                  scale="lead"
-                  label="Cameras"
-                  value={cameras.data ? String(cameras.data.total) : null}
-                  unavailableReason={cameras.isLoading ? 'Reading' : undefined}
-                />
-                <Figure
-                  scale="lead"
-                  label="Switched on"
-                  value={
-                    cameras.data ? `${cameras.data.enabled} of ${cameras.data.total}` : null
-                  }
-                  detail="A camera that is off opens no connection."
-                  unavailableReason={cameras.isLoading ? 'Reading' : undefined}
-                />
-              </>
-            ) : null}
-            {has(PERMISSIONS.viewUsers) ? (
-              <Figure
-                scale="lead"
-                label="People"
-                value={people.data ? String(people.data.total) : null}
-                unavailableReason={people.isLoading ? 'Reading' : undefined}
-              />
-            ) : null}
-          </div>
-        </Plane>
-      </Region>
+      <SectionRule lead order={2} label="This organization" detail="The numbers that say whether it is configured at all." />
+      <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="This organization">
+        {zones.isError ? <Failed error={zones.error} /> : null}
+        {has(PERMISSIONS.viewZones) ? (
+          <MetricTile
+            label="Zones"
+            icon={NavIcons.administration}
+            value={zones.data ? zones.data.total : null}
+            unavailableReason={zones.isLoading ? 'Reading' : 'Could not be read'}
+            detail="Areas cameras are placed in"
+          />
+        ) : null}
+        {has(PERMISSIONS.viewCameras) ? (
+          <>
+            <MetricTile
+              label="Cameras"
+              icon={NavIcons.cameras}
+              value={cameras.data ? cameras.data.total : null}
+              unavailableReason={cameras.isLoading ? 'Reading' : 'Could not be read'}
+              detail={recorders.data ? `On ${recorders.data.total} recorder${recorders.data.total === 1 ? '' : 's'}` : 'Configured, on or off'}
+            />
+            <MetricTile
+              label="Switched on"
+              icon={NavIcons.live}
+              value={cameras.data ? cameras.data.enabled : null}
+              unit={cameras.data ? `/ ${cameras.data.total}` : undefined}
+              unavailableReason={cameras.isLoading ? 'Reading' : 'Could not be read'}
+              detail="A camera that is off opens no connection."
+            />
+          </>
+        ) : null}
+        {has(PERMISSIONS.viewUsers) ? (
+          <MetricTile
+            label="People"
+            icon={EntityIcons.person}
+            value={people.data ? people.data.total : null}
+            unavailableReason={people.isLoading ? 'Reading' : 'Could not be read'}
+            detail="Accounts in this organization"
+          />
+        ) : null}
+      </section>
 
-      <Region order={3}>
-        <SectionRule label="Areas" detail="Only what this account can reach is listed." />
-        <Plane>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(16rem, 100%), 1fr))',
-              gap: 'var(--space-5)',
-            }}
-          >
-            {surfaces.map((surface) => (
-              <Link
-                key={surface.to}
-                to={surface.to}
-                style={{
-                  display: 'grid',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-5)',
-                  border: '1px solid var(--line-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  textDecoration: 'none',
-                  color: 'inherit',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'flex',
-                    gap: 'var(--space-3)',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <strong>{surface.label}</strong>
-                  {typeof surface.count === 'number' ? <Badge>{surface.count}</Badge> : null}
-                </span>
-                <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
-                  {surface.body}
-                </span>
-              </Link>
-            ))}
-          </div>
-          {surfaces.length === 0 ? (
-            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
-              This account holds no administration permissions. Nothing here is hidden as a
-              courtesy — the server refuses these routes too.
-            </p>
-          ) : null}
-        </Plane>
-      </Region>
+      {nextSteps.length > 0 ? (
+        <div className="uwv-stack" data-gap="sm" style={{ marginTop: 'var(--space-6)' }}>
+          {nextSteps.map((step) => (
+            <Callout
+              key={step.title}
+              tone="warning"
+              title={step.title}
+              actions={
+                <ButtonLink to={step.to} size="sm" variant="secondary">
+                  {step.label}
+                </ButtonLink>
+              }
+            >
+              {step.body}
+            </Callout>
+          ))}
+        </div>
+      ) : null}
 
-      <Region order={4}>
-        <SectionRule
-          label="What you can do here"
-          detail="Your own effective access, as the server computed it for this request."
-        />
-        <Plane>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {(user?.roles ?? []).map((role) => (
-              <Badge key={role}>{roleLabel(role)}</Badge>
-            ))}
-          </div>
-          <div style={{ marginTop: 'var(--space-5)' }}>
-            <AccessSummary />
-          </div>
-        </Plane>
-      </Region>
+      <SectionRule order={3} label="Areas" detail="Only what this account can reach is listed." />
+      <section className="uwv-area-grid uwv-arrive" data-order="3" aria-label="Areas">
+        {surfaces.map((surface) => (
+          <Link key={surface.to} to={surface.to} className="uwv-area-card">
+            <span className="uwv-area-card-head">
+              <span className="uwv-area-card-title">{surface.label}</span>
+              {typeof surface.count === 'number' ? <span className="uwv-view-count">{surface.count}</span> : null}
+            </span>
+            <span className="uwv-area-card-body">{surface.body}</span>
+            <span className="uwv-area-card-icon" aria-hidden="true">
+              <Icon icon={surface.icon} size="control" />
+            </span>
+          </Link>
+        ))}
+        {surfaces.length === 0 ? (
+          <Callout tone="neutral">
+            This account holds no administration permissions. Nothing here is hidden as a courtesy — the server refuses these
+            routes too.
+          </Callout>
+        ) : null}
+      </section>
+
+      <SectionRule order={4} label="What you can do here" detail="Your own effective access, as the server computed it for this request." />
+      <div className="uwv-arrive" data-order="4">
+        <Panel
+          title={user?.display_name || user?.subject || 'You'}
+          description={user?.roles.length ? user.roles.map(roleLabel).join(' · ') : 'No role — access comes from individual grants'}
+        >
+          <AccessSummary />
+        </Panel>
+      </div>
     </>
   );
 }
@@ -374,84 +367,65 @@ export function RolesAndAccessPage() {
         standfirst="What each role carries, and who holds it. Individual exceptions live on a person's own profile."
       />
 
-      <Region order={2}>
-        <SectionRule
-          lead
-          label="How access is decided"
-          detail="Two things compose, and one of them always wins."
-        />
-        <Plane>
-          <div style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '44rem' }}>
-            <p style={{ margin: 0 }}>
-              A person's access is what their <strong>roles</strong> carry, plus anything
-              individually <strong>added</strong>, minus anything individually{' '}
-              <strong>restricted</strong>. A restriction always wins — including over a role that
-              grants the same thing — because it is the more specific statement about that one
-              person.
+      <SectionRule lead order={2} label="How access is decided" detail="Two things compose, and one of them always wins." />
+      <div className="uwv-split-even uwv-arrive" data-order="2">
+        <Panel>
+          <div className="uwv-stack" data-gap="md">
+            <p className="uwv-type-body-lg">
+              A person&apos;s access is what their <strong>roles</strong> carry, plus anything individually{' '}
+              <strong>added</strong>, minus anything individually <strong>restricted</strong>.
             </p>
-            <p style={{ margin: 0, color: 'var(--ink-secondary)' }}>
-              This is what lets two people on the same role differ. A manager who may edit zones
-              and one who may only read them are both Restaurant Managers; the difference is one
-              added permission on the first, not a second role.
+            <p className="uwv-type-body" style={{ color: 'var(--ink-secondary)' }}>
+              A restriction always wins — including over a role that grants the same thing — because it is the more specific
+              statement about that one person.
             </p>
           </div>
-        </Plane>
-      </Region>
+        </Panel>
+        <Callout tone="info" title="Why two people on one role can differ">
+          A manager who may edit zones and one who may only read them are both Restaurant Managers; the difference is one
+          added permission on the first, not a second role.
+        </Callout>
+      </div>
 
-      <Region order={3}>
-        <SectionRule label="Who holds what" />
-        <Plane>
-          {people.isLoading ? <LoadingState label="Reading roles" /> : null}
-          {people.isError ? <Failed error={people.error} /> : null}
-          {people.data ? (
-            <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
-              {Object.values(ROLES).map((role) => {
-                const holders = people.data.users.filter((user) => user.roles.includes(role));
-                return (
-                  <div key={role}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: 'var(--space-3)',
-                        alignItems: 'baseline',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <strong>{roleLabel(role)}</strong>
-                      <StatusBadge tone={holders.length > 0 ? 'online' : 'idle'}>
-                        {holders.length === 0
-                          ? 'Nobody'
-                          : `${holders.length} ${holders.length === 1 ? 'person' : 'people'}`}
-                      </StatusBadge>
-                    </div>
-                    {holders.length > 0 ? (
-                      <ul
-                        style={{
-                          listStyle: 'none',
-                          margin: 'var(--space-2) 0 0',
-                          padding: 0,
-                          display: 'flex',
-                          gap: 'var(--space-3)',
-                          flexWrap: 'wrap',
-                        }}
-                      >
+      <SectionRule order={3} label="Who holds what" detail="Every role, and the people holding it here." />
+      <section className="uwv-arrive" data-order="3">
+        {people.isLoading ? <LoadingState label="Reading roles" /> : null}
+        {people.isError ? <Failed error={people.error} /> : null}
+        {people.data ? (
+          <ul className="uwv-role-grid" style={{ marginTop: 0 }} aria-label="Roles and who holds them">
+            {Object.values(ROLES).map((role) => {
+              const holders = people.data.users.filter((user) => user.roles.includes(role));
+              return (
+                <li key={role} className="uwv-panel uwv-role-card">
+                  <div className="uwv-role-card-head">
+                    <span className="uwv-panel-title">{roleLabel(role)}</span>
+                    <StatusPill tone={holders.length > 0 ? 'online' : 'idle'}>
+                      {holders.length === 0 ? 'Nobody' : `${holders.length} ${holders.length === 1 ? 'person' : 'people'}`}
+                    </StatusPill>
+                  </div>
+                  {holders.length > 0 ? (
+                    <>
+                      <AvatarGroup
+                        people={holders.map((holder) => ({ id: holder.id, name: holder.display_name || holder.email }))}
+                        max={6}
+                      />
+                      <ul className="uwv-chip-list" aria-label={`Holding ${roleLabel(role)}`}>
                         {holders.map((holder) => (
                           <li key={holder.id}>
-                            <Link to={`/admin/people/${encodeURIComponent(holder.id)}`}>
-                              {holder.display_name || holder.email}
-                            </Link>
+                            <Link to={`/admin/people/${encodeURIComponent(holder.id)}`}>{holder.display_name || holder.email}</Link>
                           </li>
                         ))}
                       </ul>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </Plane>
-      </Region>
+                    </>
+                  ) : (
+                    <p className="uwv-type-caption">Nobody here holds this role.</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
     </>
   );
 }

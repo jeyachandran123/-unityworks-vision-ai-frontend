@@ -10,60 +10,78 @@
  * does not check a permission here, it checks whether the account is a
  * platform operator, which no role can confer.
  *
- * Which is why the surface looks different rather than merely deeper. Mixing
- * it into `/admin` would say the two are the same kind of authority, and the
- * entire multi-tenant boundary rests on their not being.
+ * ### The list is the server's
+ *
+ * The server pages, searches and filters organizations by status, so this
+ * table asks it to and shows its `total`. It does not sort: the API has no
+ * sort, and sorting one page would present it as the whole list in order.
+ * The figures beside each row that the list does not carry — admins, last
+ * sign-in — come from the platform overview's fleet, joined by id, and read
+ * "—" when the overview has not answered.
  *
  * ### Suspension and archival are not settings
  *
  * They stop a paying customer's product working, so both demand a written
- * reason before the button does anything, and both stop the customer's cameras
- * in the same request. The page reports how many actually stopped, because
- * "the status field says suspended" and "the cameras are off" are different
- * facts and only the second one matters.
+ * reason, and archival the organization's typed name. See
+ * `features/platform/organization-actions.tsx`.
  */
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { useAuth } from '@app/auth/AuthProvider';
 import { isApiError } from '@shared/api/errors';
-
 import {
   platformAdminApi,
   platformApi,
   STATUS_MEANING,
+  type FleetRow,
   type Organization,
   type OrganizationStatus,
+  type Person,
 } from '@shared/api/platform';
+import { roleLabel } from '@app/permissions/permissions';
 import {
-  Badge,
-  Button,
-  type Column,
-  DataTable,
-  EmptyState,
-  Input,
-  LoadingState,
-  Select,
-  StatusBadge,
-} from '@shared/ui/primitives';
-import { Figure, PageIntro, Plane, Region, SectionRule } from '@shared/ui/product';
+  BulkActionBar,
+  DataGrid,
+  downloadCsv,
+  FilterChips,
+  filterValue,
+  Pagination,
+  TableCard,
+  TableToolbar,
+  useClientRows,
+  useTableState,
+  type FilterDefinition,
+  type GridColumn,
+} from '@shared/ui/data-table';
+import { Callout, useToast } from '@shared/ui/feedback';
+import { Combobox, FormActions, FormSection, useUnsavedChanges } from '@shared/ui/forms';
+import { ActionIcons, EntityIcons, Icon, NavIcons, PlatformIcons } from '@shared/ui/icons';
+import { ConfirmDialog, CopyButton, DropdownMenu, type MenuEntry } from '@shared/ui/overlays';
+import { Badge, Button, EmptyState, Input, LoadingState, Modal } from '@shared/ui/primitives';
+import { PageIntro } from '@shared/ui/product';
+import {
+  Avatar,
+  FactList,
+  MetricTile,
+  ObjectTabs,
+  Panel,
+  TabPanel,
+  initialsOf,
+  useTabParam,
+} from '@shared/ui/surfaces';
 import { CreateOrganizationAdmin } from '@features/platform/OrganizationAdmins';
+import {
+  OrganizationStatusPill,
+  STATUS_LABEL,
+  StatusDialog,
+  useEnterOrganization,
+  useInvalidateOrganizations,
+  useOrganizationMenu,
+} from '@features/platform/organization-actions';
 
-import { DangerConfirm, Failed, SearchField, useDebounced, when, whenExact } from './shared';
-
-const TONE: Record<OrganizationStatus, 'online' | 'degraded' | 'offline'> = {
-  active: 'online',
-  suspended: 'degraded',
-  archived: 'offline',
-};
-
-const LABEL: Record<OrganizationStatus, string> = {
-  active: 'Active',
-  suspended: 'Suspended',
-  archived: 'Archived',
-};
+import { Failed, when, whenExact } from './shared';
 
 /**
  * Is this account a platform operator?
@@ -82,200 +100,401 @@ export function useIsOperator() {
   return { isOperator: query.isSuccess, settled: !query.isLoading };
 }
 
-export function OrganizationsPage() {
-  const client = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'' | OrganizationStatus>('');
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const q = useDebounced(search);
+/** The platform overview, shared with the dashboard's cache. */
+function useOverview() {
+  return useQuery({
+    queryKey: ['platform', 'overview'],
+    queryFn: () => platformAdminApi.overview(),
+    staleTime: 30_000,
+  });
+}
 
-  const params = useMemo(
-    () => ({ q: q.trim() || undefined, status: status || undefined, limit: 100 }),
-    [q, status],
+function relative(iso: string | null | undefined): string {
+  if (!iso) return 'Never';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const minutes = Math.round((Date.now() - then) / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} d ago`;
+  return when(iso);
+}
+
+const STATUS_FILTER: FilterDefinition = {
+  id: 'status',
+  label: 'Status',
+  single: true,
+  options: [
+    { value: 'active', label: 'Active' },
+    { value: 'suspended', label: 'Suspended' },
+    { value: 'archived', label: 'Archived' },
+  ],
+};
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The list
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export function OrganizationsPage() {
+  const navigate = useNavigate();
+  const table = useTableState('platform-organizations', { pageSize: 25 });
+  // `?new=1` opens the create dialog, so "Create an organization" can be a
+  // link from anywhere — the dashboard's shortcuts, a bookmark.
+  const [params, setParams] = useSearchParams();
+  const [creating, setCreatingState] = useState(() => params.get('new') === '1');
+  const setCreating = (open: boolean) => {
+    setCreatingState(open);
+    if (!open && params.has('new')) {
+      const next = new URLSearchParams(params);
+      next.delete('new');
+      setParams(next, { replace: true });
+    }
+  };
+  const [bulk, setBulk] = useState<OrganizationStatus | null>(null);
+  const actions = useOrganizationMenu();
+  const overview = useOverview();
+
+  const status = filterValue(table.filters, 'status') as OrganizationStatus | undefined;
+  const query = useMemo(
+    () => ({ q: table.query || undefined, status, limit: table.pageSize, offset: table.offset }),
+    [table.query, status, table.pageSize, table.offset],
   );
 
   const organizations = useQuery({
-    queryKey: ['organizations', params],
-    queryFn: () => platformApi.organizations(params),
+    queryKey: ['organizations', query],
+    queryFn: () => platformApi.organizations(query),
+    placeholderData: (previous) => previous,
   });
 
-  const create = useMutation({
-    mutationFn: () => platformApi.create({ name: name.trim() }),
-    onSuccess: () => {
-      setName('');
-      setAdding(false);
-      void client.invalidateQueries({ queryKey: ['organizations'] });
-    },
-  });
+  const rows = organizations.data?.organizations ?? [];
+  const total = organizations.data?.total ?? 0;
+  const fleet = useMemo(
+    () => new Map<string, FleetRow>((overview.data?.fleet ?? []).map((row) => [row.id, row])),
+    [overview.data],
+  );
+  const selectedRows = rows.filter((row) => table.selected.has(row.id));
 
-  const columns: ReadonlyArray<Column<Organization>> = [
+  const columns: ReadonlyArray<GridColumn<Organization>> = [
     {
       key: 'name',
       header: 'Organization',
-      render: (organization) => (
-        <Link to={`/platform/organizations/${encodeURIComponent(organization.id)}`}>
-          {organization.name}
-        </Link>
+      render: (o) => (
+        <span className="uwv-cell-primary">
+          <Avatar name={o.name} seed={o.id} />
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/platform/organizations/${encodeURIComponent(o.id)}`}>
+              {o.name}
+            </Link>
+            <span className="uwv-cell-sub">{o.slug}</span>
+          </span>
+        </span>
       ),
+      exportValue: (o) => o.name,
     },
     {
       key: 'status',
       header: 'Status',
-      render: (organization) => (
-        <StatusBadge tone={TONE[organization.status]}>{LABEL[organization.status]}</StatusBadge>
-      ),
+      render: (o) => <OrganizationStatusPill status={o.status} />,
+      exportValue: (o) => STATUS_LABEL[o.status],
     },
-    { key: 'zones', header: 'Zones', render: (organization) => organization.zone_count },
+    { key: 'zones', header: 'Zones', numeric: true, render: (o) => o.zone_count, exportValue: (o) => o.zone_count },
     {
       key: 'cameras',
-      header: 'Cameras',
-      render: (organization) =>
-        `${organization.running_cameras} of ${organization.camera_count} running`,
+      header: 'Cameras running',
+      numeric: true,
+      render: (o) =>
+        o.camera_count === 0 ? (
+          <span className="uwv-cell-muted">None</span>
+        ) : (
+          <span>
+            {o.running_cameras}
+            <span className="uwv-cell-muted"> / {o.camera_count}</span>
+          </span>
+        ),
+      exportValue: (o) => `${o.running_cameras}/${o.camera_count}`,
     },
-    { key: 'users', header: 'People', render: (organization) => organization.user_count },
-    { key: 'created', header: 'Created', render: (organization) => when(organization.created_at) },
+    { key: 'people', header: 'People', numeric: true, render: (o) => o.user_count, exportValue: (o) => o.user_count },
+    {
+      key: 'admins',
+      header: 'Admins',
+      numeric: true,
+      render: (o) => {
+        const row = fleet.get(o.id);
+        if (!row) return <span className="uwv-cell-muted">—</span>;
+        return row.admins === 0 && o.status !== 'archived' ? (
+          <span style={{ color: 'var(--feedback-warning)', fontWeight: 'var(--weight-medium)' }}>None</span>
+        ) : (
+          row.admins
+        );
+      },
+      exportValue: (o) => fleet.get(o.id)?.admins ?? null,
+    },
+    {
+      key: 'signin',
+      header: 'Last sign-in',
+      render: (o) => {
+        const row = fleet.get(o.id);
+        return <span className="uwv-cell-muted">{row ? relative(row.last_sign_in_at) : '—'}</span>;
+      },
+      exportValue: (o) => fleet.get(o.id)?.last_sign_in_at ?? null,
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      render: (o) => <span className="uwv-cell-muted">{when(o.created_at)}</span>,
+      exportValue: (o) => o.created_at,
+    },
   ];
 
-  const all = organizations.data?.organizations ?? [];
+  const counts = overview.data?.organizations;
+  const estate = overview.data?.estate;
 
   return (
     <>
       <PageIntro
         eyebrow="Platform"
         title="Organizations"
-        standfirst="Every customer on this deployment. Creating, suspending and archving one happens here and nowhere else."
+        standfirst="Every customer on this deployment. Organizations are created, suspended and archived here and nowhere else."
         actions={
-          <Button onClick={() => setAdding((open) => !open)}>
-            {adding ? 'Cancel' : 'New organization'}
+          <Button variant="primary" icon={<Icon icon={ActionIcons.add} />} onClick={() => setCreating(true)}>
+            New organization
           </Button>
         }
       />
 
-      {adding ? (
-        <Region order={2}>
-          <SectionRule
-            label="New organization"
-            detail="It starts active, with no sites, cameras or people."
-          />
-          <Plane>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (name.trim()) create.mutate();
-              }}
-              style={{ display: 'grid', gap: 'var(--space-4)', maxWidth: '32rem' }}
-            >
-              <Input
-                label="Name"
-                hint="Its identifier is derived from this and cannot be changed afterwards — it becomes part of every camera's runtime identity and names files on disk."
-                value={name}
-                placeholder="Customer B"
-                onChange={(event) => setName(event.target.value)}
-                autoFocus
-              />
-              <div>
-                <Button type="submit" disabled={!name.trim() || create.isPending}>
-                  {create.isPending ? 'Creating…' : 'Create organization'}
-                </Button>
-              </div>
-              {create.isError ? <Failed error={create.error} /> : null}
-            </form>
-          </Plane>
-        </Region>
-      ) : null}
-
-      <Region order={adding ? 3 : 2}>
-        <SectionRule label="Across the platform" />
-        <Plane>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(11rem, 100%), 1fr))',
-              gap: 'var(--space-6)',
-            }}
-          >
-            <Figure scale="lead" label="Organizations" value={String(all.length)} />
-            <Figure
-              scale="lead"
-              label="Active"
-              value={String(all.filter((o) => o.status === 'active').length)}
-            />
-            <Figure
-              scale="lead"
-              label="Cameras running"
-              value={String(all.reduce((sum, o) => sum + o.running_cameras, 0))}
-              detail="Read from the live runtime, not from configuration."
-            />
-          </div>
-        </Plane>
-      </Region>
-
-      <Region order={adding ? 4 : 3}>
-        <SectionRule
-          lead
+      <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="Across the platform" style={{ marginBottom: 'var(--space-8)' }}>
+        <MetricTile
           label="Organizations"
-          actions={
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-3)',
-                alignItems: 'flex-end',
-                flexWrap: 'wrap',
-              }}
-            >
-              <SearchField label="Search" value={search} onChange={setSearch} />
-              <Select
-                label="Status"
-                value={status}
-                onChange={(event) => setStatus(event.target.value as typeof status)}
-              >
-                <option value="">Any</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-                <option value="archived">Archived</option>
-              </Select>
-            </div>
-          }
+          icon={EntityIcons.organization}
+          value={counts ? counts.total : null}
+          unavailableReason="The overview has not answered"
+          detail={counts ? `${counts.new_30d} new in the last 30 days` : undefined}
         />
-        <Plane>
-          {organizations.isLoading ? <LoadingState label="Reading organizations" /> : null}
-          {organizations.isError ? <Failed error={organizations.error} /> : null}
-          {organizations.data ? (
-            <DataTable
-              caption="Organizations on this platform"
-              columns={columns}
-              rows={all}
-              rowKey={(organization) => organization.id}
-              empty={<EmptyState title="Nothing matches" body="Try clearing the filters." />}
+        <MetricTile
+          label="Active"
+          icon={ActionIcons.activate}
+          value={counts ? counts.active : null}
+          unavailableReason="The overview has not answered"
+          detail="Cameras run, people sign in"
+          detailTone="success"
+        />
+        <MetricTile
+          label="Suspended or archived"
+          icon={ActionIcons.suspend}
+          value={counts ? counts.suspended + counts.archived : null}
+          unavailableReason="The overview has not answered"
+          detail={counts ? `${counts.suspended} suspended · ${counts.archived} archived` : undefined}
+          detailTone={counts && counts.suspended > 0 ? 'warning' : undefined}
+        />
+        <MetricTile
+          label="Cameras live"
+          icon={NavIcons.live}
+          value={estate ? estate.cameras_live : null}
+          unavailableReason="The runtime has not reported"
+          detail={estate ? `of ${estate.cameras_enabled} switched on — read from the runtime` : undefined}
+        />
+      </section>
+
+      <section className="uwv-arrive" data-order="3" aria-label="Organizations list">
+        <TableCard label="Organizations">
+          <TableToolbar
+            state={table}
+            searchLabel="Search organizations"
+            searchPlaceholder="Search by name or slug…"
+            searching={organizations.isFetching && table.query !== ''}
+            filters={[STATUS_FILTER]}
+            columns={columns}
+            actions={
+              <Button
+                variant="ghost"
+                icon={<Icon icon={ActionIcons.export} />}
+                disabled={rows.length === 0}
+                onClick={() => downloadCsv('organizations.csv', columns, rows)}
+              >
+                Export page
+              </Button>
+            }
+          />
+          <FilterChips filters={[STATUS_FILTER]} state={table} />
+          <BulkActionBar count={table.selected.size} noun="organizations" onClear={() => table.setSelected(new Set())}>
+            {selectedRows.some((o) => o.status === 'active') ? (
+              <Button size="sm" variant="secondary" icon={<Icon icon={ActionIcons.suspend} />} onClick={() => setBulk('suspended')}>
+                Suspend
+              </Button>
+            ) : null}
+            {selectedRows.some((o) => o.status !== 'active') ? (
+              <Button size="sm" variant="secondary" icon={<Icon icon={ActionIcons.activate} />} onClick={() => setBulk('active')}>
+                Reactivate
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => downloadCsv('organizations-selected.csv', columns, selectedRows)}
+            >
+              Export CSV
+            </Button>
+          </BulkActionBar>
+          <DataGrid<Organization>
+            caption="Organizations on this platform"
+            columns={columns}
+            rows={rows}
+            rowKey={(o) => o.id}
+            hidden={table.hidden}
+            density={table.density}
+            loading={organizations.isLoading}
+            error={organizations.error}
+            onRetry={() => void organizations.refetch()}
+            narrowed={table.narrowed}
+            selection={{
+              selected: table.selected,
+              onChange: table.setSelected,
+              label: (o) => `Select ${o.name}`,
+            }}
+            rowActions={(o) => actions.menuFor(o)}
+            rowActionsLabel={(o) => `Actions for ${o.name}`}
+            onRowOpen={(o) => navigate(`/platform/organizations/${encodeURIComponent(o.id)}`)}
+            empty={
+              <EmptyState
+                title="No organizations yet"
+                body="Create the first customer. It starts active, with no zones, cameras or people."
+                action={
+                  <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                    New organization
+                  </Button>
+                }
+              />
+            }
+            noResults={
+              <EmptyState
+                title="No organizations match"
+                body={table.query ? `Nothing is named or slugged like “${table.query}” with these filters.` : 'No organization has this status.'}
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
+              />
+            }
+          />
+          {total > 0 ? (
+            <Pagination
+              total={total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="organizations"
+              busy={organizations.isFetching}
             />
           ) : null}
-        </Plane>
-      </Region>
+        </TableCard>
+      </section>
+
+      {actions.dialogs}
+      <CreateOrganizationDialog open={creating} onClose={() => setCreating(false)} />
+      {bulk ? (
+        <StatusDialog
+          organizations={selectedRows.filter((o) => (bulk === 'active' ? o.status !== 'active' : o.status === 'active'))}
+          target={bulk}
+          open
+          onClose={() => setBulk(null)}
+          onDone={() => table.setSelected(new Set())}
+        />
+      ) : null}
     </>
   );
 }
 
-/* ── one organization ─────────────────────────────────────────────────────── */
+function CreateOrganizationDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const invalidate = useInvalidateOrganizations();
+  const toast = useToast();
+  const navigate = useNavigate();
+
+  const create = useMutation({
+    mutationFn: () => platformApi.create({ name: name.trim() }),
+    onSuccess: (organization) => {
+      invalidate();
+      setName('');
+      onClose();
+      toast.success(`${organization.name} created`, {
+        description: 'It is active, with no zones, cameras or people yet.',
+        action: {
+          label: 'Open organization',
+          onClick: () => navigate(`/platform/organizations/${encodeURIComponent(organization.id)}`),
+        },
+      });
+    },
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!create.isPending) onClose();
+      }}
+      title="New organization"
+      description="A customer of this deployment. It starts active, with no zones, cameras or people."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="create-organization" loading={create.isPending} disabled={!name.trim()}>
+            Create organization
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="create-organization"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (name.trim()) create.mutate();
+        }}
+        style={{ display: 'grid', gap: 'var(--space-4)' }}
+      >
+        <Input
+          label="Name"
+          hint="Its identifier (slug) is derived from this and can never change — it becomes part of every camera's runtime identity and names files on disk."
+          value={name}
+          placeholder="Customer B"
+          autoFocus
+          onChange={(event) => setName(event.target.value)}
+          error={create.isError ? (isApiError(create.error) ? create.error.friendlyMessage : 'The organization could not be created.') : undefined}
+        />
+      </form>
+    </Modal>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   One organization
+   ──────────────────────────────────────────────────────────────────────────── */
+
+type Tab = 'overview' | 'members' | 'settings';
+const TABS: ReadonlyArray<Tab> = ['overview', 'members', 'settings'];
 
 export function OrganizationDetailPage() {
   const { organizationId = '' } = useParams();
-  const client = useQueryClient();
+  const [tab, setTab] = useTabParam<Tab>(TABS, 'overview');
+  const { enter, entering } = useEnterOrganization();
+  const menu = useOrganizationMenu();
+  const overview = useOverview();
 
   const organization = useQuery({
     queryKey: ['organization', organizationId],
     queryFn: () => platformApi.organization(organizationId),
     enabled: Boolean(organizationId),
   });
-
-  const [name, setName] = useState('');
-  const rename = useMutation({
-    mutationFn: () => platformApi.rename(organizationId, name.trim()),
-    onSuccess: () => {
-      setName('');
-      void client.invalidateQueries({ queryKey: ['organization', organizationId] });
-      void client.invalidateQueries({ queryKey: ['organizations'] });
-    },
+  const members = useQuery({
+    queryKey: ['platform', 'members', organizationId],
+    queryFn: () => platformAdminApi.members(organizationId),
+    enabled: Boolean(organizationId),
   });
 
   if (organization.isLoading) return <LoadingState label="Reading organization" />;
@@ -283,181 +502,241 @@ export function OrganizationDetailPage() {
   if (!organization.data) return null;
 
   const it = organization.data;
+  const archived = it.status === 'archived';
+  const fleet = overview.data?.fleet.find((row) => row.id === it.id);
+  const lifecycle: MenuEntry[] = menu.menuFor(it, { includeView: false }).filter((entry) => entry.id !== 'enter' && entry.id !== 'rename');
 
   return (
     <>
       <PageIntro
-        eyebrow="Organization"
+        eyebrow="Organizations"
+        back="/platform/organizations"
         title={it.name}
-        standfirst={
+        mark={initialsOf(it.name)}
+        meta={
           <>
-            <code>{it.id}</code> · created {when(it.created_at)}
+            <OrganizationStatusPill status={it.status} />
+            <span className="uwv-page-meta-item">
+              <span className="uwv-id" title="Organization id">
+                {it.id}
+              </span>
+              <CopyButton value={it.id} label="Copy organization id" />
+            </span>
+            <span className="uwv-page-meta-item">Slug {it.slug}</span>
+            <span className="uwv-page-meta-item">Created {when(it.created_at)}</span>
           </>
         }
-        meta={<StatusBadge tone={TONE[it.status]}>{LABEL[it.status]}</StatusBadge>}
-        actions={<Link to="/platform/organizations">All organizations</Link>}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              icon={<Icon icon={ActionIcons.edit} />}
+              onClick={() => menu.ask(it, { kind: 'rename' })}
+            >
+              Rename
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Icon icon={ActionIcons.enter} />}
+              loading={entering === it.id}
+              disabled={archived}
+              title={archived ? 'Nobody may sign in to an archived organization' : undefined}
+              onClick={() => void enter(it)}
+            >
+              Enter organization
+            </Button>
+            <DropdownMenu label={`More actions for ${it.name}`} variant="secondary" size="md" items={lifecycle} />
+          </>
+        }
       />
 
-      <Region order={2}>
-        <SectionRule lead label="Where it stands" detail={STATUS_MEANING[it.status]} />
-        <Plane>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(11rem, 100%), 1fr))',
-              gap: 'var(--space-6)',
-            }}
-          >
-            <Figure scale="lead" label="Zones" value={String(it.zone_count)} />
-            <Figure scale="lead" label="Cameras" value={String(it.camera_count)} />
-            <Figure
-              scale="lead"
-              label="Running now"
-              value={String(it.running_cameras)}
-              detail="From the live runtime. If this is not zero for a suspended or archived organization, something is wrong."
-            />
-            <Figure scale="lead" label="People" value={String(it.user_count)} />
-          </div>
-
-          {it.status_changed_at ? (
-            <p style={{ marginTop: 'var(--space-6)', marginBottom: 0 }}>
-              Status changed {whenExact(it.status_changed_at)}
-              {it.status_reason ? (
-                <>
-                  {' — '}
-                  <span style={{ color: 'var(--ink-secondary)' }}>{it.status_reason}</span>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-        </Plane>
-      </Region>
-
-      <Region order={3}>
-        <SectionRule
-          label="Members"
-          detail="Who may enter this organization. Membership is the entry ticket; roles decide what they can do once inside."
-        />
-        <Members organizationId={it.id} archived={it.status === 'archived'} />
-        {it.status === 'archived' ? null : (
-          <div style={{ marginTop: 'var(--space-5)' }}>
-            <SectionRule
-              label="New Organization Admin"
-              detail="Creates the person who runs this organization: account, Organization Admin role and every camera, in one step."
-            />
-            <CreateOrganizationAdmin organizationId={it.id} />
-          </div>
-        )}
-      </Region>
-
-      <Region order={4}>
-        <SectionRule label="Name" detail="The slug and id cannot change. Only the display name." />
-        <Plane>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (name.trim()) rename.mutate();
-            }}
-            style={{
-              display: 'flex',
-              gap: 'var(--space-3)',
-              alignItems: 'flex-end',
-              flexWrap: 'wrap',
-            }}
-          >
-            <Input
-              label="Name"
-              value={name}
-              placeholder={it.name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Button type="submit" disabled={!name.trim() || rename.isPending}>
-              {rename.isPending ? 'Saving…' : 'Rename'}
+      {it.status !== 'active' ? (
+        <Callout
+          variant="banner"
+          tone={it.status === 'suspended' ? 'warning' : 'neutral'}
+          title={`${STATUS_LABEL[it.status]}${it.status_changed_at ? ` since ${whenExact(it.status_changed_at)}` : ''}`}
+          actions={
+            <Button size="sm" variant="secondary" onClick={() => menu.ask(it, { kind: 'status', target: 'active' })}>
+              Reactivate
             </Button>
-          </form>
-          {rename.isError ? <Failed error={rename.error} /> : null}
-        </Plane>
-      </Region>
+          }
+        >
+          {STATUS_MEANING[it.status]}
+          {it.status_reason ? (
+            <>
+              {' '}
+              Reason given: <strong>{it.status_reason}</strong>
+            </>
+          ) : null}
+        </Callout>
+      ) : null}
 
-      <Region order={5}>
-        <SectionRule
-          label="Enter this organization"
-          detail="Administering an organization and working inside it are different acts. This is the second one."
-        />
-        <EnterOrganization organization={it} />
-      </Region>
+      <ObjectTabs<Tab>
+        label="Organization sections"
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'members', label: 'Members', count: members.data?.count ?? null },
+          { id: 'settings', label: 'Settings' },
+        ]}
+      />
 
-      <Region order={6}>
-        <Lifecycle organization={it} />
-      </Region>
+      {tab === 'overview' ? (
+        <TabPanel id="overview">
+          <OrganizationOverview
+            organization={it}
+            fleet={fleet}
+            members={members.data?.members}
+            membersLoading={members.isLoading}
+            onMembers={() => setTab('members')}
+          />
+        </TabPanel>
+      ) : null}
+      {tab === 'members' ? (
+        <TabPanel id="members">
+          <Members organization={it} />
+        </TabPanel>
+      ) : null}
+      {tab === 'settings' ? (
+        <TabPanel id="settings">
+          <OrganizationSettings organization={it} onLifecycle={(target) => menu.ask(it, { kind: 'status', target })} />
+        </TabPanel>
+      ) : null}
+
+      {menu.dialogs}
     </>
   );
 }
 
-/**
- * The explicit boundary between administering an organization and entering it.
- *
- * ### Looking at this page did not change the active tenant, and must not
- *
- * Everything above is platform administration: it reads the organization as an
- * *object*, through operator-authorised endpoints, and the session's tenant is
- * untouched by having opened it. Entering is a different act — it mints a new
- * token, it changes which customer every subsequent request is about, and for
- * an operator it writes an audit row against that customer before it returns.
- *
- * So it is a button, with the consequence written next to it, and never a side
- * effect of navigation. A console where inspecting a customer silently moved
- * the operator into that customer would make the audit trail describe browsing
- * rather than intent.
- *
- * ### Always the recorded door
- *
- * The Platform Admin belongs to no organization, so there is no membership to
- * select: entry gives him full access and writes a row into this
- * organization's audit trail before it returns.
- */
-function EnterOrganization({ organization }: { organization: Organization }) {
-  const navigate = useNavigate();
-  const { enterOrganization } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  const archived = organization.status === 'archived';
-
-  async function go() {
-    setFailure(null);
-    setBusy(true);
-    try {
-      await enterOrganization(organization.id);
-      navigate('/dashboard', { replace: true });
-    } catch (error) {
-      setBusy(false);
-      setFailure(
-        isApiError(error) ? error.friendlyMessage : 'This organization could not be opened.',
-      );
-    }
-  }
+function OrganizationOverview({
+  organization: it,
+  fleet,
+  members,
+  membersLoading,
+  onMembers,
+}: {
+  organization: Organization;
+  fleet: FleetRow | undefined;
+  members: ReadonlyArray<Person> | undefined;
+  membersLoading: boolean;
+  onMembers: () => void;
+}) {
+  const archived = it.status === 'archived';
+  const stillRunning = it.status !== 'active' && it.running_cameras > 0;
+  const admins = (members ?? []).filter((person) =>
+    person.memberships.some((m) => m.organization_id === it.id && m.roles.includes('org_admin')),
+  );
 
   return (
-    <Plane>
-      <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <Button onClick={() => void go()} disabled={busy || archived}>
-          {busy ? 'Opening…' : 'Enter organization'}
-        </Button>
-        <p style={{ margin: 0, flex: 1, minWidth: '18rem', color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
+    <div className="uwv-detail-grid">
+      <div className="uwv-stack">
+        <div className="uwv-metrics" data-dense="true">
+          <MetricTile label="Zones" icon={NavIcons.administration} value={it.zone_count} detail="Places cameras are grouped by" />
+          <MetricTile
+            label="Cameras running"
+            icon={NavIcons.live}
+            value={it.running_cameras}
+            unit={`/ ${it.camera_count}`}
+            detail={stillRunning ? 'Still running after a stop — check the runtime' : 'From the live runtime, not configuration'}
+            detailTone={stillRunning ? 'danger' : undefined}
+          />
+          <MetricTile label="People" icon={EntityIcons.person} value={it.user_count} detail="Accounts that may enter" />
+          <MetricTile
+            label="Organization Admins"
+            icon={PlatformIcons.adminCreated}
+            value={fleet ? fleet.admins : null}
+            unavailableReason="The overview has not answered"
+            detail={fleet && fleet.admins === 0 ? 'Nobody can administer it' : 'Active members holding the role'}
+            detailTone={fleet && fleet.admins === 0 && !archived ? 'warning' : undefined}
+          />
+        </div>
+
+        <Panel
+          title="Who runs it"
+          description="Its Organization Admins: the people who grant every other role inside it."
+          actions={
+            <Button size="sm" variant="ghost" onClick={onMembers}>
+              All members
+            </Button>
+          }
+          flush
+        >
+          {membersLoading ? (
+            <LoadingState label="Reading members" />
+          ) : admins.length === 0 ? (
+            <div className="uwv-datatable-state">
+              <EmptyState
+                title="Nobody can administer it"
+                body={archived ? 'An archived organization needs none.' : 'Make somebody its Organization Admin from Members.'}
+                action={
+                  archived ? undefined : (
+                    <Button size="sm" onClick={onMembers}>
+                      Go to members
+                    </Button>
+                  )
+                }
+              />
+            </div>
+          ) : (
+            <ul className="uwv-person-list">
+              {admins.map((person) => (
+                <li key={person.id}>
+                  <Avatar name={person.display_name || person.email} seed={person.id} muted={!person.is_active} />
+                  <span className="uwv-cell-stack">
+                    <Link className="uwv-cell-title" to={`/platform/people/${encodeURIComponent(person.id)}`}>
+                      {person.display_name || person.email}
+                    </Link>
+                    <span className="uwv-cell-sub">{person.email}</span>
+                  </span>
+                  <span className="uwv-type-caption">Signed in {relative(person.last_login_at).toLowerCase()}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Callout tone="neutral" title="Entering is an act, and it is recorded">
           {archived
-            ? 'An archived organization cannot be entered. Nobody may sign in to one.'
-            : 'You will enter as Platform Admin, with full access. The entry is recorded in this organization’s audit trail.'}
-        </p>
+            ? 'An archived organization cannot be entered: nobody may sign in to one.'
+            : 'Enter organization opens it as Platform Admin, with full access to its cameras, people and records. The entry is written to its audit trail before it opens; looking at this page changes nothing.'}
+        </Callout>
       </div>
-      {failure ? (
-        <p role="alert" style={{ marginBottom: 0, color: 'var(--severity-critical, inherit)' }}>
-          {failure}
-        </p>
-      ) : null}
-    </Plane>
+
+      <div className="uwv-stack">
+        <Panel title="Details">
+          <FactList
+            items={[
+              { label: 'Status', value: <OrganizationStatusPill status={it.status} /> },
+              { label: 'Created', value: when(it.created_at) },
+              { label: 'Status changed', value: it.status_changed_at ? whenExact(it.status_changed_at) : 'Never' },
+              { label: 'Last sign-in', value: fleet ? relative(fleet.last_sign_in_at) : '—' },
+              { label: 'Cameras switched on', value: fleet ? `${fleet.cameras_enabled} of ${fleet.cameras}` : '—' },
+              { label: 'Slug', value: <span className="uwv-id">{it.slug}</span> },
+            ]}
+          />
+          {it.status_reason ? (
+            <p className="uwv-type-caption" style={{ marginTop: 'var(--space-5)' }}>
+              Last reason given: <span style={{ color: 'var(--ink-secondary)' }}>{it.status_reason}</span>
+            </p>
+          ) : null}
+        </Panel>
+      </div>
+    </div>
   );
 }
+
+/* ── members ──────────────────────────────────────────────────────────────── */
+
+const MEMBER_ROLE_FILTER: FilterDefinition = {
+  id: 'role',
+  label: 'Role here',
+  options: [
+    { value: 'org_admin', label: 'Organization Admin' },
+    { value: 'other', label: 'Other roles' },
+    { value: 'none', label: 'No role' },
+  ],
+};
 
 /**
  * Membership administration for one organization.
@@ -466,295 +745,454 @@ function EnterOrganization({ organization }: { organization: Organization }) {
  * one role — Organization Admin — and every other role is granted inside the
  * organization by that admin, who knows who works there.
  */
-function Members({ organizationId, archived }: { organizationId: string; archived: boolean }) {
+function Members({ organization }: { organization: Organization }) {
   const client = useQueryClient();
-  const [addUser, setAddUser] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
+  const toast = useToast();
+  const navigate = useNavigate();
+  const table = useTableState(`platform-members`, { pageSize: 10 });
+  const [adding, setAdding] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState<Person | null>(null);
+  const archived = organization.status === 'archived';
 
   const members = useQuery({
-    queryKey: ['platform', 'members', organizationId],
-    queryFn: () => platformAdminApi.members(organizationId),
+    queryKey: ['platform', 'members', organization.id],
+    queryFn: () => platformAdminApi.members(organization.id),
   });
+
+  const invalidate = () => {
+    void client.invalidateQueries({ queryKey: ['platform'] });
+    void client.invalidateQueries({ queryKey: ['organization', organization.id] });
+    void client.invalidateQueries({ queryKey: ['organizations'] });
+  };
+
+  const remove = useMutation({
+    mutationFn: (person: Person) => platformAdminApi.removeMember(organization.id, person.id),
+    onSuccess: (result, person) => {
+      invalidate();
+      setRemoving(null);
+      // Said, not hidden: removing somebody's last membership means the account
+      // can no longer sign in anywhere — offboarding, or a mistake.
+      if (result.left_without_access) {
+        toast.warning(`${person.display_name || person.email} removed`, {
+          description: `${result.email} now has no organization and cannot sign in anywhere.`,
+        });
+      } else {
+        toast.success(`${person.display_name || person.email} removed from ${organization.name}`);
+      }
+    },
+  });
+
+  const rolesHere = (person: Person) =>
+    person.memberships.find((m) => m.organization_id === organization.id)?.roles ?? [];
+
+  const view = useClientRows(members.data?.members ?? [], table, {
+    text: (p) => `${p.display_name} ${p.email}`,
+    filterBy: {
+      role: (p) => {
+        const roles = rolesHere(p);
+        if (roles.length === 0) return 'none';
+        return roles.map((role) => (role === 'org_admin' ? 'org_admin' : 'other'));
+      },
+    },
+    sortBy: {
+      person: (p) => (p.display_name || p.email).toLowerCase(),
+      signin: (p) => (p.last_login_at ? new Date(p.last_login_at).getTime() : null),
+    },
+  });
+
+  const columns: ReadonlyArray<GridColumn<Person>> = [
+    {
+      key: 'person',
+      header: 'Person',
+      sortable: true,
+      render: (p) => (
+        <span className="uwv-cell-primary">
+          <Avatar name={p.display_name || p.email} seed={p.id} muted={!p.is_active} />
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/platform/people/${encodeURIComponent(p.id)}`}>
+              {p.display_name || p.email}
+            </Link>
+            <span className="uwv-cell-sub">{p.email}</span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: 'roles',
+      header: 'Roles here',
+      render: (p) => {
+        const roles = rolesHere(p);
+        return roles.length === 0 ? (
+          <span className="uwv-cell-muted">No role — can enter, sees nothing</span>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
+            {roles.map((role) => (
+              <Badge key={role} tone={role === 'org_admin' ? 'accent' : 'neutral'}>
+                {roleLabel(role)}
+              </Badge>
+            ))}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'home',
+      header: 'Home',
+      render: (p) =>
+        p.home_organization_id === organization.id ? <Badge>Home</Badge> : <span className="uwv-cell-muted">—</span>,
+    },
+    {
+      key: 'signin',
+      header: 'Last sign-in',
+      sortable: true,
+      render: (p) => <span className="uwv-cell-muted">{relative(p.last_login_at)}</span>,
+    },
+    {
+      key: 'state',
+      header: 'Account',
+      render: (p) =>
+        p.is_active ? <span className="uwv-status-pill" data-tone="online">Active</span> : <span className="uwv-status-pill" data-tone="idle">Disabled</span>,
+    },
+  ];
+
+  if (members.isError) return <Failed error={members.error} />;
+
+  return (
+    <>
+      <TableCard label="Members">
+        <TableToolbar
+          state={table}
+          searchLabel="Search members"
+          searchPlaceholder="Search by name or email…"
+          filters={[MEMBER_ROLE_FILTER]}
+          columns={columns}
+          actions={
+            archived ? (
+              <span className="uwv-type-caption">An archived organization takes no new members.</span>
+            ) : (
+              <>
+                <Button variant="secondary" icon={<Icon icon={EntityIcons.person} />} onClick={() => setAdding(true)}>
+                  Add existing person
+                </Button>
+                <Button variant="primary" icon={<Icon icon={ActionIcons.add} />} onClick={() => setCreating(true)}>
+                  New Organization Admin
+                </Button>
+              </>
+            )
+          }
+        />
+        <FilterChips filters={[MEMBER_ROLE_FILTER]} state={table} />
+        <DataGrid<Person>
+          caption={`Members of ${organization.name}`}
+          columns={columns}
+          rows={view.page}
+          rowKey={(p) => p.id}
+          hidden={table.hidden}
+          density={table.density}
+          sort={table.sort}
+          onSort={table.setSort}
+          loading={members.isLoading}
+          narrowed={table.narrowed}
+          rowActions={(p) => [
+            {
+              id: 'view',
+              label: 'View person',
+              icon: ActionIcons.view,
+              onSelect: () => navigate(`/platform/people/${encodeURIComponent(p.id)}`),
+            },
+            {
+              id: 'access',
+              label: 'Edit access',
+              icon: PlatformIcons.access,
+              onSelect: () => navigate(`/platform/people/${encodeURIComponent(p.id)}/access`),
+            },
+            { id: 'sep', type: 'separator' },
+            {
+              id: 'remove',
+              label: 'Remove from organization…',
+              icon: ActionIcons.remove,
+              tone: 'danger',
+              onSelect: () => {
+                remove.reset();
+                setRemoving(p);
+              },
+            },
+          ]}
+          rowActionsLabel={(p) => `Actions for ${p.display_name || p.email}`}
+          empty={
+            <EmptyState
+              title="No members"
+              body="Nobody can sign in to this organization yet. Create its Organization Admin, or admit someone who already has an account."
+            />
+          }
+        />
+        {view.total > 0 ? (
+          <Pagination
+            total={view.total}
+            offset={table.offset}
+            limit={table.pageSize}
+            onOffset={table.setOffset}
+            onLimit={table.setPageSize}
+            noun="members"
+          />
+        ) : null}
+      </TableCard>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.display_name || removing?.email || ''} from ${organization.name}?`}
+        confirmLabel="Remove member"
+        tone="danger"
+        pending={remove.isPending}
+        error={remove.isError ? (isApiError(remove.error) ? remove.error.friendlyMessage : 'The member could not be removed.') : undefined}
+        onConfirm={() => removing && remove.mutate(removing)}
+        onCancel={() => setRemoving(null)}
+      >
+        <p>They lose every role they hold here and can no longer enter {organization.name}.</p>
+        {removing && removing.organization_count <= 1 ? (
+          <p>
+            <strong>This is their only organization.</strong> Afterwards they cannot sign in anywhere.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+
+      <AdmitDialog organization={organization} open={adding} onClose={() => setAdding(false)} memberIds={new Set((members.data?.members ?? []).map((p) => p.id))} />
+
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="New Organization Admin"
+        description={`Creates the person who runs ${organization.name}: an account, the Organization Admin role and every camera, in one step.`}
+      >
+        <CreateOrganizationAdmin
+          organizationId={organization.id}
+          bare
+          onCreated={(person) =>
+            toast.success(`${person.display_name || person.email} is now Organization Admin of ${organization.name}`)
+          }
+        />
+      </Modal>
+    </>
+  );
+}
+
+function AdmitDialog({
+  organization,
+  open,
+  onClose,
+  memberIds,
+}: {
+  organization: Organization;
+  open: boolean;
+  onClose: () => void;
+  memberIds: ReadonlySet<string>;
+}) {
+  const client = useQueryClient();
+  const toast = useToast();
+  const [chosen, setChosen] = useState('');
 
   const everyone = useQuery({
     queryKey: ['platform', 'people', 'all-for-admit'],
     queryFn: () => platformAdminApi.people({ limit: 200 }),
+    enabled: open,
   });
 
-  const invalidate = () => {
-    void client.invalidateQueries({ queryKey: ['platform', 'members', organizationId] });
-    void client.invalidateQueries({ queryKey: ['platform', 'people'] });
-    void client.invalidateQueries({ queryKey: ['platform', 'overview'] });
-  };
-
-  const add = useMutation({
-    mutationFn: (userId: string) => platformAdminApi.addMember(organizationId, userId, 'org_admin'),
-    onSuccess: () => {
-      setAddUser('');
-      setFailure(null);
-      invalidate();
-    },
-    onError: (error) =>
-      setFailure(isApiError(error) ? error.friendlyMessage : 'The member could not be added.'),
-  });
-
-  const remove = useMutation({
-    mutationFn: (userId: string) => platformAdminApi.removeMember(organizationId, userId),
-    onSuccess: (result) => {
-      // Reported rather than hidden: removing somebody's last membership means
-      // the account can no longer sign in anywhere, which is what offboarding
-      // looks like and is also what a mistake looks like.
-      setFailure(
-        result.left_without_access
-          ? `${result.email} now has no organization and cannot sign in anywhere.`
-          : null,
-      );
-      invalidate();
-    },
-    onError: (error) =>
-      setFailure(isApiError(error) ? error.friendlyMessage : 'The member could not be removed.'),
-  });
-
-  if (members.isLoading) return <LoadingState label="Reading members" />;
-  if (members.isError) return <Failed error={members.error} />;
-
-  const rows = members.data?.members ?? [];
-  const held = new Set(rows.map((person) => person.id));
-  // The Platform Admin is never admitted: he belongs to no organization and
-  // enters any of them from the console.
+  // The Platform Admin is never admitted: they belong to no organization and
+  // enter any of them from the console.
   const admittable = (everyone.data?.people ?? []).filter(
-    (person) => !held.has(person.id) && !person.is_platform_operator,
+    (person) => !memberIds.has(person.id) && !person.is_platform_operator,
   );
 
+  const add = useMutation({
+    mutationFn: (userId: string) => platformAdminApi.addMember(organization.id, userId, 'org_admin'),
+    onSuccess: (person) => {
+      void client.invalidateQueries({ queryKey: ['platform'] });
+      void client.invalidateQueries({ queryKey: ['organization', organization.id] });
+      toast.success(`${person.display_name || person.email} is now Organization Admin of ${organization.name}`);
+      setChosen('');
+      onClose();
+    },
+  });
+
   return (
-    <Plane>
-      {failure ? (
-        <p role="alert" style={{ marginTop: 0 }}>
-          {failure}
-        </p>
-      ) : null}
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No members"
-          body="Nobody can sign in to this organization yet. Admit someone below."
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!add.isPending) onClose();
+      }}
+      title="Add an existing person"
+      description={`They become Organization Admin of ${organization.name}, with every camera, alongside any organizations they already run.`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={add.isPending}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={add.isPending} disabled={!chosen} onClick={() => add.mutate(chosen)}>
+            Add as Organization Admin
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+        {everyone.isLoading ? <LoadingState label="Reading people" /> : null}
+        <Combobox
+          label="Person"
+          value={chosen}
+          onChange={setChosen}
+          placeholder="Search by name or email…"
+          emptyText="Nobody matches who is not already a member"
+          options={admittable.map((person) => ({
+            value: person.id,
+            label: person.display_name || person.email,
+            detail: person.email,
+          }))}
         />
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
-          {rows.map((person) => (
-            <li
-              key={person.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-3)',
-                paddingBottom: 'var(--space-3)',
-                borderBottom: '1px solid var(--line-subtle)',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ flex: 1, minWidth: '14rem' }}>
-                <Link to={`/platform/people/${encodeURIComponent(person.id)}`}>
-                  {person.display_name || person.email}
-                </Link>
-                {person.home_organization_id === organizationId ? (
-                  <span style={{ marginLeft: 'var(--space-2)' }}>
-                    <Badge>home</Badge>
-                  </span>
-                ) : null}
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)' }}>
-                  {(person.memberships.find((m) => m.organization_id === organizationId)?.roles ?? [])
-                    .length === 0
-                    ? 'No role here — can enter, sees nothing'
-                    : person.memberships
-                        .find((m) => m.organization_id === organizationId)!
-                        .roles.join(', ')}
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(person.id)}
-              >
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div
-        style={{
-          marginTop: 'var(--space-6)',
-          paddingTop: 'var(--space-5)',
-          borderTop: '1px solid var(--line-subtle)',
-          display: 'flex',
-          gap: 'var(--space-3)',
-          alignItems: 'flex-end',
-          flexWrap: 'wrap',
-        }}
-      >
-        <Select
-          label="Add an existing person as Organization Admin"
-          value={addUser}
-          onChange={(event) => setAddUser(event.target.value)}
-          disabled={archived}
-        >
-          <option value="">Choose…</option>
-          {admittable.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.display_name || person.email} · {person.email}
-            </option>
-          ))}
-        </Select>
-        <Button disabled={!addUser || add.isPending || archived} onClick={() => add.mutate(addUser)}>
-          {add.isPending ? 'Adding…' : 'Add as Organization Admin'}
-        </Button>
-        <p style={{ margin: 0, flexBasis: '100%', color: 'var(--ink-tertiary)', fontSize: 'var(--text-xs)' }}>
-          {archived
-            ? 'An archived organization takes no new members.'
-            : 'They become Organization Admin here, with every camera, alongside any organizations they already run.'}
-        </p>
+        {add.isError ? (
+          <Callout tone="error" live>
+            {isApiError(add.error) ? add.error.friendlyMessage : 'The member could not be added.'}
+          </Callout>
+        ) : null}
       </div>
-    </Plane>
+    </Modal>
   );
 }
 
-function Lifecycle({ organization }: { organization: Organization }) {
-  const client = useQueryClient();
-  const [target, setTarget] = useState<OrganizationStatus>(
-    organization.status === 'active' ? 'suspended' : 'active',
-  );
-  const [reason, setReason] = useState('');
-  const [result, setResult] = useState<Organization | null>(null);
+/* ── settings ─────────────────────────────────────────────────────────────── */
 
-  const change = useMutation({
-    mutationFn: () => platformApi.setStatus(organization.id, target, reason.trim()),
+function OrganizationSettings({
+  organization: it,
+  onLifecycle,
+}: {
+  organization: Organization;
+  onLifecycle: (target: OrganizationStatus) => void;
+}) {
+  const [name, setName] = useState(it.name);
+  const invalidate = useInvalidateOrganizations();
+  const toast = useToast();
+  const trimmed = name.trim();
+  const dirty = trimmed !== it.name;
+  useUnsavedChanges(dirty);
+
+  const rename = useMutation({
+    mutationFn: () => platformApi.rename(it.id, trimmed),
     onSuccess: (updated) => {
-      setReason('');
-      setResult(updated);
-      void client.invalidateQueries({ queryKey: ['organization', organization.id] });
-      void client.invalidateQueries({ queryKey: ['organizations'] });
+      invalidate(it.id);
+      toast.success('Organization renamed', { description: `${it.name} is now ${updated?.name || trimmed}.` });
     },
   });
 
-  const narrowing = target !== 'active';
-  const needsReason = narrowing && !reason.trim();
-
   return (
-    <>
-      <SectionRule
-        lead
-        label="Lifecycle"
-        detail="This reaches sign-in, permissions and the camera runtime. It is not a label."
-      />
-      <Plane>
-        <div style={{ display: 'grid', gap: 'var(--space-5)', maxWidth: '36rem' }}>
-          <Select
-            label="Move to"
-            value={target}
-            onChange={(event) => setTarget(event.target.value as OrganizationStatus)}
-          >
-            {(['active', 'suspended', 'archived'] as const)
-              .filter((state) => state !== organization.status)
-              .map((state) => (
-                <option key={state} value={state}>
-                  {LABEL[state]}
-                </option>
-              ))}
-          </Select>
-
-          <p
-            style={{
-              margin: 0,
-              padding: 'var(--space-4)',
-              border: '1px solid var(--line-subtle)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--ink-secondary)',
-            }}
-          >
-            {STATUS_MEANING[target]}
-            {narrowing && organization.running_cameras > 0 ? (
-              <>
-                {' '}
-                <strong>
-                  {organization.running_cameras} running camera
-                  {organization.running_cameras === 1 ? '' : 's'} will be stopped immediately.
-                </strong>
-              </>
-            ) : null}
-          </p>
-
-          {narrowing ? (
-            <Input
-              label="Reason"
-              hint="Required. It stops the customer's product working, and this is the only moment anyone reliably knows why."
-              value={reason}
-              placeholder="Invoice 41 unpaid for 60 days."
-              onChange={(event) => setReason(event.target.value)}
-            />
-          ) : null}
-
-          {target === 'archived' ? (
-            <DangerConfirm
-              expect={organization.name}
-              label={`Type ${organization.name} to confirm`}
-              actionLabel="Archive this organization"
-              pending={change.isPending}
-              hint={
-                <>
-                  Nobody at <strong>{organization.name}</strong> will be able to sign in, and
-                  every camera stops. Data is retained and nothing is deleted, but the product
-                  stops for everyone there the moment you confirm.
-                </>
-              }
-              onConfirm={() => {
-                if (!needsReason) change.mutate();
-              }}
-            />
-          ) : (
-            <div>
-              <Button
-                variant={narrowing ? 'danger' : 'primary'}
-                disabled={needsReason || change.isPending}
-                onClick={() => change.mutate()}
-              >
-                {change.isPending ? 'Applying…' : `Move to ${LABEL[target].toLowerCase()}`}
-              </Button>
+    <div>
+      <FormSection
+        title="General"
+        description="What this customer is called across the console. Only the display name can change; the slug and id are permanent."
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (dirty && trimmed) rename.mutate();
+          }}
+          style={{ display: 'grid', gap: 'var(--space-5)' }}
+        >
+          <Input
+            label="Organization name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            error={
+              !trimmed
+                ? 'A name is required.'
+                : rename.isError
+                  ? isApiError(rename.error)
+                    ? rename.error.friendlyMessage
+                    : 'The name could not be changed.'
+                  : undefined
+            }
+          />
+          <div className="uwv-form-grid">
+            <Input label="Slug" value={it.slug} readOnly disabled hint="Part of every camera's runtime identity. Never changes." />
+            <div className="uwv-field">
+              <span className="uwv-field-label">Organization id</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minHeight: 'var(--control-md)' }}>
+                <span className="uwv-id">{it.id}</span>
+                <CopyButton value={it.id} label="Copy organization id" />
+              </span>
+              <span className="uwv-field-hint">Quote this when you contact support.</span>
             </div>
-          )}
+          </div>
+          <FormActions dirty={dirty} saving={rename.isPending} disabled={!trimmed} onCancel={() => setName(it.name)} />
+        </form>
+      </FormSection>
 
-          {change.isError ? <Failed error={change.error} /> : null}
-
-          {result ? (
+      <FormSection
+        title="Lifecycle"
+        description="This reaches sign-in, permissions and the camera runtime. It is not a label: each change is recorded with its reason."
+      >
+        <div className="uwv-radio-cards-grid" role="list" aria-label="Lifecycle states">
+          {(['active', 'suspended', 'archived'] as const).map((state) => (
             <div
-              style={{
-                display: 'grid',
-                gap: 'var(--space-2)',
-                padding: 'var(--space-4)',
-                border: '1px solid var(--line-default)',
-                borderRadius: 'var(--radius-md)',
-              }}
+              key={state}
+              role="listitem"
+              className="uwv-radio-card"
+              data-checked={state === it.status ? 'true' : undefined}
+              data-tone={state === 'active' ? 'default' : state === 'suspended' ? 'warning' : 'danger'}
+              style={{ paddingLeft: 'var(--space-4)', cursor: 'default' }}
+              aria-current={state === it.status ? 'true' : undefined}
             >
-              <strong>
-                Now <Badge>{LABEL[result.status]}</Badge>
-              </strong>
-              {typeof result.cameras_stopped === 'number' ? (
-                <span>
-                  {result.cameras_stopped} camera
-                  {result.cameras_stopped === 1 ? '' : 's'} stopped.
-                </span>
-              ) : null}
-              {result.note ? (
-                <span style={{ color: 'var(--ink-tertiary)', fontSize: 'var(--text-sm)' }}>
-                  {result.note}
-                </span>
-              ) : null}
+              <span className="uwv-radio-card-head">
+                <OrganizationStatusPill status={state} />
+                {state === it.status ? <span className="uwv-type-caption">Current</span> : null}
+              </span>
+              <span className="uwv-radio-card-description">{STATUS_MEANING[state]}</span>
             </div>
-          ) : null}
+          ))}
         </div>
-      </Plane>
-    </>
+        <div className="uwv-danger-row">
+          <div className="uwv-danger-row-text">
+            <p className="uwv-danger-row-title">
+              {it.status === 'active' ? 'Suspend organization' : 'Reactivate organization'}
+            </p>
+            <p className="uwv-danger-row-description">
+              {it.status === 'active'
+                ? 'Reversible. People can still sign in and read; changes are refused and cameras stop.'
+                : 'Sign-in and changes are allowed again. Cameras are started again from the camera list.'}
+            </p>
+          </div>
+          {it.status === 'active' ? (
+            <Button variant="secondary" icon={<Icon icon={ActionIcons.suspend} />} onClick={() => onLifecycle('suspended')}>
+              Suspend…
+            </Button>
+          ) : (
+            <Button variant="secondary" icon={<Icon icon={ActionIcons.activate} />} onClick={() => onLifecycle('active')}>
+              Reactivate…
+            </Button>
+          )}
+        </div>
+      </FormSection>
+
+      <FormSection
+        tone="danger"
+        title="Danger zone"
+        description="Acts that stop the product for everyone at this customer. Each asks for a reason, and archiving for the organization's name."
+      >
+        <div className="uwv-danger-row">
+          <div className="uwv-danger-row-text">
+            <p className="uwv-danger-row-title">Archive organization</p>
+            <p className="uwv-danger-row-description">
+              Nobody can sign in and every camera stops. Data is retained and nothing is deleted — there is no deleting an
+              organization.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            icon={<Icon icon={ActionIcons.archive} />}
+            disabled={it.status === 'archived'}
+            onClick={() => onLifecycle('archived')}
+          >
+            {it.status === 'archived' ? 'Archived' : 'Archive…'}
+          </Button>
+        </div>
+      </FormSection>
+    </div>
   );
 }

@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PLATFORM_ADMIN_LABEL, ROLES } from '@app/permissions/permissions';
 import { isApiError } from '@shared/api/errors';
 import { platformAdminApi, platformApi, type Person } from '@shared/api/platform';
+import { Callout } from '@shared/ui/feedback';
 import { Button, Input, Select } from '@shared/ui/primitives';
 import { Plane } from '@shared/ui/product';
 
@@ -53,7 +54,16 @@ function useOpenOrganizations(enabled: boolean) {
  * With `organizationId`, the organization is fixed (the organization's own
  * page); without it, the form asks which organization (Roles & Access).
  */
-export function CreateOrganizationAdmin({ organizationId }: { organizationId?: string }) {
+export function CreateOrganizationAdmin({
+  organizationId,
+  bare = false,
+  onCreated,
+}: {
+  organizationId?: string;
+  /** Without its own plane: inside a dialog, which is already a surface. */
+  bare?: boolean;
+  onCreated?: (person: Person) => void;
+}) {
   const invalidate = useInvalidatePlatform();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -73,6 +83,7 @@ export function CreateOrganizationAdmin({ organizationId }: { organizationId?: s
       }),
     onSuccess: (person) => {
       setCreated(person);
+      onCreated?.(person);
       setName('');
       setEmail('');
       setPassword('');
@@ -83,8 +94,9 @@ export function CreateOrganizationAdmin({ organizationId }: { organizationId?: s
   const shortPassword = password.length > 0 && password.length < PASSWORD_MIN_LENGTH;
   const ready = Boolean(target) && email.includes('@') && password.length >= PASSWORD_MIN_LENGTH;
 
+  const Surface = bare ? 'div' : Plane;
   return (
-    <Plane>
+    <Surface>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -141,24 +153,24 @@ export function CreateOrganizationAdmin({ organizationId }: { organizationId?: s
           onChange={(event) => setPassword(event.target.value)}
         />
         <div>
-          <Button type="submit" disabled={!ready || create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create Organization Admin'}
+          <Button type="submit" variant="primary" loading={create.isPending} disabled={!ready}>
+            Create Organization Admin
           </Button>
         </div>
         {create.isError ? (
-          <p role="alert" style={{ margin: 0, color: 'var(--severity-critical, inherit)' }}>
+          <Callout tone="error" live>
             {failureText(create.error, 'The Organization Admin could not be created.')}
-          </p>
+          </Callout>
         ) : null}
         {created ? (
-          <p role="status" style={{ margin: 0 }}>
+          <Callout tone="success" live>
             <strong>{created.display_name || created.email}</strong> is now Organization Admin of{' '}
             {created.memberships.map((m) => m.organization_name).join(', ')}, and can sign in with{' '}
             {created.email}.
-          </p>
+          </Callout>
         ) : null}
       </form>
-    </Plane>
+    </Surface>
   );
 }
 
@@ -168,7 +180,7 @@ export function CreateOrganizationAdmin({ organizationId }: { organizationId?: s
  * One Organization Admin may hold one organization or several. Whoever holds
  * more than one chooses which to work in when they sign in.
  */
-export function GiveOrganization() {
+export function GiveOrganization({ bare = false }: { bare?: boolean } = {}) {
   const invalidate = useInvalidatePlatform();
   const [personId, setPersonId] = useState('');
   const [organizationId, setOrganizationId] = useState('');
@@ -204,16 +216,10 @@ export function GiveOrganization() {
     },
   });
 
+  const Surface = bare ? 'div' : Plane;
   return (
-    <Plane>
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
-          alignItems: 'flex-end',
-          flexWrap: 'wrap',
-        }}
-      >
+    <Surface>
+      <div className="uwv-stack" data-gap="md">
         <Select
           id="give-organization-person"
           label="Organization Admin"
@@ -245,57 +251,47 @@ export function GiveOrganization() {
             </option>
           ))}
         </Select>
-        <Button
-          disabled={!personId || !organizationId || give.isPending}
-          onClick={() => {
-            setDone(null);
-            give.mutate();
-          }}
-        >
-          {give.isPending ? 'Giving…' : 'Give organization'}
-        </Button>
+        {person ? (
+          <p className="uwv-type-caption">
+            Holds today: {person.memberships.map((m) => m.organization_name).join(', ') || 'nothing'}.
+          </p>
+        ) : null}
+        <div>
+          <Button
+            variant="primary"
+            loading={give.isPending}
+            disabled={!personId || !organizationId}
+            onClick={() => {
+              setDone(null);
+              give.mutate();
+            }}
+          >
+            Give organization
+          </Button>
+        </div>
       </div>
-      {person ? (
-        <p
-          style={{
-            marginBottom: 0,
-            color: 'var(--ink-tertiary)',
-            fontSize: 'var(--text-sm)',
-          }}
-        >
-          Holds today: {person.memberships.map((m) => m.organization_name).join(', ') || 'nothing'}.
-        </p>
-      ) : null}
       {give.isError ? (
-        <p
-          role="alert"
-          style={{
-            marginBottom: 0,
-            color: 'var(--severity-critical, inherit)',
-          }}
-        >
-          {failureText(give.error, 'The organization could not be given.')}
-        </p>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <Callout tone="error" live>
+            {failureText(give.error, 'The organization could not be given.')}
+          </Callout>
+        </div>
       ) : null}
       {done ? (
-        <p role="status" style={{ marginBottom: 0 }}>
-          {done}
-        </p>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <Callout tone="success" live>
+            {done}
+          </Callout>
+        </div>
       ) : null}
-    </Plane>
+    </Surface>
   );
 }
 
 /** Shown where the Platform Admin is named, so the two admins read as two. */
 export function PlatformAdminNote() {
   return (
-    <p
-      style={{
-        margin: 0,
-        color: 'var(--ink-tertiary)',
-        fontSize: 'var(--text-sm)',
-      }}
-    >
+    <p className="uwv-type-caption">
       The {PLATFORM_ADMIN_LABEL} belongs to no organization and can enter any of them. An
       Organization Admin runs the organizations they are given — one or several.
     </p>

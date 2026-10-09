@@ -310,6 +310,10 @@ describe('accessibility baseline', () => {
     expect(screen.getByLabelText('Email')).toHaveFocus();
     await user.tab();
     expect(screen.getByLabelText('Password')).toHaveFocus();
+    // The show-password toggle is a stop of its own: revealing what was typed
+    // must be reachable without a mouse too.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Show password' })).toHaveFocus();
     await user.tab();
     expect(screen.getByRole('button', { name: /sign in/i })).toHaveFocus();
   });

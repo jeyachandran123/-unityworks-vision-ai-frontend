@@ -52,7 +52,10 @@ import {
 } from '@shared/api/wall';
 import { useAuth } from '@app/auth/AuthProvider';
 import { isApiError } from '@shared/api/errors';
-import { Badge, Button, ErrorState, KeyValue, LoadingState } from '@shared/ui/primitives';
+import { PERMISSIONS } from '@app/permissions/permissions';
+import { PermissionGate } from '@app/permissions/guards';
+import { Badge, Button, EmptyState, ErrorState, KeyValue, LoadingState } from '@shared/ui/primitives';
+import { ButtonLink } from '@shared/ui/surfaces';
 import {
   CameraSurface,
   Eyebrow,
@@ -636,6 +639,22 @@ export function CameraWallPage() {
         detail="Every configured channel, in recorder order. Selecting a tile focuses it; it does not start analysis."
       />
       <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
+        {cameras.length === 0 ? (
+          // No channel is not an empty black wall: it is a fact with a next
+          // step, said in words. Somebody who cannot see a camera here needs
+          // to know whether there is none, or whether they cannot reach it.
+          <EmptyState
+            title="No channel on the wall yet"
+            body="The recorder reports no channel this account can see. Cameras appear here once they are added and switched on — or once an administrator widens which cameras your account reaches."
+            action={
+              <PermissionGate permission={PERMISSIONS.manageCameras}>
+                <ButtonLink to="/admin/cameras" variant="secondary" size="sm">
+                  Open camera administration
+                </ButtonLink>
+              </PermissionGate>
+            }
+          />
+        ) : (
         <div
           className="uwv-wall"
           style={{
@@ -656,6 +675,7 @@ export function CameraWallPage() {
             />
           ))}
         </div>
+        )}
       </Region>
 
       {/* What the wall adds up to. Supporting, and after the thing it is about. */}

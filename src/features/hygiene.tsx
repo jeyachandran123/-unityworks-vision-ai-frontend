@@ -199,7 +199,7 @@ export function StaffHygienePage() {
         meta={
           page.available ? (
             <>
-              <Badge mono>{page.cameras_queried.length} cameras</Badge>
+              <Badge>{page.cameras_queried.length} {page.cameras_queried.length === 1 ? 'camera' : 'cameras'}</Badge>
               {!page.window_fully_observable ? (
                 // Partial coverage is stated rather than smoothed over: some of
                 // the window could not be read, and a count from an incomplete
@@ -240,16 +240,22 @@ export function StaffHygienePage() {
               marginBottom: 'var(--space-6)',
             }}
           >
+            {/* With no camera in scope these are not zero readings — nothing was
+                watched — so they show a dash and why, never a 0 that reads as a
+                clean result. "No violations" and "not watching" must differ. */}
             <StatCard
               label="Subjects observed"
-              value={page.count}
+              value={page.cameras_queried.length === 0 ? null : page.count}
+              unavailableReason="No camera in scope — nothing was watched"
               tone={page.count > 0 ? 'accent' : 'default'}
               detail={`In the ${WINDOWS.find((w) => w.id === windowId)?.label.toLowerCase()}`}
             />
             <StatCard
               label="Observations read"
-              value={page.observation_count ?? null}
-              unavailableReason="Not reported for this window"
+              value={page.cameras_queried.length === 0 ? null : (page.observation_count ?? null)}
+              unavailableReason={
+                page.cameras_queried.length === 0 ? 'No camera in scope — nothing was read' : 'Not reported for this window'
+              }
               detail="Individual readings behind the rows"
             />
             <StatCard

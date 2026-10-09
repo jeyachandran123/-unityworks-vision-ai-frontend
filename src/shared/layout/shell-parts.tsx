@@ -11,8 +11,9 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTheme } from '@shared/theme/theme';
-import { ControlIcons, Icon } from '@shared/ui/icons';
+import { ControlIcons, Icon, type LucideIcon } from '@shared/ui/icons';
 import { IconButton } from '@shared/ui/primitives';
+import { initialsOf } from '@shared/ui/surfaces';
 
 /**
  * The mark: an aperture.
@@ -77,6 +78,7 @@ export interface MenuAction {
   label: string;
   onSelect: () => void;
   tone?: 'danger';
+  icon?: LucideIcon;
 }
 
 /**
@@ -105,11 +107,25 @@ export function AccountMenu({
   onOpenChange: (open: boolean) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    const items = () => [...(root.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false);
+      if (event.key === 'Escape') {
+        onOpenChange(false);
+        trigger.current?.focus();
+        return;
+      }
+      // Arrows walk the menu, the way `role="menu"` promises they will.
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const list = items();
+      if (list.length === 0) return;
+      event.preventDefault();
+      const at = list.indexOf(document.activeElement as HTMLElement);
+      const next = event.key === 'ArrowDown' ? (at + 1) % list.length : (at - 1 + list.length) % list.length;
+      list[next]?.focus();
     };
     const onPointer = (event: MouseEvent) => {
       if (root.current && !root.current.contains(event.target as Node)) onOpenChange(false);
@@ -125,6 +141,7 @@ export function AccountMenu({
   return (
     <div ref={root} style={{ position: 'relative', flexShrink: 0 }}>
       <button
+        ref={trigger}
         type="button"
         className="uwv-btn"
         data-variant="ghost"
@@ -135,7 +152,7 @@ export function AccountMenu({
         style={{ paddingLeft: 'var(--space-1)', gap: 'var(--space-2)' }}
       >
         <span className="uwv-avatar" aria-hidden="true">
-          {(name || subject || '?').slice(0, 1).toUpperCase()}
+          {initialsOf(name || subject || '?')}
         </span>
         <span
           style={{
@@ -170,6 +187,7 @@ export function AccountMenu({
               data-tone={action.tone}
               onClick={action.onSelect}
             >
+              {action.icon ? <Icon icon={action.icon} size="control" /> : null}
               {action.label}
             </button>
           ))}

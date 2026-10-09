@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ACCESS_CATALOG } from '@app/permissions/access-catalog';
@@ -34,7 +34,9 @@ import {
   LoadingState,
   Select,
 } from '@shared/ui/primitives';
-import { GoTo, PageIntro, Plane, Region } from '@shared/ui/product';
+import { PageIntro, Plane, Region } from '@shared/ui/product';
+import { Callout } from '@shared/ui/feedback';
+import { initialsOf } from '@shared/ui/surfaces';
 import { AccessMatrix } from '@features/platform/AccessMatrix';
 import { PASSWORD_MIN_LENGTH } from '@features/platform/OrganizationAdmins';
 import {
@@ -245,14 +247,10 @@ export function NewPersonPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Platform"
+        eyebrow="People"
+        back="/platform/people"
         title="New person"
         standfirst="Create an account and decide, organization by organization, what it may do."
-        actions={
-          <Link to="/platform/people" style={{ textDecoration: 'none' }}>
-            <GoTo>All people</GoTo>
-          </Link>
-        }
       />
       <Stepper steps={NEW_STEPS} current={step} />
 
@@ -389,11 +387,19 @@ export function EditPersonAccessPage() {
   // A failed *background* refetch keeps its data; only a read that never
   // succeeded replaces the editor.
   if (!access.data || !roles.data) {
+    // Still a page, with its way back: a bare error is a dead end.
     return (
-      <ErrorState
-        title="Access could not be read"
-        body="No such account, or the platform is unavailable."
-      />
+      <>
+        <PageIntro eyebrow="People" back="/platform/people" title="Edit access" />
+        <ErrorState
+          title="Access could not be read"
+          body="No such account, or the platform is unavailable."
+          onRetry={() => {
+            void access.refetch();
+            void roles.refetch();
+          }}
+        />
+      </>
     );
   }
 
@@ -401,22 +407,16 @@ export function EditPersonAccessPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Platform · Access"
+        eyebrow="Access"
+        back={`/platform/people/${encodeURIComponent(userId)}`}
         title={person.display_name || person.email}
+        mark={initialsOf(person.display_name || person.email)}
         standfirst={person.email}
-        actions={
-          <Link
-            to={`/platform/people/${encodeURIComponent(userId)}`}
-            style={{ textDecoration: 'none' }}
-          >
-            <GoTo>Back to person</GoTo>
-          </Link>
-        }
       />
       {saved ? (
-        <p role="status" style={{ marginTop: 0 }}>
-          Access saved. It takes effect on their next request.
-        </p>
+        <Callout variant="banner" tone="success" title="Access saved" live>
+          It takes effect on their next request.
+        </Callout>
       ) : null}
       {person.is_platform_operator ? (
         <EmptyState

@@ -146,7 +146,7 @@ export function ReportsPage() {
         meta={
           catalogue.isSuccess ? (
             <>
-              <Badge mono>{catalogue.data.count} report types</Badge>
+              <Badge>{catalogue.data.count} report types</Badge>
               {canExport ? null : <Badge>read-only — this account cannot export</Badge>}
             </>
           ) : undefined
@@ -354,20 +354,8 @@ function PickerItem({
         type="button"
         onClick={() => onSelect(report.id)}
         aria-current={active ? 'true' : undefined}
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          padding: 'var(--space-2) var(--space-3)',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid',
-          borderColor: active ? 'var(--accent-line)' : 'transparent',
-          background: active ? 'var(--accent-wash)' : 'transparent',
-          color: report.permitted ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
-          cursor: 'pointer',
-          fontSize: 'var(--text-sm)',
-          display: 'grid',
-          gap: '2px',
-        }}
+        className="uwv-picker-item"
+        data-refused={report.permitted ? undefined : 'true'}
       >
         <span
           style={{
@@ -434,38 +422,29 @@ function Controls({
           alignItems: 'flex-end',
         }}
       >
-        <fieldset
-          disabled={disabled}
-          style={{ border: 0, padding: 0, margin: 0, display: 'grid', gap: 'var(--space-2)' }}
-        >
-          <legend
-            style={{
-              fontSize: 'var(--text-xs)',
-              fontWeight: 'var(--weight-medium)',
-              color: 'var(--ink-secondary)',
-              padding: 0,
-            }}
-          >
+        {/* Laid out as a field, not a fieldset: a legend sits outside its
+            fieldset's flow, which put this label a few pixels lower than the
+            two select labels beside it. */}
+        <div className="uwv-field">
+          <span className="uwv-field-label" id="report-period-label">
             Period
-          </legend>
-          {/* The shared segmented control's look, on the buttons this form
-              already had: a choice that filters, so pressed/unpressed buttons
-              rather than tabs. */}
-          <div className="uwv-tabs">
+          </span>
+          {/* A choice that filters, so pressed/unpressed buttons rather than tabs. */}
+          <div className="uwv-tabs" role="group" aria-labelledby="report-period-label">
             {PERIODS.map((option) => (
               <button
                 key={option.id}
                 type="button"
                 className="uwv-tab"
+                disabled={disabled}
                 onClick={() => onPeriod(option.id)}
                 aria-pressed={periodId === option.id}
-                style={disabled ? { cursor: 'not-allowed' } : undefined}
               >
                 {option.label}
               </button>
             ))}
           </div>
-        </fieldset>
+        </div>
 
         <Select
           label="Granularity"

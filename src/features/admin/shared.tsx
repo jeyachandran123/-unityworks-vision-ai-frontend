@@ -142,31 +142,9 @@ export function ObjectTabs({
   tabs: ReadonlyArray<{ to: string; label: string; end?: boolean }>;
 }) {
   return (
-    <nav
-      aria-label="Sections"
-      style={{
-        display: 'flex',
-        gap: 'var(--space-5)',
-        borderBottom: '1px solid var(--line-subtle)',
-        marginBottom: 'var(--space-6)',
-        overflowX: 'auto',
-      }}
-    >
+    <nav aria-label="Sections" className="uwv-object-tabs">
       {tabs.map((tab) => (
-        <NavLink
-          key={tab.to}
-          to={tab.to}
-          end={tab.end}
-          style={({ isActive }) => ({
-            padding: 'var(--space-2) 0',
-            marginBottom: '-1px',
-            whiteSpace: 'nowrap',
-            textDecoration: 'none',
-            fontSize: 'var(--text-sm)',
-            color: isActive ? 'var(--ink-primary)' : 'var(--ink-tertiary)',
-            borderBottom: `2px solid ${isActive ? 'var(--ink-primary)' : 'transparent'}`,
-          })}
-        >
+        <NavLink key={tab.to} to={tab.to} end={tab.end} className="uwv-object-tab">
           {tab.label}
         </NavLink>
       ))}

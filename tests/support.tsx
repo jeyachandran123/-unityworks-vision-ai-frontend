@@ -15,6 +15,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@app/auth/AuthProvider';
 import { PERMISSIONS } from '@app/permissions/permissions';
 import { ConnectionProvider } from '@shared/realtime/useConnection';
+import { ConfirmProvider } from '@shared/ui/overlays';
 import { ToastProvider } from '@shared/ui/primitives';
 import type { Identity, OrganizationSummary } from '@shared/api/services';
 // The evaluation fixtures are annotated with the real API types rather than
@@ -2101,11 +2102,13 @@ export function renderApp(ui: ReactElement, route = '/'): RenderResult {
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <AuthProvider>
-          <ConnectionProvider>
-            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-          </ConnectionProvider>
-        </AuthProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <ConnectionProvider>
+              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+            </ConnectionProvider>
+          </AuthProvider>
+        </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>,
   );

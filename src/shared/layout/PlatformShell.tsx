@@ -43,14 +43,17 @@ import {
   platformItemFor,
   type PlatformNavItem,
 } from '@app/router/platform-navigation';
-import { ControlIcons, Icon } from '@shared/ui/icons';
+import { ActionIcons, ControlIcons, Icon } from '@shared/ui/icons';
 import { IconButton } from '@shared/ui/primitives';
+import { PageErrorBoundary } from '@shared/ui/boundary';
 import { useMediaQuery } from '@shared/ui/product';
 import { SHELL_BREAKPOINT } from './AppShell';
 import { AccountMenu, BrandMark, CrumbSeparator, RegisterMark, ThemeToggle } from './shell-parts';
+import { ShellSearch, useSignOut } from './shell-search';
 
 export function PlatformShell() {
-  const { user, logout, organizations } = useAuth();
+  const { user, organizations } = useAuth();
+  const signOut = useSignOut('the control plane');
   const location = useLocation();
   const navigate = useNavigate();
   const narrow = useMediaQuery(`(max-width: ${SHELL_BREAKPOINT})`);
@@ -131,6 +134,7 @@ export function PlatformShell() {
               </ol>
             </nav>
           )}
+          <ShellSearch kind="platform" compact={narrow} />
 
           {/* The persistent register mark. A screenshot from here must be
               unambiguous. */}
@@ -149,8 +153,16 @@ export function PlatformShell() {
             open={menuOpen}
             onOpenChange={setMenuOpen}
             actions={[
-              { label: 'Organization application', onSelect: () => navigate(exitTo) },
-              { label: 'Sign out', onSelect: () => void logout(), tone: 'danger' },
+              { label: 'Organization application', icon: ActionIcons.enter, onSelect: () => navigate(exitTo) },
+              {
+                label: 'Sign out',
+                icon: ActionIcons.signOut,
+                tone: 'danger',
+                onSelect: () => {
+                  setMenuOpen(false);
+                  void signOut();
+                },
+              },
             ]}
           />
         </header>
@@ -167,7 +179,9 @@ export function PlatformShell() {
             overflowX: 'hidden',
           }}
         >
-          <Outlet />
+          <PageErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </PageErrorBoundary>
         </main>
       </div>
     </div>

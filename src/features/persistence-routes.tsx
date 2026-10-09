@@ -20,8 +20,8 @@
  * scrolled into view.
  */
 
-import { useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   auditLabel,
@@ -54,20 +54,17 @@ import {
   SectionHeader,
   SeverityBadge,
   StateBadge,
-  StatCard,
   StatusBadge,
+  Tabs,
   type Severity,
 } from '@shared/ui/primitives';
 import {
   CameraSurface,
   Eyebrow,
-  Figure,
   FindingReadout,
   GoTo,
   Meter,
   PageIntro,
-  Plane,
-  Region,
   SectionRule,
 } from '@shared/ui/product';
 import { attributeLabel, failedConditions } from '@shared/semantics/finding';
@@ -75,7 +72,21 @@ import { framesApi } from '@shared/api/persistence';
 import { wallApi, STREAM_STATE_LABEL, streamTone } from '@shared/api/wall';
 import { isApiError } from '@shared/api/errors';
 import { authorizedFetch } from '@shared/api/client';
-import { Icon, StatusIcons } from '@shared/ui/icons';
+import { ActionIcons, DataIcons, Icon, NavIcons, SeverityIcons, StatusIcons } from '@shared/ui/icons';
+import {
+  DataGrid,
+  downloadCsv,
+  FilterChips,
+  Pagination,
+  TableCard,
+  TableToolbar,
+  useClientRows,
+  useTableState,
+  type FilterDefinition,
+  type GridColumn,
+} from '@shared/ui/data-table';
+import { Callout, useToast } from '@shared/ui/feedback';
+import { Avatar, ButtonLink, MetricTile, StatusPill } from '@shared/ui/surfaces';
 
 /* ── shared helpers ───────────────────────────────────────────────────────── */
 
@@ -158,7 +169,10 @@ const CAMERA_COLUMNS: ReadonlyArray<Column<Camera>> = [
  */
 export function CamerasPage() {
   const client = useQueryClient();
+  const navigate = useNavigate();
+  const toast = useToast();
   const cameras = useQuery({ queryKey: ['cameras'], queryFn: camerasApi.list });
+  const table = useTableState('estate-cameras', { pageSize: 25 });
 
   // Starting and stopping are acts with their own routes: until they existed,
   // flipping `enabled` changed a row and dialled nothing until the next
@@ -166,45 +180,61 @@ export function CamerasPage() {
   const toggle = useMutation({
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
       enabled ? camerasApi.start(key) : camerasApi.stop(key),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['cameras'] }),
+    onSuccess: (result, { key, enabled }) => {
+      void client.invalidateQueries({ queryKey: ['cameras'] });
+      if (result.available === false) toast.warning(`${key} did not ${enabled ? 'start' : 'stop'}`, { description: result.reason || undefined });
+      else toast.success(enabled ? `${key} is starting` : `${key} stopped`);
+    },
   });
 
-  const columns = useMemo<ReadonlyArray<Column<Camera>>>(
-    () => [
-      {
-        key: 'key',
-        header: 'Camera',
-        render: (c) => (
-          <Link
-            to={`/cameras/${encodeURIComponent(c.camera_key)}`}
-            style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}
-          >
-            {c.camera_key}
-          </Link>
-        ),
-        width: '10rem',
-      },
-      ...CAMERA_COLUMNS,
-      {
-        key: 'action',
-        header: '',
-        render: (camera) => (
-          <PermissionGate permission={PERMISSIONS.manageCameras}>
-            <Button
-              size="sm"
-              variant={camera.enabled ? 'secondary' : 'primary'}
-              loading={toggle.isPending && toggle.variables?.key === camera.camera_key}
-              onClick={() => toggle.mutate({ key: camera.camera_key, enabled: !camera.enabled })}
-            >
-              {camera.enabled ? 'Disable' : 'Enable'}
-            </Button>
-          </PermissionGate>
-        ),
-        width: '7rem',
-      },
-    ],
-    [toggle],
-  );
+  const all = cameras.data?.cameras ?? [];
+  const view = useClientRows(all, table, {
+    text: (c) => `${c.camera_key} ${c.name}`,
+    filterBy: { state: (c) => (c.enabled ? 'enabled' : 'disabled') },
+    sortBy: {
+      key: (c) => c.camera_key,
+      name: (c) => (c.name || '').toLowerCase(),
+      channel: (c) => c.channel,
+      fps: (c) => c.analysis_fps,
+    },
+  });
+  const filters: FilterDefinition[] = [
+    {
+      id: 'state',
+      label: 'State',
+      options: [
+        { value: 'enabled', label: 'Enabled' },
+        { value: 'disabled', label: 'Disabled' },
+      ],
+    },
+  ];
+
+  const columns: ReadonlyArray<GridColumn<Camera>> = [
+    {
+      key: 'key',
+      header: 'Camera',
+      sortable: true,
+      render: (c) => (
+        <span className="uwv-cell-primary">
+          <span className="uwv-metric-icon">
+            <Icon icon={NavIcons.cameras} size="control" />
+          </span>
+          <span className="uwv-cell-stack">
+            <Link className="uwv-cell-title" to={`/cameras/${encodeURIComponent(c.camera_key)}`}>
+              {c.camera_key}
+            </Link>
+            <span className="uwv-cell-sub">{c.name || '—'}</span>
+          </span>
+        </span>
+      ),
+    },
+    ...CAMERA_COLUMNS.filter((column) => column.key !== 'name').map(
+      (column): GridColumn<Camera> => ({
+        ...column,
+        sortable: column.key === 'channel' || column.key === 'fps',
+      }),
+    ),
+  ];
 
   if (cameras.isPending) return <LoadingState label="Loading cameras" />;
   if (cameras.isError) return <Failed error={cameras.error} />;
@@ -221,107 +251,119 @@ export function CamerasPage() {
         actions={
           <PermissionGate permission={PERMISSIONS.manageCameras}>
             {/* Onboarding lives at `/admin/cameras/new`, which walks through
-                placement, connection, processing and a connection test. The
-                modal that used to open here asked for `restaurant_id` as free
-                text and had no field for the host — so a camera added through
-                it was created, listed, and never connected. */}
-            <Link to="/admin/cameras/new">
-              <Button variant="primary">Add a camera</Button>
-            </Link>
+                placement, connection, processing and a connection test. */}
+            <ButtonLink to="/admin/cameras/new" variant="primary" icon={ActionIcons.add}>
+              Add a camera
+            </ButtonLink>
           </PermissionGate>
         }
       />
 
-      {/* This page and the incident ledger were structurally identical before
-          Stage 5, and they ask opposite questions. An operator opens the ledger
-          to read a record, so there the record leads. An administrator opens
-          this page to find out how much of the estate is *actually processing*
-          — the count is the question, and the rows are how you act on the
-          answer. So the order here is genuinely reversed rather than
-          decoratively varied, and the meter carries the same proportion the
-          figures state, over the only denominator that means anything: the
-          number of cameras that exist. */}
+      {/* An administrator opens this page to find out how much of the estate is
+          *actually processing* — the count is the question, and the rows are
+          how you act on the answer. So the counts lead, and the consequence no
+          figure states is said beside them. */}
       <SectionRule
         lead
         order={2}
         label="What a restart would restore"
         detail="A disabled camera opens no connection and reaches no model. This is the difference between the estate on paper and the estate in service."
       />
-      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
-        <div className="uwv-lead">
-          <Plane
-            className="uwv-figure-row"
-            style={{ alignSelf: 'start' }}
-          >
-            <Figure label="Registered" scale="hero" value={list.total} detail="Camera rows this tenant holds" />
-            <Figure
-              label="Enabled"
-              scale="lead"
-              value={list.enabled}
-              tone={list.enabled > 0 ? 'accent' : 'default'}
-              detail="Sessions the runtime starts"
-            />
-            <Figure
-              label="Not processed"
-              scale="lead"
-              value={dark}
-              detail="Registered and deliberately switched off"
-            />
-          </Plane>
-          {/* No meter here, deliberately.
-
-              A two-segment bar over the same three numbers stated beside it
-              would be a chart drawn because the column was empty, and the brief
-              for this stage is explicit that a visualisation has to answer a
-              question the figures do not. This one does not: "how much of the
-              estate is switched off" is already legible as `1 of 3`. What the
-              column is for is the consequence, which no figure states. */}
-          <p
-            style={{
-              alignSelf: 'start',
-              fontSize: 'var(--text-sm)',
-              color: 'var(--ink-secondary)',
-              lineHeight: 'var(--leading-relaxed)',
-              maxWidth: 'var(--measure)',
-            }}
-          >
-            A disabled camera opens no connection, decodes nothing and reaches no
-            model. An empty finding from one means <strong>nothing was observed</strong>,
-            not that nothing happened — which is why the two counts are kept apart
-            here rather than summarised into one.
-          </p>
-        </div>
-      </Region>
+      <section className="uwv-metrics uwv-arrive" data-order="2" style={{ marginBottom: 'var(--space-4)' }}>
+        <MetricTile label="Registered" icon={NavIcons.cameras} value={list.total} detail="Camera rows this tenant holds" />
+        <MetricTile label="Enabled" icon={NavIcons.live} value={list.enabled} detail="Sessions the runtime starts" detailTone={list.enabled > 0 ? 'success' : undefined} />
+        <MetricTile label="Not processed" icon={ActionIcons.suspend} value={dark} detail="Registered and deliberately switched off" />
+      </section>
+      <Callout tone="neutral">
+        A disabled camera opens no connection, decodes nothing and reaches no model. An empty finding from one means{' '}
+        <strong>nothing was observed</strong>, not that nothing happened — which is why the two counts are kept apart here
+        rather than summarised into one.
+      </Callout>
 
       <SectionRule
         order={3}
         label="The register"
         detail="Each row carries a credential reference, never a credential. The URI shown is redacted at the server. A camera key opens that camera's own page."
       />
-
-      <Region order={3}>
-        <Plane padded={false} style={{ overflow: 'hidden' }}>
-          <DataTable
-            columns={columns}
-            rows={list.cameras}
-            rowKey={(camera) => camera.camera_key}
+      <section className="uwv-arrive" data-order="3">
+        <TableCard label="Camera register">
+          {list.total > 0 ? (
+            <TableToolbar state={table} searchLabel="Search cameras" searchPlaceholder="Key or name…" filters={filters} columns={columns} />
+          ) : null}
+          <FilterChips filters={filters} state={table} />
+          <DataGrid<Camera>
             caption="Cameras registered in this organization, with their channel, stream and enabled state"
+            columns={columns}
+            rows={view.page}
+            rowKey={(camera) => camera.camera_key}
+            hidden={table.hidden}
+            density={table.density}
+            sort={table.sort}
+            onSort={table.setSort}
+            narrowed={table.narrowed}
+            rowInline={(camera) => (
+              <PermissionGate permission={PERMISSIONS.manageCameras}>
+                <Button
+                  size="sm"
+                  variant={camera.enabled ? 'secondary' : 'primary'}
+                  loading={toggle.isPending && toggle.variables?.key === camera.camera_key}
+                  onClick={() => toggle.mutate({ key: camera.camera_key, enabled: !camera.enabled })}
+                >
+                  {camera.enabled ? 'Disable' : 'Enable'}
+                </Button>
+              </PermissionGate>
+            )}
+            rowActions={(camera) => [
+              {
+                id: 'open',
+                label: 'Open camera',
+                icon: ActionIcons.view,
+                onSelect: () => navigate(`/cameras/${encodeURIComponent(camera.camera_key)}`),
+              },
+              {
+                id: 'audit',
+                label: 'Who looked at it',
+                icon: NavIcons.audit,
+                onSelect: () => navigate(`/audit?resource_type=camera&resource_id=${encodeURIComponent(camera.camera_key)}`),
+              },
+            ]}
+            rowActionsLabel={(camera) => `More for ${camera.camera_key}`}
             empty={
               <EmptyState
                 title="No cameras registered"
                 body="Add a camera to begin. A new camera is created disabled — enabling it is a separate, audited decision."
               />
             }
+            noResults={
+              <EmptyState
+                title="No camera matches"
+                body="Clear the search or the filter."
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
+              />
+            }
           />
-        </Plane>
+          {view.total > table.pageSize ? (
+            <Pagination
+              total={view.total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="cameras"
+            />
+          ) : null}
+        </TableCard>
 
         {toggle.isError ? (
           <div style={{ marginTop: 'var(--space-4)' }}>
             <Failed error={toggle.error} />
           </div>
         ) : null}
-      </Region>
-
+      </section>
     </>
   );
 }
@@ -362,8 +404,10 @@ function statusTone(status: IncidentStatus): 'online' | 'degraded' | 'offline' |
  */
 export function IncidentsPage() {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<IncidentStatus | 'all'>('active');
   const [open, setOpen] = useState<Incident | null>(null);
+  const table = useTableState('incidents', { pageSize: 25, sort: { key: 'observed', direction: 'desc' } });
 
   const incidents = useQuery({
     queryKey: ['incidents', filter],
@@ -375,12 +419,38 @@ export function IncidentsPage() {
     setOpen(null);
   };
 
-  const columns: ReadonlyArray<Column<Incident>> = [
+  const rows = incidents.data?.incidents ?? [];
+  const severityRank = (level: string) => {
+    const at = SEVERITY_ORDER.indexOf(level as Severity);
+    return at < 0 ? SEVERITY_ORDER.length : at;
+  };
+  // Every row the server returned is here, so these are honest over the rows
+  // in this view — and the page says when that view is the newest hundred.
+  const view = useClientRows(rows, table, {
+    text: (i) => `${i.summary} ${i.rule_id} ${i.camera_key}`,
+    filterBy: { severity: (i) => i.severity },
+    sortBy: {
+      observed: (i) => (i.observed_at ? new Date(i.observed_at).getTime() : null),
+      severity: (i) => severityRank(i.severity),
+    },
+  });
+
+  const severityFilter: FilterDefinition = {
+    id: 'severity',
+    label: 'Severity',
+    options: SEVERITY_ORDER.filter((level) => rows.some((i) => i.severity === level)).map((level) => ({
+      value: level,
+      label: level[0]!.toUpperCase() + level.slice(1),
+    })),
+  };
+
+  const columns: ReadonlyArray<GridColumn<Incident>> = [
     {
       key: 'severity',
-      header: '',
+      header: 'Severity',
+      sortable: true,
       render: (i) => <SeverityBadge severity={(i.severity as Severity) ?? 'info'} />,
-      width: '7rem',
+      width: '8rem',
     },
     {
       key: 'summary',
@@ -388,29 +458,31 @@ export function IncidentsPage() {
       render: (i) => (
         // The row's own address. This is what makes an incident linkable from
         // an alert, a report figure or — when it exists — a notification.
-        <Link
-          to={`/incidents/${encodeURIComponent(i.id)}`}
-          style={{ color: 'var(--ink-primary)', textDecoration: 'none', fontWeight: 'var(--weight-medium)' }}
-        >
-          {i.summary || i.rule_id}
-        </Link>
+        <span className="uwv-cell-stack">
+          <Link className="uwv-cell-title" to={`/incidents/${encodeURIComponent(i.id)}`}>
+            {i.summary || i.rule_id}
+          </Link>
+          <span className="uwv-cell-sub">{i.rule_id}</span>
+        </span>
       ),
     },
     {
       key: 'camera',
       header: 'Where',
-      render: (i) => (
-        <Link to={`/cameras/${encodeURIComponent(i.camera_key)}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-          {i.camera_key}
-        </Link>
-      ),
-      width: '10rem',
+      render: (i) => <Link to={`/cameras/${encodeURIComponent(i.camera_key)}`}>{i.camera_key}</Link>,
+      width: '9rem',
     },
-    { key: 'observed', header: 'When', render: (i) => when(i.observed_at), width: '12rem' },
+    {
+      key: 'observed',
+      header: 'When',
+      sortable: true,
+      render: (i) => <span className="uwv-cell-muted">{when(i.observed_at)}</span>,
+      width: '12rem',
+    },
     {
       key: 'status',
       header: 'Status',
-      render: (i) => <StatusBadge tone={statusTone(i.status)}>{i.status}</StatusBadge>,
+      render: (i) => <StatusPill tone={statusTone(i.status)}>{i.status[0]!.toUpperCase() + i.status.slice(1)}</StatusPill>,
       width: '9rem',
     },
     {
@@ -422,23 +494,13 @@ export function IncidentsPage() {
       numeric: true,
       width: '7rem',
     },
-    {
-      key: 'inspect',
-      header: '',
-      render: (incident) => (
-        <Button size="sm" onClick={() => setOpen(incident)}>
-          Inspect
-        </Button>
-      ),
-      width: '6rem',
-    },
   ];
 
-  if (incidents.isPending) return <LoadingState label="Loading incidents" />;
   if (incidents.isError) return <Failed error={incidents.error} />;
 
-  const rows = incidents.data.incidents;
-  const bySeverity = (level: string) => rows.filter((i) => i.severity === level).length;
+  const urgent = rows.filter((i) => i.severity === 'critical' || i.severity === 'high').length;
+  const withEvidence = rows.filter((i) => i.evidence_refs.length > 0).length;
+  const truncated = rows.length >= 100;
 
   return (
     <>
@@ -447,45 +509,108 @@ export function IncidentsPage() {
         title="Incidents"
         standfirst="The ledger. Each incident freezes the finding that raised it, so it stays explicable after the rules change."
         actions={
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {STATUS_FILTERS.map((option) => (
-              <Button
-                key={option.id}
-                size="sm"
-                variant={filter === option.id ? 'primary' : 'secondary'}
-                onClick={() => setFilter(option.id)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          <ButtonLink to="/alerts" variant="secondary" icon={NavIcons.alerts}>
+            Open alerts
+          </ButtonLink>
         }
       />
 
-      {/* The ledger leads, and it leads on a plane.
+      {rows.length > 0 ? (
+        <section className="uwv-metrics uwv-arrive" data-order="2" aria-label="This view" style={{ marginBottom: 'var(--space-8)' }}>
+          <MetricTile
+            label="In this view"
+            icon={NavIcons.incidents}
+            value={rows.length}
+            unit={truncated ? '+' : undefined}
+            detail={filter === 'all' ? 'Every status' : `Status: ${filter}`}
+          />
+          <MetricTile label="Critical or high" icon={SeverityIcons.high} value={urgent} detail="Of the rows in this view" detailTone={urgent > 0 ? 'warning' : undefined} />
+          <MetricTile label="With evidence" icon={NavIcons.evidence} value={withEvidence} detail="Imagery was retained and can be produced" />
+          <div className="uwv-metric">
+            <div className="uwv-metric-head">
+              <span className="uwv-metric-label">Severity spread</span>
+            </div>
+            <Meter
+              caption={`Severity of the ${rows.length} incident(s) in this view`}
+              total={rows.length}
+              emptyNote="This filter selects no incident, so there is no spread to draw."
+              segments={SEVERITY_ORDER.map((level) => ({
+                key: level,
+                label: level,
+                value: rows.filter((i) => i.severity === level).length,
+                color: `var(--severity-${level})`,
+              }))}
+            />
+          </div>
+        </section>
+      ) : null}
 
-          Stage 5's critique put this page and the Cameras page side by side and
-          found them structurally identical: eyebrow, display title, standfirst,
-          a row of four equally-weighted figures, a rule, a table. Two pages
-          about entirely different things, composed the same way, because the
-          composition had not been decided — it had been inherited.
-
-          An incident ledger is a record being examined. So the record is the
-          first thing, it sits on its own ground, and the arithmetic about it
-          comes afterwards, where arithmetic belongs. */}
+      {/* The ledger leads: an incident ledger is a record being examined, so
+          the record is the first thing and the arithmetic sits above it. */}
       <SectionRule
         lead
-        order={2}
+        order={3}
         label="The ledger"
         detail="Newest first, as the store returns them. A row opens at its own address; Inspect reads it here."
       />
-      <Region order={2} style={{ marginBottom: 'var(--space-12)' }}>
-        <Plane padded={false} style={{ overflow: 'hidden' }}>
-          <DataTable
+      {truncated ? (
+        <Callout tone="info" title="The newest 100">
+          The store returns the hundred most recent incidents with this status. Searching and sorting work over those; older
+          ones are in the store and in Reports.
+        </Callout>
+      ) : null}
+      <section className="uwv-arrive" data-order="3" style={{ marginTop: truncated ? 'var(--space-4)' : undefined }}>
+        <TableCard label="Incidents">
+          <TableToolbar
+            state={table}
+            leading={
+              <Tabs
+                label="Status"
+                active={filter}
+                onChange={(next) => {
+                  setFilter(next as IncidentStatus | 'all');
+                  table.setOffset(0);
+                }}
+                tabs={STATUS_FILTERS}
+              />
+            }
+            searchLabel={rows.length > 0 ? 'Search incidents' : undefined}
+            searchPlaceholder="What, rule or camera…"
+            filters={severityFilter.options.length > 1 ? [severityFilter] : []}
             columns={columns}
-            rows={rows}
-            rowKey={(incident) => incident.id}
+          />
+          <FilterChips filters={[severityFilter]} state={table} />
+          <DataGrid<Incident>
             caption="Incidents in this organization, with severity, what happened, camera, time observed, status and evidence count"
+            columns={columns}
+            rows={view.page}
+            rowKey={(incident) => incident.id}
+            hidden={table.hidden}
+            density={table.density}
+            sort={table.sort}
+            onSort={table.setSort}
+            loading={incidents.isPending}
+            narrowed={table.narrowed}
+            rowInline={(incident) => (
+              <Button size="sm" variant="secondary" onClick={() => setOpen(incident)}>
+                Inspect
+              </Button>
+            )}
+            rowActions={(incident) => [
+              {
+                id: 'open',
+                label: 'Open incident page',
+                icon: ActionIcons.view,
+                onSelect: () => navigate(`/incidents/${encodeURIComponent(incident.id)}`),
+              },
+              {
+                id: 'camera',
+                label: 'Open camera',
+                icon: NavIcons.cameras,
+                onSelect: () => navigate(`/cameras/${encodeURIComponent(incident.camera_key)}`),
+              },
+            ]}
+            rowActionsLabel={(incident) => `More for ${incident.summary || incident.rule_id}`}
             empty={
               <EmptyState
                 title={filter === 'all' ? 'No incidents recorded' : `No ${filter} incidents`}
@@ -496,60 +621,36 @@ export function IncidentsPage() {
                 }
               />
             }
-          />
-        </Plane>
-      </Region>
-
-      {rows.length > 0 ? (
-        <>
-          <SectionRule
-            order={3}
-            label="What is in this view"
-            detail="The severity spread of the rows above, over their own count — never over a total this filter is not showing."
-          />
-          <Region order={3}>
-            <div className="uwv-lead">
-              <Meter
-                caption={`Severity of the ${rows.length} incident(s) in this view`}
-                total={rows.length}
-                emptyNote="This filter selects no incident, so there is no spread to draw."
-                segments={SEVERITY_ORDER.map((level) => ({
-                  key: level,
-                  label: level,
-                  value: bySeverity(level),
-                  color: `var(--severity-${level})`,
-                }))}
+            noResults={
+              <EmptyState
+                title="Nothing in this view matches"
+                body="Clear the search or the severity filter."
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
               />
-              <Plane
-                style={{
-                  display: 'grid',
-                  gap: 'var(--space-6)',
-                  alignContent: 'start',
-                  alignSelf: 'start',
-                }}
-              >
-                <Figure
-                  label="In this view"
-                  scale="hero"
-                  value={rows.length}
-                  detail={filter === 'all' ? 'Every status' : `Status: ${filter}`}
-                />
-                <Figure
-                  label="With evidence"
-                  scale="quiet"
-                  value={rows.filter((i) => i.evidence_refs.length > 0).length}
-                  detail="Imagery was retained and can be produced"
-                />
-              </Plane>
-            </div>
-          </Region>
-        </>
-      ) : null}
+            }
+          />
+          {view.total > 0 ? (
+            <Pagination
+              total={view.total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="incidents"
+            />
+          ) : null}
+        </TableCard>
+      </section>
 
       <Drawer
         open={open !== null}
         onClose={() => setOpen(null)}
         title={open ? open.summary || open.rule_id : ''}
+        description={open ? `${open.camera_key} · ${when(open.observed_at)}` : undefined}
       >
         {open ? <IncidentReadout incident={open} onChanged={refresh} compact /> : null}
       </Drawer>
@@ -593,7 +694,7 @@ export function IncidentDetailPage() {
   if (incident.isError) {
     return (
       <>
-        <PageIntro eyebrow="Operations · Incident" title="Not available" />
+        <PageIntro eyebrow="Incidents" back="/incidents" title="Not available" />
         <Failed error={incident.error} />
       </>
     );
@@ -604,7 +705,8 @@ export function IncidentDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Operations · Incident"
+        eyebrow="Incidents"
+        back="/incidents"
         title={data.summary || data.rule_id}
         meta={
           <>
@@ -1137,6 +1239,14 @@ function EvidenceImage({ evidenceRef }: { evidenceRef: string }) {
 
 /* ── Audit ────────────────────────────────────────────────────────────────── */
 
+const AUDIT_LIMIT = 200;
+
+const OUTCOME_TONE: Record<AuditEvent['outcome'], 'online' | 'degraded' | 'offline'> = {
+  success: 'online',
+  denied: 'degraded',
+  failed: 'offline',
+};
+
 export function AuditPage() {
   /**
    * The trail, optionally narrowed to one resource.
@@ -1151,16 +1261,71 @@ export function AuditPage() {
   const resourceType = params.get('resource_type') ?? '';
   const resourceId = params.get('resource_id') ?? '';
   const scoped = resourceType.length > 0 && resourceId.length > 0;
+  const [open, setOpen] = useState<AuditEvent | null>(null);
+  const table = useTableState('audit', { pageSize: 25, sort: { key: 'when', direction: 'desc' } });
 
   const events = useQuery({
     queryKey: scoped ? ['audit', resourceType, resourceId] : ['audit'],
-    queryFn: () =>
-      scoped ? auditApi.forResource(resourceType, resourceId) : auditApi.list(200),
+    queryFn: () => (scoped ? auditApi.forResource(resourceType, resourceId) : auditApi.list(AUDIT_LIMIT)),
   });
 
-  const columns: ReadonlyArray<Column<AuditEvent>> = [
-    { key: 'when', header: 'When', render: (e) => when(e.occurred_at), width: '12rem' },
-    { key: 'actor', header: 'Who', render: (e) => e.actor || '—' },
+  const rows = events.data?.events ?? [];
+  const view = useClientRows(rows, table, {
+    text: (e) => `${e.actor} ${auditLabel(e.action)} ${e.action} ${e.resource_type} ${e.resource_id}`,
+    filterBy: {
+      outcome: (e) => e.outcome,
+      kind: (e) => (isImageryAccess(e) ? 'imagery' : 'other'),
+    },
+    sortBy: {
+      when: (e) => (e.occurred_at ? new Date(e.occurred_at).getTime() : null),
+      actor: (e) => e.actor.toLowerCase(),
+    },
+  });
+
+  const filters: FilterDefinition[] = [
+    {
+      id: 'outcome',
+      label: 'Outcome',
+      options: [
+        { value: 'success', label: 'Success' },
+        { value: 'denied', label: 'Denied' },
+        { value: 'failed', label: 'Failed' },
+      ],
+    },
+    {
+      id: 'kind',
+      label: 'Kind',
+      options: [
+        { value: 'imagery', label: 'Access to imagery' },
+        { value: 'other', label: 'Everything else' },
+      ],
+    },
+  ];
+
+  const columns: ReadonlyArray<GridColumn<AuditEvent>> = [
+    {
+      key: 'when',
+      header: 'When',
+      sortable: true,
+      render: (e) => <span className="uwv-cell-muted">{when(e.occurred_at)}</span>,
+      width: '12rem',
+      exportValue: (e) => e.occurred_at,
+    },
+    {
+      key: 'actor',
+      header: 'Who',
+      sortable: true,
+      render: (e) =>
+        e.actor ? (
+          <span className="uwv-cell-primary">
+            <Avatar name={e.actor} size="sm" />
+            <span className="uwv-cell-title">{e.actor}</span>
+          </span>
+        ) : (
+          '—'
+        ),
+      exportValue: (e) => e.actor,
+    },
     {
       key: 'action',
       header: 'What',
@@ -1169,34 +1334,33 @@ export function AuditPage() {
           {auditLabel(event.action)}
           {/* Marked, so the rows a privacy review asks for do not have to be
               picked out of a list by eye. */}
-          {isImageryAccess(event) ? <Badge>imagery</Badge> : null}
+          {isImageryAccess(event) ? <Badge tone="accent">imagery</Badge> : null}
         </span>
       ),
+      exportValue: (e) => auditLabel(e.action),
     },
     {
       key: 'resource',
       header: 'On',
-      render: (e) => (e.resource_id ? `${e.resource_type}: ${e.resource_id}` : e.resource_type || '—'),
+      render: (e) => (
+        <span className="uwv-cell-muted">{e.resource_id ? `${e.resource_type}: ${e.resource_id}` : e.resource_type || '—'}</span>
+      ),
+      exportValue: (e) => (e.resource_id ? `${e.resource_type}: ${e.resource_id}` : e.resource_type),
     },
     {
       key: 'outcome',
       header: 'Outcome',
-      render: (e) =>
-        e.outcome === 'success' ? (
-          <StatusBadge tone="online">success</StatusBadge>
-        ) : e.outcome === 'denied' ? (
-          <StatusBadge tone="degraded">denied</StatusBadge>
-        ) : (
-          <StatusBadge tone="offline">failed</StatusBadge>
-        ),
+      render: (e) => <StatusPill tone={OUTCOME_TONE[e.outcome]}>{e.outcome}</StatusPill>,
       width: '8rem',
+      exportValue: (e) => e.outcome,
     },
   ];
 
   if (events.isPending) return <LoadingState label="Loading the audit trail" />;
   if (events.isError) return <Failed error={events.error} />;
 
-  const imagery = events.data.events.filter(isImageryAccess).length;
+  const imagery = rows.filter(isImageryAccess).length;
+  const refused = rows.filter((e) => e.outcome !== 'success').length;
 
   return (
     <>
@@ -1214,55 +1378,133 @@ export function AuditPage() {
                 Show the whole trail
               </Button>
             </>
-          ) : null
+          ) : (
+            <span className="uwv-page-meta-item">The latest {AUDIT_LIMIT} events, newest first</span>
+          )
+        }
+        actions={
+          <Button
+            variant="secondary"
+            icon={<Icon icon={ActionIcons.export} />}
+            disabled={view.matched.length === 0}
+            onClick={() => downloadCsv('audit-trail.csv', columns, view.matched)}
+          >
+            Export CSV
+          </Button>
         }
       />
 
       {scoped ? (
-        <p
-          style={{
-            fontSize: 'var(--text-sm)',
-            color: 'var(--ink-secondary)',
-            maxWidth: 'var(--measure)',
-            marginBottom: 'var(--space-6)',
-          }}
-        >
-          Narrowed to one resource. An empty result here means no event was recorded against it —
-          not that access was refused and not that the resource is unknown.
-        </p>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <Callout tone="info" title="Narrowed to one resource">
+            An empty result here means no event was recorded against it — not that access was refused and not that the
+            resource is unknown.
+          </Callout>
+        </div>
       ) : null}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
-          gap: 'var(--space-4)',
-          marginBottom: 'var(--space-6)',
-        }}
-      >
-        <StatCard label="Events shown" value={events.data.count} detail="Most recent first" />
-        <StatCard
+      <section className="uwv-metrics uwv-arrive" data-order="2" style={{ marginBottom: 'var(--space-6)' }}>
+        <MetricTile label="Events shown" icon={StatusIcons.guarantee} value={events.data.count} detail="Most recent first" />
+        <MetricTile
           label="Imagery accesses"
+          icon={NavIcons.evidence}
           value={imagery}
-          tone={imagery > 0 ? 'accent' : 'default'}
           detail="Views of, or refused views of, identifiable people"
+          detailTone={imagery > 0 ? 'warning' : undefined}
         />
-      </div>
+        <MetricTile label="Refused or failed" icon={StatusIcons.blocked} value={refused} detail="An act the server would not complete" />
+      </section>
 
-      <Card>
-        <DataTable
-          columns={columns}
-          rows={events.data.events}
-          rowKey={(event) => event.id}
-          caption="Audit events for this organization, most recent first"
-          empty={
-            <EmptyState
-              title="No audit events"
-              body="Nothing has been recorded for this organization yet."
+      <section className="uwv-arrive" data-order="3" aria-label="Audit events">
+        <TableCard label="Audit events">
+          <TableToolbar
+            state={table}
+            searchLabel={rows.length > 0 ? 'Search the trail' : undefined}
+            searchPlaceholder="Who, what or which resource…"
+            filters={rows.length > 0 ? filters : []}
+            columns={columns}
+          />
+          <FilterChips filters={filters} state={table} />
+          <DataGrid<AuditEvent>
+            caption="Audit events for this organization, most recent first"
+            columns={columns}
+            rows={view.page}
+            rowKey={(event) => event.id}
+            hidden={table.hidden}
+            density={table.density}
+            sort={table.sort}
+            onSort={table.setSort}
+            narrowed={table.narrowed}
+            onRowOpen={(event) => setOpen(event)}
+            rowActions={(event) => [
+              { id: 'detail', label: 'View details', icon: ActionIcons.view, onSelect: () => setOpen(event) },
+              ...(event.resource_id
+                ? [
+                    {
+                      id: 'scope',
+                      label: 'Everything on this resource',
+                      icon: DataIcons.filter,
+                      onSelect: () => setParams({ resource_type: event.resource_type, resource_id: event.resource_id }),
+                    },
+                  ]
+                : []),
+            ]}
+            rowActionsLabel={(event) => `More about ${auditLabel(event.action)}`}
+            empty={<EmptyState title="No audit events" body="Nothing has been recorded for this organization yet." />}
+            noResults={
+              <EmptyState
+                title="No event matches"
+                body="Clear the search or the filters."
+                action={
+                  <Button size="sm" onClick={table.clearFilters}>
+                    Clear search and filters
+                  </Button>
+                }
+              />
+            }
+          />
+          {view.total > 0 ? (
+            <Pagination
+              total={view.total}
+              offset={table.offset}
+              limit={table.pageSize}
+              onOffset={table.setOffset}
+              onLimit={table.setPageSize}
+              noun="events"
             />
-          }
-        />
-      </Card>
+          ) : null}
+        </TableCard>
+      </section>
+
+      <Drawer
+        open={open !== null}
+        onClose={() => setOpen(null)}
+        title={open ? auditLabel(open.action) : ''}
+        description={open ? when(open.occurred_at) : undefined}
+      >
+        {open ? (
+          <div className="uwv-stack" data-gap="md">
+            <dl className="uwv-fact-rows">
+              {(
+                [
+                  ['Who', open.actor || '—'],
+                  ['Roles', open.actor_roles.length ? open.actor_roles.join(', ') : '—'],
+                  ['Action', open.action],
+                  ['On', open.resource_id ? `${open.resource_type}: ${open.resource_id}` : open.resource_type || '—'],
+                  ['Outcome', open.outcome],
+                  ['Request', open.request_id || '—'],
+                ] as const
+              ).map(([term, value]) => (
+                <div key={term}>
+                  <dt>{term}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {Object.keys(open.detail ?? {}).length > 0 ? <JsonViewer data={open.detail} label="Recorded detail" /> : null}
+          </div>
+        ) : null}
+      </Drawer>
     </>
   );
 }
@@ -1296,7 +1538,8 @@ export function EvidenceDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Compliance · Evidence"
+        eyebrow="Evidence"
+        back="/evidence"
         title="Evidence record"
         standfirst="The record, not the picture. Retrieving the imagery is a separate act against an identifiable person's likeness, and it is recorded when you ask for it — never because this page loaded."
         meta={<Badge mono>{evidenceRef}</Badge>}
@@ -1359,7 +1602,7 @@ export function CameraDetailPage() {
   if (!camera) {
     return (
       <>
-        <PageIntro eyebrow="Platform · Camera" title="Not in this estate" meta={<Badge mono>{cameraKey}</Badge>} />
+        <PageIntro eyebrow="Cameras" back="/cameras" title="Not in this estate" meta={<Badge mono>{cameraKey}</Badge>} />
         <EmptyState
           title="No camera with that key"
           body="It may have been retired, or it may belong to an organization this account does not reach. Nothing is being hidden — the estate simply has no row with this key."
@@ -1375,7 +1618,8 @@ export function CameraDetailPage() {
   return (
     <>
       <PageIntro
-        eyebrow="Platform · Camera"
+        eyebrow="Cameras"
+        back="/cameras"
         title={camera.name || camera.camera_key}
         standfirst={camera.purpose || 'No stated purpose is recorded for this camera.'}
         meta={
