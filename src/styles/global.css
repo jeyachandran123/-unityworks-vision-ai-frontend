@@ -326,19 +326,30 @@ a:hover { text-decoration: underline; }
   background: var(--surface-base);
 }
 
+/* The sidebar is itself the sticky, viewport-tall object — not a transparent
+   sticky panel riding inside a document-tall column. That arrangement let
+   Chrome scroll the panel as its own layer before it had painted the newly
+   exposed stretch of the column behind it, and for a frame the light page
+   showed through: a white flash down the sidebar on every quick scroll.
+   Opaque, one viewport tall, and isolated, there is nothing behind it to show. */
 .uwv-nav {
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
   background: var(--nav-bg);
   color: var(--nav-ink);
+  isolation: isolate;
   transition: width var(--motion-base) var(--ease-out);
 }
 .uwv-nav-inner {
   width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  background: var(--nav-bg);
 }
 .uwv-nav-brand {
   height: var(--topbar-height);

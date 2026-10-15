@@ -111,6 +111,12 @@ export function PageIntro({
   /** A mark identifying the object — initials, an icon — beside the title. */
   mark?: ReactNode;
 }) {
+  // The tab says which page this is, so a row of open tabs can be told apart.
+  // Every page opens with this header, so every page names itself here.
+  useEffect(() => {
+    document.title = `${title} · UnityWorks Vision AI`;
+  }, [title]);
+
   return (
     <header className="uwv-section-head uwv-arrive uwv-page-header" data-lead="true" data-order="1">
       <div className="uwv-page-header-top">

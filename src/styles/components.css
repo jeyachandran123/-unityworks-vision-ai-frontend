@@ -1498,23 +1498,17 @@ a.uwv-metric:hover { border-color: var(--accent-line); box-shadow: var(--shadow-
     mask-image: radial-gradient(ellipse 70% 60% at 35% 45%, #000 20%, transparent 78%);
     pointer-events: none;
   }
-  /* The viewfinder itself, enormous and almost invisible, bottom right. */
+  /* A low glow behind the foot of the panel: depth, without a shape to read. */
   .uwv-signin-brand::after {
     content: "";
     position: absolute;
-    right: -4rem;
-    bottom: -4rem;
+    right: -10rem;
+    bottom: -12rem;
     z-index: -1;
-    width: 26rem;
-    height: 26rem;
-    background:
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) top left / 4.5rem 2px no-repeat,
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) top left / 2px 4.5rem no-repeat,
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) top right / 4.5rem 2px no-repeat,
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) top right / 2px 4.5rem no-repeat,
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) bottom left / 4.5rem 2px no-repeat,
-      linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.09)) bottom left / 2px 4.5rem no-repeat,
-      radial-gradient(circle at center, rgb(164 140 255 / 0.22) 0 2.25rem, transparent 2.3rem);
+    width: 34rem;
+    height: 34rem;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(124 92 255 / 0.22), transparent 68%);
     pointer-events: none;
   }
 }
